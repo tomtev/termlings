@@ -56,6 +56,10 @@ Options:
   --bg=<color>     SVG background (hex or "none", default: none)
   --padding=<n>    SVG padding in pixels (default: 1)
   --animated       SVG with CSS animation (use with --walk, --talk, --wave)
+  --mp4            Export animated MP4 (requires ffmpeg)
+  --out=<file>     Output file path for --mp4 (default: termling.mp4)
+  --fps=<n>        MP4 frame rate (default: 4)
+  --duration=<n>   MP4 duration in seconds (default: 3)
   --info           Show DNA traits info
   --help           Show this help`);
   process.exit(0);
@@ -125,6 +129,128 @@ if (flags.has("svg")) {
     // Static SVG
     console.log(renderSVG(dna, size, 0, bg, padding));
   }
+  process.exit(0);
+}
+
+if (flags.has("mp4")) {
+  // Export animated MP4 — requires ffmpeg
+  const { execSync, execFileSync } = await import("child_process");
+  const { mkdirSync, writeFileSync, rmSync } = await import("fs");
+  const { join } = await import("path");
+  const { tmpdir } = await import("os");
+
+  // Check ffmpeg
+  try {
+    execSync("ffmpeg -version", { stdio: "ignore" });
+  } catch {
+    console.error("Error: ffmpeg is required for --mp4. Install it: https://ffmpeg.org/download.html");
+    process.exit(1);
+  }
+
+  const mp4Traits = decodeDNA(dna);
+  const mp4LegFrames = LEGS[mp4Traits.legs].length;
+  const fps = opts.fps ? parseInt(opts.fps, 10) : 4;
+  const duration = opts.duration ? parseInt(opts.duration, 10) : 3;
+  const totalFrames = fps * duration;
+  const outFile = opts.out || "termling.mp4";
+  const size = opts.size ? parseInt(opts.size, 10) : 10;
+  const padding = opts.padding !== undefined ? parseInt(opts.padding, 10) : 1;
+  const bg = opts.bg === "none" ? null : opts.bg || "#000";
+
+  const doWalk = flags.has("walk");
+  const doTalk = flags.has("talk");
+  const doWave = flags.has("wave");
+
+  const faceRgbMp4 = hslToRgb(mp4Traits.faceHue * 30, 0.5, 0.5);
+  const darkRgbMp4 = hslToRgb(mp4Traits.faceHue * 30, 0.5, 0.28);
+  const hatRgbMp4 = hslToRgb(mp4Traits.hatHue * 30, 0.5, 0.5);
+
+  const cols = 9;
+  const half = Math.round(size / 2);
+  const quarter = Math.round(size / 4);
+
+  // Parse hex color to RGB
+  function hexToRgb(hex: string): [number, number, number] {
+    const h = hex.replace("#", "");
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+
+  const bgRgb: [number, number, number] = bg ? hexToRgb(bg) : [0, 0, 0];
+
+  function gridToPPM(grid: typeof generateGrid extends (...a: any[]) => infer R ? R : never): Buffer {
+    const rows = grid.length;
+    const w = (cols + padding * 2) * size;
+    const h = (rows + padding * 2) * size;
+    const pixels = Buffer.alloc(w * h * 3);
+
+    // Fill background
+    for (let i = 0; i < w * h; i++) {
+      if (bg) {
+        pixels[i * 3] = bgRgb[0];
+        pixels[i * 3 + 1] = bgRgb[1];
+        pixels[i * 3 + 2] = bgRgb[2];
+      }
+    }
+
+    function fillRect(rx: number, ry: number, rw: number, rh: number, r: number, g: number, b: number) {
+      for (let py = ry; py < ry + rh && py < h; py++) {
+        for (let px = rx; px < rx + rw && px < w; px++) {
+          const idx = (py * w + px) * 3;
+          pixels[idx] = r;
+          pixels[idx + 1] = g;
+          pixels[idx + 2] = b;
+        }
+      }
+    }
+
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const cell = grid[y][x];
+        const rx = (x + padding) * size;
+        const ry = (y + padding) * size;
+        const [fR, fG, fB] = faceRgbMp4;
+        const [dR, dG, dB] = darkRgbMp4;
+        const [hR, hG, hB] = hatRgbMp4;
+
+        if (cell === "f") fillRect(rx, ry, size, size, fR, fG, fB);
+        else if (cell === "l") fillRect(rx, ry, half, size, fR, fG, fB);
+        else if (cell === "a") fillRect(rx, ry + half, size, half, fR, fG, fB);
+        else if (cell === "e" || cell === "d") fillRect(rx, ry, size, size, dR, dG, dB);
+        else if (cell === "s") { fillRect(rx, ry, size, size, fR, fG, fB); fillRect(rx, ry + half, size, half, dR, dG, dB); }
+        else if (cell === "n") { fillRect(rx, ry, size, size, fR, fG, fB); fillRect(rx + quarter, ry, half, size, dR, dG, dB); }
+        else if (cell === "m") { fillRect(rx, ry, size, size, fR, fG, fB); fillRect(rx, ry, size, half, dR, dG, dB); }
+        else if (cell === "q") { fillRect(rx, ry, size, size, fR, fG, fB); fillRect(rx + half, ry + half, half, half, dR, dG, dB); }
+        else if (cell === "r") { fillRect(rx, ry, size, size, fR, fG, fB); fillRect(rx, ry + half, half, half, dR, dG, dB); }
+        else if (cell === "h") fillRect(rx, ry, size, size, hR, hG, hB);
+        else if (cell === "k") { fillRect(rx, ry, size, size, fR, fG, fB); fillRect(rx + quarter, ry, half, size, hR, hG, hB); }
+      }
+    }
+
+    const header = `P6\n${w} ${h}\n255\n`;
+    return Buffer.concat([Buffer.from(header), pixels]);
+  }
+
+  const tmpDir = join(tmpdir(), `termlings-${Date.now()}`);
+  mkdirSync(tmpDir, { recursive: true });
+
+  console.log(`Generating ${totalFrames} frames...`);
+  for (let f = 0; f < totalFrames; f++) {
+    const walkF = doWalk ? f % mp4LegFrames : 0;
+    const talkF = doTalk ? f % 2 : 0;
+    const waveF = doWave ? (f % 2) + 1 : 0;
+    const grid = generateGrid(mp4Traits, walkF, talkF, waveF);
+    const ppm = gridToPPM(grid);
+    writeFileSync(join(tmpDir, `frame-${String(f).padStart(4, "0")}.ppm`), ppm);
+  }
+
+  console.log(`Encoding ${outFile}...`);
+  execSync(
+    `ffmpeg -y -framerate ${fps} -i "${tmpDir}/frame-%04d.ppm" -c:v libx264 -pix_fmt yuv420p -crf 18 -vf "pad=ceil(iw/2)*2:ceil(ih/2)*2" "${outFile}"`,
+    { stdio: "inherit" }
+  );
+
+  rmSync(tmpDir, { recursive: true, force: true });
+  console.log(`Done: ${outFile}`);
   process.exit(0);
 }
 

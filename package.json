@@ -20,5 +20,8 @@
     "./vue": "./src/vue/index.ts",
     "./ink": "./src/ink/index.ts"
   },
-  "files": ["src", "bin"]
+  "files": ["src", "bin"],
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  }
 }
