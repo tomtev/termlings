@@ -3,7 +3,7 @@
   "version": "0.1.2",
   "type": "module",
   "license": "MIT",
-  "description": "Cute pixel creatures for web and terminal.",
+  "description": "Open-source pixel creatures for web and the terminal.",
   "bin": {
     "termlings": "./bin/termlings.js"
   },

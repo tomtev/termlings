@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="banner.png" alt="termlings — Cute pixel creatures for web and terminal" width="800" />
+  <img src="banner.png" alt="termlings — Open-source pixel creatures for web and the terminal" width="800" />
 </p>
 
 # termlings
 
-Cute pixel creatures for web and terminal.
+Open-source pixel creatures for web and the terminal.
 
 <p align="center">
   <img src="demo.gif" alt="Animated termlings walking, talking, and waving" />
