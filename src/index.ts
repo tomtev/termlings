@@ -436,19 +436,42 @@ export function hslToRgb(h: number, s: number, l: number): [number, number, numb
 }
 
 /**
+ * Compute face, dark-accent, and hat RGB colors for a given set of traits.
+ * In BW mode, maps each hue to a distinct gray in the safe range (89-166).
+ */
+export function getTraitColors(traits: DecodedDNA, bw = false): {
+  faceRgb: [number, number, number];
+  darkRgb: [number, number, number];
+  hatRgb: [number, number, number];
+} {
+  if (bw) {
+    const fg = hueToGray(traits.faceHue);
+    const dg = Math.round(fg * 0.55);
+    const hg = hueToGray(traits.hatHue);
+    return {
+      faceRgb: [fg, fg, fg],
+      darkRgb: [dg, dg, dg],
+      hatRgb: [hg, hg, hg],
+    };
+  }
+  const faceHueDeg = traits.faceHue * 30;
+  const hatHueDeg = traits.hatHue * 30;
+  return {
+    faceRgb: hslToRgb(faceHueDeg, 0.5, 0.5),
+    darkRgb: hslToRgb(faceHueDeg, 0.5, 0.28),
+    hatRgb: hslToRgb(hatHueDeg, 0.5, 0.5),
+  };
+}
+
+/**
  * Render a DNA string as an SVG string with transparent background.
  * Each pixel is rendered as a square rect. 1-cell padding around the grid.
  */
-export function renderSVG(dna: string, pixelSize = 10, frame = 0, background: string | null = '#000', padding = 1): string {
+export function renderSVG(dna: string, pixelSize = 10, frame = 0, background: string | null = '#000', padding = 1, bw = false): string {
   const traits = decodeDNA(dna);
   const grid = generateGrid(traits, frame);
 
-  const faceHueDeg = traits.faceHue * 30;
-  const hatHueDeg = traits.hatHue * 30;
-
-  const faceRgb = hslToRgb(faceHueDeg, 0.5, 0.5);
-  const darkRgb = hslToRgb(faceHueDeg, 0.5, 0.28);
-  const hatRgb = hslToRgb(hatHueDeg, 0.5, 0.5);
+  const { faceRgb, darkRgb, hatRgb } = getTraitColors(traits, bw);
 
   const toHex = (r: number, g: number, b: number) =>
     `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
@@ -515,16 +538,11 @@ export function renderSVG(dna: string, pixelSize = 10, frame = 0, background: st
  * Render a DNA string as ANSI colored pixel art for the terminal.
  * Uses `██` per pixel (2 chars wide for square proportions).
  */
-export function renderTerminal(dna: string, frame = 0): string {
+export function renderTerminal(dna: string, frame = 0, bw = false): string {
   const traits = decodeDNA(dna);
   const grid = generateGrid(traits, frame);
 
-  const faceHueDeg = traits.faceHue * 30;
-  const hatHueDeg = traits.hatHue * 30;
-
-  const faceRgb = hslToRgb(faceHueDeg, 0.5, 0.5);
-  const darkRgb = hslToRgb(faceHueDeg, 0.5, 0.28);
-  const hatRgb = hslToRgb(hatHueDeg, 0.5, 0.5);
+  const { faceRgb, darkRgb, hatRgb } = getTraitColors(traits, bw);
 
   const faceAnsi = `\x1b[38;2;${faceRgb[0]};${faceRgb[1]};${faceRgb[2]}m`;
   const darkAnsi = `\x1b[38;2;${darkRgb[0]};${darkRgb[1]};${darkRgb[2]}m`;
@@ -578,19 +596,14 @@ export function renderTerminal(dna: string, frame = 0): string {
  * Returns the SVG string, number of leg frames, and total row count.
  * Used by framework components for CSS-only animation (no JS timers).
  */
-export function renderLayeredSVG(dna: string, pixelSize = 10): {
+export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false): {
   svg: string;
   legFrames: number;
   rows: number;
 } {
   const traits = decodeDNA(dna);
 
-  const faceHueDeg = traits.faceHue * 30;
-  const hatHueDeg = traits.hatHue * 30;
-
-  const faceRgb = hslToRgb(faceHueDeg, 0.5, 0.5);
-  const darkRgb = hslToRgb(faceHueDeg, 0.5, 0.28);
-  const hatRgb = hslToRgb(hatHueDeg, 0.5, 0.5);
+  const { faceRgb, darkRgb, hatRgb } = getTraitColors(traits, bw);
 
   const toHex = (r: number, g: number, b: number) =>
     `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
@@ -736,16 +749,11 @@ export function getAvatarCSS(): string {
 `;
 }
 
-export function renderTerminalSmall(dna: string, frame = 0): string {
+export function renderTerminalSmall(dna: string, frame = 0, bw = false): string {
   const traits = decodeDNA(dna);
   const grid = generateGrid(traits, frame);
 
-  const faceHueDeg = traits.faceHue * 30;
-  const hatHueDeg = traits.hatHue * 30;
-
-  const faceRgb = hslToRgb(faceHueDeg, 0.5, 0.5);
-  const darkRgb = hslToRgb(faceHueDeg, 0.5, 0.28);
-  const hatRgb = hslToRgb(hatHueDeg, 0.5, 0.5);
+  const { faceRgb, darkRgb, hatRgb } = getTraitColors(traits, bw);
 
   function cellRgb(cell: Pixel): [number, number, number] | null {
     if (cell === "f" || cell === "l" || cell === "a" || cell === "q" || cell === "r") return faceRgb;
@@ -782,3 +790,12 @@ export function renderTerminalSmall(dna: string, frame = 0): string {
   }
   return lines.join("\n");
 }
+
+/**
+ * Map a hue index (0-11) to a gray value in the safe range (89-166).
+ * All values are visible on both light and dark terminals.
+ */
+function hueToGray(hueIndex: number): number {
+  return Math.round(89 + (hueIndex / 11) * 77);
+}
+

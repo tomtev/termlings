@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Text, Box } from 'ink';
-import { decodeDNA, generateGrid, hslToRgb, traitsFromName } from '../index.js';
+import { decodeDNA, generateGrid, getTraitColors, traitsFromName } from '../index.js';
 import type { Pixel } from '../index.js';
 
 export interface AvatarProps {
@@ -10,9 +10,10 @@ export interface AvatarProps {
   walking?: boolean;
   talking?: boolean;
   waving?: boolean;
+  bw?: boolean;
 }
 
-export function Avatar({ dna, name, compact = false, walking = false, talking = false, waving = false }: AvatarProps) {
+export function Avatar({ dna, name, compact = false, walking = false, talking = false, waving = false, bw = false }: AvatarProps) {
   const [walkFrame, setWalkFrame] = useState(0);
   const [talkFrame, setTalkFrame] = useState(0);
   const [waveFrame, setWaveFrame] = useState(0);
@@ -50,11 +51,7 @@ export function Avatar({ dna, name, compact = false, walking = false, talking = 
     [traits, walkFrame, talkFrame, waveFrame]
   );
 
-  const faceHueDeg = traits.faceHue * 30;
-  const hatHueDeg = traits.hatHue * 30;
-  const faceRgb = hslToRgb(faceHueDeg, 0.5, 0.5);
-  const darkRgb = hslToRgb(faceHueDeg, 0.5, 0.28);
-  const hatRgb = hslToRgb(hatHueDeg, 0.5, 0.5);
+  const { faceRgb, darkRgb, hatRgb } = getTraitColors(traits, bw);
 
   const faceHex = rgbHex(faceRgb);
   const darkHex = rgbHex(darkRgb);

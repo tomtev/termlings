@@ -5,6 +5,7 @@ import {
   renderSVG,
   renderLayeredSVG,
   getAvatarCSS,
+  getTraitColors,
   decodeDNA,
   encodeDNA,
   generateRandomDNA,
@@ -50,6 +51,7 @@ Options:
   --talk           Animate talking
   --wave           Animate waving
   --compact        Half-height rendering
+  --bw             Black & white (shade characters, no colors)
   --random         Generate a random termling
   --svg            Output SVG to stdout
   --size=<px>      SVG pixel size (default: 10)
@@ -82,6 +84,8 @@ if (!isDNA) {
   console.log(`${DIM}dna: ${dna}${RESET}\n`);
 }
 
+const bw = flags.has("bw");
+
 if (flags.has("info")) {
   const traits = decodeDNA(dna);
   console.log("Traits:", JSON.stringify(traits, null, 2));
@@ -95,7 +99,7 @@ if (flags.has("svg")) {
 
   if (flags.has("animated")) {
     // Animated SVG with embedded CSS keyframes
-    const { svg, legFrames } = renderLayeredSVG(dna, size);
+    const { svg, legFrames } = renderLayeredSVG(dna, size, bw);
     const css = getAvatarCSS();
     const classes = ["tg-avatar"];
     if (flags.has("walk")) classes.push("walking");
@@ -127,7 +131,7 @@ if (flags.has("svg")) {
     }
   } else {
     // Static SVG
-    console.log(renderSVG(dna, size, 0, bg, padding));
+    console.log(renderSVG(dna, size, 0, bg, padding, bw));
   }
   process.exit(0);
 }
@@ -161,9 +165,7 @@ if (flags.has("mp4")) {
   const doTalk = flags.has("talk");
   const doWave = flags.has("wave");
 
-  const faceRgbMp4 = hslToRgb(mp4Traits.faceHue * 30, 0.5, 0.5);
-  const darkRgbMp4 = hslToRgb(mp4Traits.faceHue * 30, 0.5, 0.28);
-  const hatRgbMp4 = hslToRgb(mp4Traits.hatHue * 30, 0.5, 0.5);
+  const { faceRgb: faceRgbMp4, darkRgb: darkRgbMp4, hatRgb: hatRgbMp4 } = getTraitColors(mp4Traits, bw);
 
   const cols = 9;
   const half = Math.round(size / 2);
@@ -258,8 +260,10 @@ const animate = flags.has("walk") || flags.has("talk") || flags.has("wave");
 const compact = flags.has("compact");
 
 if (!animate) {
-  // Static render using ANSI colors
-  const output = compact ? renderTerminalSmall(dna) : renderTerminal(dna);
+  // Static render
+  const output = compact
+    ? renderTerminalSmall(dna, 0, bw)
+    : renderTerminal(dna, 0, bw);
   console.log(output);
   process.exit(0);
 }
@@ -267,9 +271,7 @@ if (!animate) {
 // --- Animated render with ANSI escape codes ---
 const traits = decodeDNA(dna);
 const legFrameCount = LEGS[traits.legs].length;
-const faceRgb = hslToRgb(traits.faceHue * 30, 0.5, 0.5);
-const darkRgb = hslToRgb(traits.faceHue * 30, 0.5, 0.28);
-const hatRgb = hslToRgb(traits.hatHue * 30, 0.5, 0.5);
+const { faceRgb, darkRgb, hatRgb } = getTraitColors(traits, bw);
 
 let walkFrame = 0;
 let talkFrame = 0;
@@ -372,3 +374,5 @@ function renderSmallFromGrid(grid: Pixel[][]): string {
   }
   return lines.join("\n");
 }
+
+

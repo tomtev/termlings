@@ -8,6 +8,7 @@ export interface AvatarProps {
   walking?: boolean;
   talking?: boolean;
   waving?: boolean;
+  bw?: boolean;
 }
 
 let cssInjected = false;
@@ -23,11 +24,11 @@ function injectCSS() {
 
 const PX_SIZES = { sm: 3, lg: 8, xl: 14 } as const;
 
-export function Avatar({ dna, name, size = 'lg', walking = false, talking = false, waving = false }: AvatarProps) {
+export function Avatar({ dna, name, size = 'lg', walking = false, talking = false, waving = false, bw = false }: AvatarProps) {
   injectCSS();
   const idleDelay = useRef(Math.random() * 3);
   const resolvedDna = useMemo(() => dna ?? encodeDNA(traitsFromName(name ?? 'agent')), [dna, name]);
-  const { svg, legFrames } = useMemo(() => renderLayeredSVG(resolvedDna, PX_SIZES[size]), [resolvedDna, size]);
+  const { svg, legFrames } = useMemo(() => renderLayeredSVG(resolvedDna, PX_SIZES[size], bw), [resolvedDna, size, bw]);
   const idle = !walking && !talking && !waving;
 
   const cls = [

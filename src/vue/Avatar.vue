@@ -9,11 +9,13 @@ const props = withDefaults(defineProps<{
   walking?: boolean;
   talking?: boolean;
   waving?: boolean;
+  bw?: boolean;
 }>(), {
   size: 'lg',
   walking: false,
   talking: false,
   waving: false,
+  bw: false,
 });
 
 const PX_SIZES = { sm: 3, lg: 8, xl: 14 } as const;
@@ -34,7 +36,7 @@ const resolvedDna = computed(() =>
   props.dna ?? encodeDNA(traitsFromName(props.name ?? 'agent'))
 );
 const rendered = computed(() =>
-  renderLayeredSVG(resolvedDna.value, PX_SIZES[props.size])
+  renderLayeredSVG(resolvedDna.value, PX_SIZES[props.size], props.bw)
 );
 const idle = computed(() => !props.walking && !props.talking && !props.waving);
 </script>

@@ -8,12 +8,13 @@
     walking?: boolean;
     talking?: boolean;
     waving?: boolean;
+    bw?: boolean;
   }
 
-  let { dna, name, size = 'lg', walking = false, talking = false, waving = false }: Props = $props();
+  let { dna, name, size = 'lg', walking = false, talking = false, waving = false, bw = false }: Props = $props();
 
   const resolvedDna = $derived(dna ?? encodeDNA(traitsFromName(name ?? 'agent')));
-  const rendered = $derived(renderLayeredSVG(resolvedDna, size === 'xl' ? 14 : size === 'sm' ? 3 : 8));
+  const rendered = $derived(renderLayeredSVG(resolvedDna, size === 'xl' ? 14 : size === 'sm' ? 3 : 8, bw));
   const idle = $derived(!walking && !talking && !waving);
   const idleDelay = Math.random() * 3;
 </script>
