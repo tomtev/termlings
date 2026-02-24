@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-#\!/usr/bin/env node
 
 // src/index.ts
 var F = ["_", "f", "f", "f", "f", "f", "f", "f", "_"];
