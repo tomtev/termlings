@@ -6,6 +6,10 @@
 
 Cute pixel creatures for web and terminal.
 
+<p align="center">
+  <img src="demo.gif" alt="Animated termlings walking, talking, and waving" />
+</p>
+
 Each avatar is encoded as a **7-character hex DNA string** (~32M combinations) that deterministically renders a unique character with hat, eyes, mouth, body, legs, and two independent color hues.
 
 ## CLI
