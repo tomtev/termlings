@@ -1,0 +1,24 @@
+{
+  "name": "termlings",
+  "version": "0.1.2",
+  "type": "module",
+  "license": "MIT",
+  "description": "Pixel art avatar system. 32M+ unique characters from a 7-char hex DNA string.",
+  "bin": {
+    "termlings": "./bin/termlings.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tomtev/touchgrass",
+    "directory": "packages/termlings"
+  },
+  "keywords": ["avatar", "pixel-art", "svelte", "react", "vue", "terminal", "ink", "cli"],
+  "exports": {
+    ".": "./src/index.ts",
+    "./svelte": "./src/svelte/index.ts",
+    "./react": "./src/react/index.ts",
+    "./vue": "./src/vue/index.ts",
+    "./ink": "./src/ink/index.ts"
+  },
+  "files": ["src", "bin"]
+}
