@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="banner.png" alt="termlings — Cute pixel creatures for web and terminal" width="800" />
+</p>
+
 # termlings
 
 Cute pixel creatures for web and terminal.
