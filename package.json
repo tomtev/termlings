@@ -1,6 +1,6 @@
 {
   "name": "termlings",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "type": "module",
   "license": "MIT",
   "description": "Open-source pixel creatures for web and the terminal.",
@@ -22,6 +22,9 @@
   },
   "files": ["src", "bin"],
   "devDependencies": {
-    "@resvg/resvg-js": "^2.6.2"
+    "@opentui/core": "^0.1.82",
+    "@opentui/solid": "^0.1.82",
+    "@resvg/resvg-js": "^2.6.2",
+    "solid-js": "^1.9.11"
   }
 }

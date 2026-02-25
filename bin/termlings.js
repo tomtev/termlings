@@ -411,16 +411,16 @@ function renderSVG(dna2, pixelSize = 10, frame = 0, background = "auto", padding
   const side = Math.max(cols, maxRows) + pad * 2;
   const w = side * pixelSize;
   const h = side * pixelSize;
-  const ox = Math.floor((side - cols) / 2);
-  const oy = Math.floor((side - rows) / 2);
+  const oxPx = Math.round((w - cols * pixelSize) / 2);
+  const oyPx = Math.round((h - rows * pixelSize) / 2);
   const half = Math.round(pixelSize / 2);
   const quarter = Math.round(pixelSize / 4);
   const rects = [];
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       const cell = grid[y][x];
-      const rx = (x + ox) * pixelSize;
-      const ry = (y + oy) * pixelSize;
+      const rx = x * pixelSize + oxPx;
+      const ry = y * pixelSize + oyPx;
       if (cell === "f") {
         rects.push(`<rect x="${rx}" y="${ry}" width="${pixelSize}" height="${pixelSize}" fill="${faceHex}"/>`);
       } else if (cell === "l") {
@@ -525,8 +525,8 @@ function renderLayeredSVG(dna2, pixelSize = 10, bw2 = false, padding = 0) {
   const side = Math.max(cols, maxRows) + pad * 2;
   const w = side * pixelSize;
   const h = side * pixelSize;
-  const ox = Math.floor((side - cols) / 2);
-  const oy = Math.floor((side - totalRows) / 2);
+  const oxPx = Math.round((w - cols * pixelSize) / 2);
+  const oyPx = Math.round((h - totalRows * pixelSize) / 2);
   function px(cell, rx, ry) {
     if (cell === "_") return "";
     if (cell === "f") return `<rect x="${rx}" y="${ry}" width="${pixelSize}" height="${pixelSize}" fill="${faceHex}"/>`;
@@ -545,7 +545,7 @@ function renderLayeredSVG(dna2, pixelSize = 10, bw2 = false, padding = 0) {
     let out = "";
     for (let y = 0; y < rows.length; y++) {
       for (let x = 0; x < cols; x++) {
-        out += px(rows[y][x], (x + ox) * pixelSize, (startY + y + oy) * pixelSize);
+        out += px(rows[y][x], x * pixelSize + oxPx, (startY + y) * pixelSize + oyPx);
       }
     }
     return out;
