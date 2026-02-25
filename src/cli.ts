@@ -62,9 +62,17 @@ Options:
   --out=<file>     Output file path for --mp4 (default: termling.mp4)
   --fps=<n>        MP4 frame rate (default: 4)
   --duration=<n>   MP4 duration in seconds (default: 3)
+  --play           Launch interactive game mode
   --info           Show DNA traits info
   --help           Show this help`);
   process.exit(0);
+}
+
+if (flags.has("play")) {
+  // Launch game mode — game.ts takes over the process
+  await import("./game.js");
+  // Block here forever — game loop runs via setInterval
+  await new Promise(() => {});
 }
 
 if (flags.has("random") || !input) {
