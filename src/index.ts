@@ -487,8 +487,9 @@ export function renderSVG(dna: string, pixelSize = 10, frame = 0, background: st
 
   const cols = 9;
   const rows = grid.length;
+  const maxRows = 12; // max possible: 5-row hat + 7 body
   const pad = padding;
-  const side = Math.max(cols, rows) + pad * 2;
+  const side = Math.max(cols, maxRows) + pad * 2;
   const w = side * pixelSize;
   const h = side * pixelSize;
   const ox = Math.floor((side - cols) / 2);
@@ -637,8 +638,9 @@ export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false, paddin
 
   // hat + face + eyes + 2 mouth + 2 body + 1 legs
   const totalRows = hatRows.length + 1 + 1 + 2 + 2 + 1;
+  const maxRows = 12; // max possible: 5-row hat + 7 body
   const pad = padding;
-  const side = Math.max(cols, totalRows) + pad * 2;
+  const side = Math.max(cols, maxRows) + pad * 2;
   const w = side * pixelSize;
   const h = side * pixelSize;
   const ox = Math.floor((side - cols) / 2);
