@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue';
-import { encodeDNA, traitsFromName, renderLayeredSVG, getAvatarCSS } from '../index.js';
+import { encodeDNA, traitsFromName, renderLayeredSVG, getAvatarCSS } from '../index.ts';
 
 const props = withDefaults(defineProps<{
   dna?: string;

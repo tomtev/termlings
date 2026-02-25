@@ -1,6 +1,6 @@
 {
   "name": "termlings",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "type": "module",
   "license": "MIT",
   "description": "Open-source pixel creatures for web and the terminal.",

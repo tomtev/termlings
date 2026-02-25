@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { encodeDNA, traitsFromName, renderLayeredSVG, getAvatarCSS } from '../index.js';
+  import { encodeDNA, traitsFromName, renderLayeredSVG, getAvatarCSS } from '../index.ts';
 
   interface Props {
     dna?: string;
