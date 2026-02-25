@@ -383,6 +383,32 @@ export const TALK_FRAMES: Pixel[][][] = [
 ];
 
 /**
+ * Generate a compact pixel grid for small rendering.
+ * Mouths are condensed to 1 row (just the mouth line, no cheek corners).
+ */
+export function generateGridSmall(traits: DecodedDNA, frame = 0, talkFrame = 0, waveFrame = 0): Pixel[][] {
+  const legFrames = LEGS[traits.legs];
+  const legRow = legFrames[frame % legFrames.length];
+  const mouthRows = talkFrame === 0
+    ? MOUTHS[traits.mouth]
+    : TALK_FRAMES[(talkFrame - 1) % TALK_FRAMES.length];
+  const bodyRows = waveFrame === 0
+    ? BODIES[traits.body]
+    : WAVE_FRAMES[(waveFrame - 1) % WAVE_FRAMES.length];
+  // Use only the last mouth row (the actual mouth line), with a face row gap above
+  const mouthRow = mouthRows[mouthRows.length - 1];
+  return [
+    ...HATS[traits.hat],
+    F,
+    EYES[traits.eyes],
+    F,
+    mouthRow,
+    ...bodyRows,
+    legRow,
+  ];
+}
+
+/**
  * Generate the pixel grid from decoded DNA traits.
  * @param frame Walking animation frame index (0 = standing). Wraps automatically.
  * @param talkFrame Talk animation frame (0 = normal mouth, 1+ = talk frames). Wraps automatically.
@@ -767,7 +793,7 @@ export function getAvatarCSS(): string {
 
 export function renderTerminalSmall(dna: string, frame = 0, bw = false): string {
   const traits = decodeDNA(dna);
-  const grid = generateGrid(traits, frame);
+  const grid = generateGridSmall(traits, frame);
 
   const { faceRgb, darkRgb, hatRgb } = getTraitColors(traits, bw);
 

@@ -1,5 +1,6 @@
 import {
   generateGrid,
+  generateGridSmall,
   decodeDNA,
   encodeDNA,
   generateRandomDNA,
@@ -22,6 +23,7 @@ for (const a of rawArgs) {
 }
 const argDna = positional[0] || null    // player DNA string (7-hex) or name
 const argRoom = positional[1] || null   // room seed for deterministic NPC placement
+let smallMode = rawArgs.includes("--small")
 
 // --- Terminal setup ---
 
@@ -94,6 +96,7 @@ function makeEntity(
 ): Entity {
   const traits = decodeDNA(dna)
   const { faceRgb, darkRgb, hatRgb } = getTraitColors(traits)
+  const fullHeight = HATS[traits.hat].length + 7
   return {
     dna,
     x,
@@ -107,7 +110,7 @@ function makeEntity(
     darkRgb,
     hatRgb,
     legFrames: LEGS[traits.legs].length,
-    height: HATS[traits.hat].length + 7,
+    height: smallMode ? Math.ceil(fullHeight / 2) : fullHeight,
     walking: opts.walking ?? false,
     talking: opts.talking ?? false,
     waving: opts.waving ?? false,
@@ -144,6 +147,16 @@ function pixelCell(
   return { chars, fg, bg }
 }
 
+/** Resolve a pixel type to its primary color */
+function pixelRgb(p: Pixel, face: RGB, dark: RGB, hat: RGB): RGB | null {
+  switch (p) {
+    case "f": case "l": case "a": return face
+    case "e": case "d": case "s": case "n": case "m": case "q": case "r": return dark
+    case "h": case "k": return hat
+    default: return null
+  }
+}
+
 // --- Screen buffer ---
 
 let buffer: Cell[][] = []
@@ -176,7 +189,7 @@ stdout.on("resize", () => {
   rows = stdout.rows || 24
   allocBuffer()
   stdout.write("\x1b[2J")
-  player.x = Math.min(player.x, cols - 20)
+  player.x = Math.min(player.x, cols - (smallMode ? 10 : 20))
   player.y = Math.min(player.y, rows - player.height - 2)
 })
 
@@ -235,6 +248,60 @@ function stampEntity(e: Entity) {
   }
 }
 
+/** Stamp a sprite in small mode (half-block, 1 char per column) */
+function stampEntitySmall(e: Entity) {
+  // Use compact grid (1-row mouth) — talking shown via horizontal squish
+  const grid = generateGridSmall(e.traits, e.walkFrame, 0, e.waveFrame)
+  const rendered = e.flipped ? grid.map((row) => [...row].reverse()) : grid
+
+  // When talking, squish by skipping outermost filled columns
+  const squish = e.talkFrame === 1 ? 1 : 0
+
+  for (let gy = 0; gy < rendered.length; gy += 2) {
+    const topRow = rendered[gy]
+    const botRow = gy + 1 < rendered.length ? rendered[gy + 1] : null
+    const sy = e.y + Math.floor(gy / 2)
+    if (sy < 0 || sy >= rows) continue
+
+    for (let gx = squish; gx < topRow.length - squish; gx++) {
+      const sx = e.x + gx
+      if (sx < 0 || sx >= cols) continue
+
+      const top = pixelRgb(topRow[gx], e.faceRgb, e.darkRgb, e.hatRgb)
+      const bot = botRow ? pixelRgb(botRow[gx], e.faceRgb, e.darkRgb, e.hatRgb) : null
+
+      if (top && bot) {
+        buffer[sy][sx] = { ch: "▀", fg: top, bg: bot }
+      } else if (top) {
+        buffer[sy][sx] = { ch: "▀", fg: top, bg: null }
+      } else if (bot) {
+        buffer[sy][sx] = { ch: "▄", fg: bot, bg: null }
+      }
+    }
+  }
+
+  // Shadow row
+  const shadowY = e.y + Math.ceil(rendered.length / 2)
+  if (shadowY >= 0 && shadowY < rows) {
+    let minC = 9, maxC = 0
+    for (const row of rendered) {
+      for (let c = 0; c < row.length; c++) {
+        if (row[c] !== "_") {
+          if (c < minC) minC = c
+          if (c > maxC) maxC = c
+        }
+      }
+    }
+    const shadowFg: RGB = [50, 50, 50]
+    for (let gx = minC; gx <= maxC; gx++) {
+      const sx = e.x + gx
+      if (sx >= 0 && sx < cols) {
+        buffer[shadowY][sx] = { ch: "░", fg: shadowFg, bg: null }
+      }
+    }
+  }
+}
+
 /** Render buffer to terminal as one big write */
 function renderBuffer() {
   let out = "\x1b[H" // cursor home
@@ -268,7 +335,7 @@ function renderBuffer() {
 }
 
 /** Draw border and HUD text onto buffer */
-function stampUI(hud: { text: string; active?: boolean }[]) {
+function stampUI(hud: { text: string; active?: boolean; fg?: RGB }[]) {
   const borderFg: RGB = [80, 80, 80]
   for (let x = 0; x < cols; x++) {
     buffer[0][x] = { ch: x === 0 ? "╭" : x === cols - 1 ? "╮" : "─", fg: borderFg, bg: null }
@@ -282,7 +349,7 @@ function stampUI(hud: { text: string; active?: boolean }[]) {
   const activeFg: RGB = [255, 220, 80]
   let cx = 2
   for (const seg of hud) {
-    const fg = seg.active ? activeFg : dimFg
+    const fg = seg.fg ?? (seg.active ? activeFg : dimFg)
     for (const ch of seg.text) {
       if (cx < cols - 1) {
         buffer[rows - 1][cx] = { ch, fg, bg: null }
@@ -342,11 +409,12 @@ const playerTraits = decodeDNA(playerDna)
 const rng = seededRandom(argRoom ?? "default")
 const npcDNAs = generateNpcDNAs(5, playerTraits.faceHue, rng)
 
-const player = makeEntity(playerDna, Math.floor(cols / 2) - 9, Math.floor(rows / 2) - 5)
+const player = makeEntity(playerDna, Math.floor(cols / 2) - (smallMode ? 5 : 9), Math.floor(rows / 2) - (smallMode ? 3 : 5))
 
 const npcs: Entity[] = Array.from({ length: 5 }, (_, i) => {
-  const x = 4 + Math.floor(rng() * (cols - 30))
-  const y = 2 + Math.floor(rng() * (rows - 16))
+  const spawnMargin = smallMode ? 14 : 30
+  const x = 4 + Math.floor(rng() * (cols - spawnMargin))
+  const y = 2 + Math.floor(rng() * (rows - (smallMode ? 8 : 16)))
   const e = makeEntity(npcDNAs[i], x, y, { idle: true })
   e.idleTicks = Math.floor(30 + Math.random() * 90)
   return e
@@ -360,7 +428,8 @@ let moveStopTimer: ReturnType<typeof setTimeout> | null = null
 stdin.on("data", (key: string) => {
   if (key === "q" || key === "\x03") cleanup() // q or Ctrl+C
 
-  const step = 2
+  const step = smallMode ? 1 : 2
+  const spriteW = smallMode ? 10 : 20
   if (key === "\x1b[A") { // up
     player.y = Math.max(1, player.y - 1)
     startMoving()
@@ -372,7 +441,7 @@ stdin.on("data", (key: string) => {
     player.flipped = true
     startMoving()
   } else if (key === "\x1b[C") { // right
-    player.x = Math.min(cols - 20, player.x + step)
+    player.x = Math.min(cols - spriteW, player.x + step)
     player.flipped = false
     startMoving()
   } else if (key === "t") {
@@ -382,6 +451,17 @@ stdin.on("data", (key: string) => {
     player.waving = !player.waving
     if (!player.waving) player.waveFrame = 0
     else player.waveFrame = 1
+  } else if (key === "z") {
+    smallMode = !smallMode
+    // Scale positions proportionally (small is half size)
+    const scale = smallMode ? 0.5 : 2
+    for (const e of [player, ...npcs]) {
+      e.x = Math.round(e.x * scale)
+      e.y = Math.round(e.y * scale)
+      const fullH = HATS[e.traits.hat].length + 7
+      e.height = smallMode ? Math.ceil(fullH / 2) : fullH
+    }
+    stdout.write("\x1b[2J")
   }
 })
 
@@ -460,8 +540,9 @@ function updateAnimations() {
     }
 
     if (npc.targetX == null || npc.targetY == null) {
-      npc.targetX = 4 + Math.floor(Math.random() * (cols - 30))
-      npc.targetY = 2 + Math.floor(Math.random() * (rows - 16))
+      const wanderMargin = smallMode ? 14 : 30
+      npc.targetX = 4 + Math.floor(Math.random() * (cols - wanderMargin))
+      npc.targetY = 2 + Math.floor(Math.random() * (rows - (smallMode ? 8 : 16)))
       npc.walking = true
       npc.idle = false
       npc.talking = Math.random() < 0.2
@@ -484,8 +565,9 @@ function updateAnimations() {
         npc.idle = true
         npc.idleTicks = Math.floor(60 + Math.random() * 150)
       } else {
-        if (Math.abs(dx) > 2) {
-          npc.x += dx > 0 ? 2 : -2
+        const npcStep = smallMode ? 1 : 2
+        if (Math.abs(dx) > npcStep) {
+          npc.x += dx > 0 ? npcStep : -npcStep
           npc.flipped = dx < 0
         }
         if (Math.abs(dy) > 1) {
@@ -500,15 +582,18 @@ function updateAnimations() {
 
 const roomLabel = argRoom ?? "default"
 
-function buildHud(): { text: string; active?: boolean }[] {
+function buildHud(): { text: string; active?: boolean; fg?: RGB }[] {
   return [
-    { text: ` ${playerDna} ` },
+    { text: " ██ ", fg: player.faceRgb },
+    { text: `${playerDna} ` },
     { text: `| room: ${roomLabel} ` },
     { text: "| Arrows: move " },
     { text: "| " },
     { text: "[T]alk", active: player.talking },
     { text: " | " },
     { text: "[W]ave", active: player.waving },
+    { text: " | " },
+    { text: "[Z]oom", active: smallMode },
     { text: " | Q: quit " },
   ]
 }
@@ -520,7 +605,8 @@ function frame() {
   const all = [...npcs, player].sort((a, b) => (a.y + a.height) - (b.y + b.height))
 
   for (const entity of all) {
-    stampEntity(entity)
+    if (smallMode) stampEntitySmall(entity)
+    else stampEntity(entity)
   }
 
   stampUI(buildHud())

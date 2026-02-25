@@ -858,7 +858,7 @@ function stampUI(hud) {
   const activeFg = [255, 220, 80];
   let cx = 2;
   for (const seg of hud) {
-    const fg = seg.active ? activeFg : dimFg;
+    const fg = seg.fg ?? (seg.active ? activeFg : dimFg);
     for (const ch of seg.text) {
       if (cx < cols - 1) {
         buffer[rows - 1][cx] = { ch, fg, bg: null };
@@ -996,7 +996,8 @@ function updateAnimations() {
 }
 function buildHud() {
   return [
-    { text: ` ${playerDna} ` },
+    { text: " \u2588\u2588 ", fg: player.faceRgb },
+    { text: `${playerDna} ` },
     { text: `| room: ${roomLabel} ` },
     { text: "| Arrows: move " },
     { text: "| " },
