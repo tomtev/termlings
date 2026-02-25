@@ -285,7 +285,9 @@ function renderLayeredSVG(dna2, pixelSize = 10, bw2 = false, padding = 0) {
     }
     return out;
   }
-  const staticRects = renderRows([...hatRows, F, EYES[traits2.eyes]], 0);
+  const staticRects = renderRows([...hatRows, F], 0);
+  const eyeY = hatRows.length + 1;
+  const eyeRects = renderRows([EYES[traits2.eyes]], eyeY);
   const mY = hatRows.length + 2;
   const mouth0 = renderRows(mouthNormal, mY);
   const mouth1 = renderRows(mouthTalk, mY);
@@ -298,7 +300,7 @@ function renderLayeredSVG(dna2, pixelSize = 10, bw2 = false, padding = 0) {
   const legs1 = legFrameCount2 > 1 ? renderRows([legVariant[1]], lY) : "";
   const legs2 = legFrameCount2 > 2 ? renderRows([legVariant[2]], lY) : "";
   const legs3 = legFrameCount2 > 3 ? renderRows([legVariant[3]], lY) : "";
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges"><g class="tg-bob">${staticRects}<g class="tg-mouth-0">${mouth0}</g><g class="tg-mouth-1">${mouth1}</g><g class="tg-body-0">${body0}</g><g class="tg-body-1">${body1}</g><g class="tg-body-2">${body2}</g></g><g class="tg-legs-0">${legs0}</g>` + (legs1 ? `<g class="tg-legs-1">${legs1}</g>` : "") + (legs2 ? `<g class="tg-legs-2">${legs2}</g>` : "") + (legs3 ? `<g class="tg-legs-3">${legs3}</g>` : "") + `</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges"><g class="tg-bob">${staticRects}<g class="tg-eyes">${eyeRects}</g><g class="tg-mouth-0">${mouth0}</g><g class="tg-mouth-1">${mouth1}</g><g class="tg-body-0">${body0}</g><g class="tg-body-1">${body1}</g><g class="tg-body-2">${body2}</g></g><g class="tg-legs-0">${legs0}</g>` + (legs1 ? `<g class="tg-legs-1">${legs1}</g>` : "") + (legs2 ? `<g class="tg-legs-2">${legs2}</g>` : "") + (legs3 ? `<g class="tg-legs-3">${legs3}</g>` : "") + `</svg>`;
   return { svg, legFrames: legFrameCount2, rows: totalRows, bgHex };
 }
 function getAvatarCSS() {
@@ -348,6 +350,10 @@ function getAvatarCSS() {
 .tg-avatar.waving .tg-body-0 { opacity: 0 }
 .tg-avatar.waving .tg-body-1 { animation: tg-toggle 1200ms steps(1) infinite }
 .tg-avatar.waving .tg-body-2 { animation: tg-toggle 1200ms steps(1) infinite; animation-delay: -600ms }
+
+.tg-avatar.backside .tg-eyes,
+.tg-avatar.backside .tg-mouth-0,
+.tg-avatar.backside .tg-mouth-1 { display: none }
 `;
 }
 function renderTerminalSmall(dna2, frame2 = 0, bw2 = false) {

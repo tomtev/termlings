@@ -697,8 +697,12 @@ export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false, paddin
     return out;
   }
 
-  // Static rows: hat + face + eyes
-  const staticRects = renderRows([...hatRows, F, EYES[traits.eyes]!], 0);
+  // Static rows: hat + face (no eyes — eyes get their own group for backside support)
+  const staticRects = renderRows([...hatRows, F], 0);
+
+  // Eyes
+  const eyeY = hatRows.length + 1;
+  const eyeRects = renderRows([EYES[traits.eyes]!], eyeY);
 
   // Mouth starts after static rows
   const mY = hatRows.length + 2;
@@ -721,6 +725,7 @@ export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false, paddin
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges">` +
     `<g class="tg-bob">${staticRects}` +
+    `<g class="tg-eyes">${eyeRects}</g>` +
     `<g class="tg-mouth-0">${mouth0}</g>` +
     `<g class="tg-mouth-1">${mouth1}</g>` +
     `<g class="tg-body-0">${body0}</g>` +
@@ -788,6 +793,10 @@ export function getAvatarCSS(): string {
 .tg-avatar.waving .tg-body-0 { opacity: 0 }
 .tg-avatar.waving .tg-body-1 { animation: tg-toggle 1200ms steps(1) infinite }
 .tg-avatar.waving .tg-body-2 { animation: tg-toggle 1200ms steps(1) infinite; animation-delay: -600ms }
+
+.tg-avatar.backside .tg-eyes,
+.tg-avatar.backside .tg-mouth-0,
+.tg-avatar.backside .tg-mouth-1 { display: none }
 `;
 }
 

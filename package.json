@@ -1,16 +1,31 @@
 {
   "name": "termlings",
-  "version": "0.1.12",
-  "type": "module",
-  "license": "MIT",
-  "description": "Open-source pixel creatures for web and the terminal.",
-  "bin": {
-    "termlings": "./bin/termlings.js"
-  },
+  "version": "0.1.14",
   "repository": {
     "type": "git",
     "url": "https://github.com/tomtev/termlings"
   },
+  "devDependencies": {
+    "@opentui/core": "^0.1.82",
+    "@opentui/solid": "^0.1.82",
+    "@resvg/resvg-js": "^2.6.2",
+    "solid-js": "^1.9.11"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./svelte": "./src/svelte/index.ts",
+    "./react": "./src/react/index.ts",
+    "./vue": "./src/vue/index.ts",
+    "./ink": "./src/ink/index.ts"
+  },
+  "bin": {
+    "termlings": "./bin/termlings.js"
+  },
+  "description": "Open-source pixel creatures for web and the terminal.",
+  "files": [
+    "src",
+    "bin"
+  ],
   "homepage": "https://termlings.com",
   "keywords": [
     "avatar",
@@ -22,21 +37,6 @@
     "ink",
     "cli"
   ],
-  "exports": {
-    ".": "./src/index.ts",
-    "./svelte": "./src/svelte/index.ts",
-    "./react": "./src/react/index.ts",
-    "./vue": "./src/vue/index.ts",
-    "./ink": "./src/ink/index.ts"
-  },
-  "files": [
-    "src",
-    "bin"
-  ],
-  "devDependencies": {
-    "@opentui/core": "^0.1.82",
-    "@opentui/solid": "^0.1.82",
-    "@resvg/resvg-js": "^2.6.2",
-    "solid-js": "^1.9.11"
-  }
+  "license": "MIT",
+  "type": "module"
 }

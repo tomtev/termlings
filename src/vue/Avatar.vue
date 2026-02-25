@@ -9,12 +9,14 @@ const props = withDefaults(defineProps<{
   walking?: boolean;
   talking?: boolean;
   waving?: boolean;
+  backside?: boolean;
   bw?: boolean;
 }>(), {
   size: 'lg',
   walking: false,
   talking: false,
   waving: false,
+  backside: false,
   bw: false,
 });
 
@@ -47,8 +49,9 @@ const idle = computed(() => !props.walking && !props.talking && !props.waving);
     :class="{
       idle: idle,
       walking: props.walking,
-      talking: props.talking,
+      talking: props.talking && !props.backside,
       waving: props.waving,
+      backside: props.backside,
       'walk-3f': rendered.legFrames === 3,
       'walk-4f': rendered.legFrames === 4,
       'tg-avatar-sm': props.size === 'sm',

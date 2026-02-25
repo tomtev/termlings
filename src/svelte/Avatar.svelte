@@ -8,10 +8,11 @@
     walking?: boolean;
     talking?: boolean;
     waving?: boolean;
+    backside?: boolean;
     bw?: boolean;
   }
 
-  let { dna, name, size = 'lg', walking = false, talking = false, waving = false, bw = false }: Props = $props();
+  let { dna, name, size = 'lg', walking = false, talking = false, waving = false, backside = false, bw = false }: Props = $props();
 
   const resolvedDna = $derived(dna ?? encodeDNA(traitsFromName(name ?? 'agent')));
   const rendered = $derived(renderLayeredSVG(resolvedDna, size === 'xl' ? 14 : size === 'sm' ? 3 : 8, bw));
@@ -25,8 +26,9 @@
   class="tg-avatar"
   class:idle
   class:walking
-  class:talking
+  class:talking={talking && !backside}
   class:waving
+  class:backside
   class:walk-3f={rendered.legFrames === 3}
   class:walk-4f={rendered.legFrames === 4}
   class:sm={size === 'sm'}
