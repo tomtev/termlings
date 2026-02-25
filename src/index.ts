@@ -488,8 +488,11 @@ export function renderSVG(dna: string, pixelSize = 10, frame = 0, background: st
   const cols = 9;
   const rows = grid.length;
   const pad = padding;
-  const w = (cols + pad * 2) * pixelSize;
-  const h = (rows + pad * 2) * pixelSize;
+  const side = Math.max(cols, rows) + pad * 2;
+  const w = side * pixelSize;
+  const h = side * pixelSize;
+  const ox = Math.floor((side - cols) / 2);
+  const oy = Math.floor((side - rows) / 2);
 
   const half = Math.round(pixelSize / 2);
   const quarter = Math.round(pixelSize / 4);
@@ -497,8 +500,8 @@ export function renderSVG(dna: string, pixelSize = 10, frame = 0, background: st
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       const cell = grid[y][x];
-      const rx = (x + pad) * pixelSize;
-      const ry = (y + pad) * pixelSize;
+      const rx = (x + ox) * pixelSize;
+      const ry = (y + oy) * pixelSize;
       if (cell === "f") {
         rects.push(`<rect x="${rx}" y="${ry}" width="${pixelSize}" height="${pixelSize}" fill="${faceHex}"/>`);
       } else if (cell === "l") {
@@ -635,8 +638,11 @@ export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false, paddin
   // hat + face + eyes + 2 mouth + 2 body + 1 legs
   const totalRows = hatRows.length + 1 + 1 + 2 + 2 + 1;
   const pad = padding;
-  const w = (cols + pad * 2) * pixelSize;
-  const h = (totalRows + pad * 2) * pixelSize;
+  const side = Math.max(cols, totalRows) + pad * 2;
+  const w = side * pixelSize;
+  const h = side * pixelSize;
+  const ox = Math.floor((side - cols) / 2);
+  const oy = Math.floor((side - totalRows) / 2);
 
   function px(cell: Pixel, rx: number, ry: number): string {
     if (cell === "_") return "";
@@ -657,7 +663,7 @@ export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false, paddin
     let out = "";
     for (let y = 0; y < rows.length; y++) {
       for (let x = 0; x < cols; x++) {
-        out += px(rows[y][x], (x + pad) * pixelSize, (startY + y + pad) * pixelSize);
+        out += px(rows[y][x], (x + ox) * pixelSize, (startY + y + oy) * pixelSize);
       }
     }
     return out;
