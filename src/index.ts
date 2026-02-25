@@ -443,15 +443,18 @@ export function getTraitColors(traits: DecodedDNA, bw = false): {
   faceRgb: [number, number, number];
   darkRgb: [number, number, number];
   hatRgb: [number, number, number];
+  bgRgb: [number, number, number];
 } {
   if (bw) {
     const fg = hueToGray(traits.faceHue);
     const dg = Math.round(fg * 0.55);
+    const bg = Math.round(fg * 0.18);
     const hg = hueToGray(traits.hatHue);
     return {
       faceRgb: [fg, fg, fg],
       darkRgb: [dg, dg, dg],
       hatRgb: [hg, hg, hg],
+      bgRgb: [bg, bg, bg],
     };
   }
   const faceHueDeg = traits.faceHue * 30;
@@ -460,6 +463,7 @@ export function getTraitColors(traits: DecodedDNA, bw = false): {
     faceRgb: hslToRgb(faceHueDeg, 0.5, 0.5),
     darkRgb: hslToRgb(faceHueDeg, 0.5, 0.28),
     hatRgb: hslToRgb(hatHueDeg, 0.5, 0.5),
+    bgRgb: hslToRgb(faceHueDeg, 0.5, 0.1),
   };
 }
 
@@ -467,11 +471,11 @@ export function getTraitColors(traits: DecodedDNA, bw = false): {
  * Render a DNA string as an SVG string with transparent background.
  * Each pixel is rendered as a square rect. 1-cell padding around the grid.
  */
-export function renderSVG(dna: string, pixelSize = 10, frame = 0, background: string | null = '#000', padding = 1, bw = false): string {
+export function renderSVG(dna: string, pixelSize = 10, frame = 0, background: string | null = 'auto', padding = 1, bw = false): string {
   const traits = decodeDNA(dna);
   const grid = generateGrid(traits, frame);
 
-  const { faceRgb, darkRgb, hatRgb } = getTraitColors(traits, bw);
+  const { faceRgb, darkRgb, hatRgb, bgRgb } = getTraitColors(traits, bw);
 
   const toHex = (r: number, g: number, b: number) =>
     `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
@@ -479,6 +483,7 @@ export function renderSVG(dna: string, pixelSize = 10, frame = 0, background: st
   const faceHex = toHex(...faceRgb);
   const darkHex = toHex(...darkRgb);
   const hatHex = toHex(...hatRgb);
+  const resolvedBg = background === 'auto' ? toHex(...bgRgb) : background;
 
   const cols = 9;
   const rows = grid.length;
@@ -530,7 +535,7 @@ export function renderSVG(dna: string, pixelSize = 10, frame = 0, background: st
     }
   }
 
-  const bg = background ? `<rect width="${w}" height="${h}" fill="${background}"/>\n` : '';
+  const bg = resolvedBg ? `<rect width="${w}" height="${h}" fill="${resolvedBg}"/>\n` : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges">\n${bg}${rects.join("\n")}\n</svg>`;
 }
 
@@ -596,14 +601,15 @@ export function renderTerminal(dna: string, frame = 0, bw = false): string {
  * Returns the SVG string, number of leg frames, and total row count.
  * Used by framework components for CSS-only animation (no JS timers).
  */
-export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false): {
+export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false, padding = 0): {
   svg: string;
   legFrames: number;
   rows: number;
+  bgHex: string;
 } {
   const traits = decodeDNA(dna);
 
-  const { faceRgb, darkRgb, hatRgb } = getTraitColors(traits, bw);
+  const { faceRgb, darkRgb, hatRgb, bgRgb } = getTraitColors(traits, bw);
 
   const toHex = (r: number, g: number, b: number) =>
     `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
@@ -611,6 +617,7 @@ export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false): {
   const faceHex = toHex(...faceRgb);
   const darkHex = toHex(...darkRgb);
   const hatHex = toHex(...hatRgb);
+  const bgHex = toHex(...bgRgb);
 
   const half = Math.round(pixelSize / 2);
   const quarter = Math.round(pixelSize / 4);
@@ -627,8 +634,9 @@ export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false): {
 
   // hat + face + eyes + 2 mouth + 2 body + 1 legs
   const totalRows = hatRows.length + 1 + 1 + 2 + 2 + 1;
-  const w = cols * pixelSize;
-  const h = totalRows * pixelSize;
+  const pad = padding;
+  const w = (cols + pad * 2) * pixelSize;
+  const h = (totalRows + pad * 2) * pixelSize;
 
   function px(cell: Pixel, rx: number, ry: number): string {
     if (cell === "_") return "";
@@ -649,7 +657,7 @@ export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false): {
     let out = "";
     for (let y = 0; y < rows.length; y++) {
       for (let x = 0; x < cols; x++) {
-        out += px(rows[y][x], x * pixelSize, (startY + y) * pixelSize);
+        out += px(rows[y][x], (x + pad) * pixelSize, (startY + y + pad) * pixelSize);
       }
     }
     return out;
@@ -691,7 +699,7 @@ export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false): {
     (legs3 ? `<g class="tg-legs-3">${legs3}</g>` : "") +
     `</svg>`;
 
-  return { svg, legFrames: legFrameCount, rows: totalRows };
+  return { svg, legFrames: legFrameCount, rows: totalRows, bgHex };
 }
 
 /**

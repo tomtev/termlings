@@ -377,11 +377,13 @@ function getTraitColors(traits2, bw2 = false) {
   if (bw2) {
     const fg = hueToGray(traits2.faceHue);
     const dg = Math.round(fg * 0.55);
+    const bg = Math.round(fg * 0.18);
     const hg = hueToGray(traits2.hatHue);
     return {
       faceRgb: [fg, fg, fg],
       darkRgb: [dg, dg, dg],
-      hatRgb: [hg, hg, hg]
+      hatRgb: [hg, hg, hg],
+      bgRgb: [bg, bg, bg]
     };
   }
   const faceHueDeg = traits2.faceHue * 30;
@@ -389,17 +391,19 @@ function getTraitColors(traits2, bw2 = false) {
   return {
     faceRgb: hslToRgb(faceHueDeg, 0.5, 0.5),
     darkRgb: hslToRgb(faceHueDeg, 0.5, 0.28),
-    hatRgb: hslToRgb(hatHueDeg, 0.5, 0.5)
+    hatRgb: hslToRgb(hatHueDeg, 0.5, 0.5),
+    bgRgb: hslToRgb(faceHueDeg, 0.5, 0.1)
   };
 }
-function renderSVG(dna2, pixelSize = 10, frame = 0, background = "#000", padding = 1, bw2 = false) {
+function renderSVG(dna2, pixelSize = 10, frame = 0, background = "auto", padding = 1, bw2 = false) {
   const traits2 = decodeDNA(dna2);
   const grid = generateGrid(traits2, frame);
-  const { faceRgb: faceRgb2, darkRgb: darkRgb2, hatRgb: hatRgb2 } = getTraitColors(traits2, bw2);
+  const { faceRgb: faceRgb2, darkRgb: darkRgb2, hatRgb: hatRgb2, bgRgb: bgRgb2 } = getTraitColors(traits2, bw2);
   const toHex = (r, g, b) => `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
   const faceHex = toHex(...faceRgb2);
   const darkHex = toHex(...darkRgb2);
   const hatHex = toHex(...hatRgb2);
+  const resolvedBg = background === "auto" ? toHex(...bgRgb2) : background;
   const cols = 9;
   const rows = grid.length;
   const pad = padding;
@@ -443,7 +447,7 @@ function renderSVG(dna2, pixelSize = 10, frame = 0, background = "#000", padding
       }
     }
   }
-  const bg = background ? `<rect width="${w}" height="${h}" fill="${background}"/>
+  const bg = resolvedBg ? `<rect width="${w}" height="${h}" fill="${resolvedBg}"/>
 ` : "";
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges">
 ${bg}${rects.join("\n")}
@@ -492,13 +496,14 @@ function renderTerminal(dna2, frame = 0, bw2 = false) {
   }
   return lines.join("\n");
 }
-function renderLayeredSVG(dna2, pixelSize = 10, bw2 = false) {
+function renderLayeredSVG(dna2, pixelSize = 10, bw2 = false, padding = 0) {
   const traits2 = decodeDNA(dna2);
-  const { faceRgb: faceRgb2, darkRgb: darkRgb2, hatRgb: hatRgb2 } = getTraitColors(traits2, bw2);
+  const { faceRgb: faceRgb2, darkRgb: darkRgb2, hatRgb: hatRgb2, bgRgb: bgRgb2 } = getTraitColors(traits2, bw2);
   const toHex = (r, g, b) => `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
   const faceHex = toHex(...faceRgb2);
   const darkHex = toHex(...darkRgb2);
   const hatHex = toHex(...hatRgb2);
+  const bgHex = toHex(...bgRgb2);
   const half = Math.round(pixelSize / 2);
   const quarter = Math.round(pixelSize / 4);
   const cols = 9;
@@ -511,8 +516,9 @@ function renderLayeredSVG(dna2, pixelSize = 10, bw2 = false) {
   const legVariant = LEGS[traits2.legs];
   const legFrameCount2 = legVariant.length;
   const totalRows = hatRows.length + 1 + 1 + 2 + 2 + 1;
-  const w = cols * pixelSize;
-  const h = totalRows * pixelSize;
+  const pad = padding;
+  const w = (cols + pad * 2) * pixelSize;
+  const h = (totalRows + pad * 2) * pixelSize;
   function px(cell, rx, ry) {
     if (cell === "_") return "";
     if (cell === "f") return `<rect x="${rx}" y="${ry}" width="${pixelSize}" height="${pixelSize}" fill="${faceHex}"/>`;
@@ -531,7 +537,7 @@ function renderLayeredSVG(dna2, pixelSize = 10, bw2 = false) {
     let out = "";
     for (let y = 0; y < rows.length; y++) {
       for (let x = 0; x < cols; x++) {
-        out += px(rows[y][x], x * pixelSize, (startY + y) * pixelSize);
+        out += px(rows[y][x], (x + pad) * pixelSize, (startY + y + pad) * pixelSize);
       }
     }
     return out;
@@ -550,7 +556,7 @@ function renderLayeredSVG(dna2, pixelSize = 10, bw2 = false) {
   const legs2 = legFrameCount2 > 2 ? renderRows([legVariant[2]], lY) : "";
   const legs3 = legFrameCount2 > 3 ? renderRows([legVariant[3]], lY) : "";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges"><g class="tg-bob">${staticRects}<g class="tg-mouth-0">${mouth0}</g><g class="tg-mouth-1">${mouth1}</g><g class="tg-body-0">${body0}</g><g class="tg-body-1">${body1}</g><g class="tg-body-2">${body2}</g></g><g class="tg-legs-0">${legs0}</g>` + (legs1 ? `<g class="tg-legs-1">${legs1}</g>` : "") + (legs2 ? `<g class="tg-legs-2">${legs2}</g>` : "") + (legs3 ? `<g class="tg-legs-3">${legs3}</g>` : "") + `</svg>`;
-  return { svg, legFrames: legFrameCount2, rows: totalRows };
+  return { svg, legFrames: legFrameCount2, rows: totalRows, bgHex };
 }
 function getAvatarCSS() {
   return `
