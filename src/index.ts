@@ -697,15 +697,18 @@ export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false, paddin
     return out;
   }
 
-  // Static rows: hat + face (no eyes — eyes get their own group for backside support)
-  const staticRects = renderRows([...hatRows, F], 0);
-
-  // Eyes
+  // Static rows: hat + face + face-colored backing for eye & mouth rows
+  // The backing ensures the face area stays solid when backside hides eyes/mouth
   const eyeY = hatRows.length + 1;
+  const mY = hatRows.length + 2;
+  const staticRects = renderRows([...hatRows, F], 0)
+    + renderRows([F], eyeY)
+    + renderRows([F, F], mY);
+
+  // Eyes (rendered on top of face backing)
   const eyeRects = renderRows([EYES[traits.eyes]!], eyeY);
 
-  // Mouth starts after static rows
-  const mY = hatRows.length + 2;
+  // Mouth starts after eyes (rendered on top of face backing)
   const mouth0 = renderRows(mouthNormal, mY);
   const mouth1 = renderRows(mouthTalk, mY);
 

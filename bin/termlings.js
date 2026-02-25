@@ -285,10 +285,12 @@ function renderLayeredSVG(dna2, pixelSize = 10, bw2 = false, padding = 0) {
     }
     return out;
   }
-  const staticRects = renderRows([...hatRows, F], 0);
   const eyeY = hatRows.length + 1;
-  const eyeRects = renderRows([EYES[traits2.eyes]], eyeY);
   const mY = hatRows.length + 2;
+  const staticRects = renderRows([...hatRows, F], 0)
+    + renderRows([F], eyeY)
+    + renderRows([F, F], mY);
+  const eyeRects = renderRows([EYES[traits2.eyes]], eyeY);
   const mouth0 = renderRows(mouthNormal, mY);
   const mouth1 = renderRows(mouthTalk, mY);
   const bY = mY + 2;
