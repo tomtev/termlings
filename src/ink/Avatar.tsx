@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Text, Box } from 'ink';
-import { decodeDNA, generateGrid, getTraitColors, traitsFromName } from '../index.js';
-import type { Pixel } from '../index.js';
+import { decodeDNA, generateGrid, getTraitColors, traitsFromName } from '../index';
+import type { Pixel } from '../index';
 
 export interface AvatarProps {
   dna?: string;

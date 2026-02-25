@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react';
-import { encodeDNA, traitsFromName, renderLayeredSVG, getAvatarCSS } from '../index.js';
+import { encodeDNA, traitsFromName, renderLayeredSVG, getAvatarCSS } from '../index';
 
 export interface AvatarProps {
   dna?: string;

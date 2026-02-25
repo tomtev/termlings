@@ -387,20 +387,20 @@ export const TALK_FRAMES: Pixel[][][] = [
  * Mouths are condensed to 1 row (just the mouth line, no cheek corners).
  */
 export function generateGridSmall(traits: DecodedDNA, frame = 0, talkFrame = 0, waveFrame = 0): Pixel[][] {
-  const legFrames = LEGS[traits.legs];
-  const legRow = legFrames[frame % legFrames.length];
+  const legFrames = LEGS[traits.legs]!;
+  const legRow = legFrames[frame % legFrames.length]!;
   const mouthRows = talkFrame === 0
-    ? MOUTHS[traits.mouth]
-    : TALK_FRAMES[(talkFrame - 1) % TALK_FRAMES.length];
+    ? MOUTHS[traits.mouth]!
+    : TALK_FRAMES[(talkFrame - 1) % TALK_FRAMES.length]!;
   const bodyRows = waveFrame === 0
-    ? BODIES[traits.body]
-    : WAVE_FRAMES[(waveFrame - 1) % WAVE_FRAMES.length];
+    ? BODIES[traits.body]!
+    : WAVE_FRAMES[(waveFrame - 1) % WAVE_FRAMES.length]!;
   // Use only the last mouth row (the actual mouth line), with a face row gap above
-  const mouthRow = mouthRows[mouthRows.length - 1];
+  const mouthRow = mouthRows[mouthRows.length - 1]!;
   return [
-    ...HATS[traits.hat],
+    ...HATS[traits.hat]!,
     F,
-    EYES[traits.eyes],
+    EYES[traits.eyes]!,
     F,
     mouthRow,
     ...bodyRows,
@@ -415,18 +415,18 @@ export function generateGridSmall(traits: DecodedDNA, frame = 0, talkFrame = 0, 
  * @param waveFrame Wave animation frame (0 = normal body, 1+ = wave frames). Wraps automatically.
  */
 export function generateGrid(traits: DecodedDNA, frame = 0, talkFrame = 0, waveFrame = 0): Pixel[][] {
-  const legFrames = LEGS[traits.legs];
-  const legRow = legFrames[frame % legFrames.length];
+  const legFrames = LEGS[traits.legs]!;
+  const legRow = legFrames[frame % legFrames.length]!;
   const mouthRows = talkFrame === 0
-    ? MOUTHS[traits.mouth]
-    : TALK_FRAMES[(talkFrame - 1) % TALK_FRAMES.length];
+    ? MOUTHS[traits.mouth]!
+    : TALK_FRAMES[(talkFrame - 1) % TALK_FRAMES.length]!;
   const bodyRows = waveFrame === 0
-    ? BODIES[traits.body]
-    : WAVE_FRAMES[(waveFrame - 1) % WAVE_FRAMES.length];
+    ? BODIES[traits.body]!
+    : WAVE_FRAMES[(waveFrame - 1) % WAVE_FRAMES.length]!;
   return [
-    ...HATS[traits.hat],
+    ...HATS[traits.hat]!,
     F,
-    EYES[traits.eyes],
+    EYES[traits.eyes]!,
     ...mouthRows,
     ...bodyRows,
     legRow,
@@ -526,7 +526,7 @@ export function renderSVG(dna: string, pixelSize = 10, frame = 0, background: st
   const rects: string[] = [];
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
-      const cell = grid[y][x];
+      const cell = grid[y]![x]!;
       const rx = x * pixelSize + oxPx;
       const ry = y * pixelSize + oyPx;
       if (cell === "f") {
@@ -653,13 +653,13 @@ export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false, paddin
   const quarter = Math.round(pixelSize / 4);
   const cols = 9;
 
-  const hatRows = HATS[traits.hat];
-  const mouthNormal = MOUTHS[traits.mouth];
-  const mouthTalk = TALK_FRAMES[0];
-  const bodyNormal = BODIES[traits.body];
-  const waveF1 = WAVE_FRAMES[0];
-  const waveF2 = WAVE_FRAMES[1];
-  const legVariant = LEGS[traits.legs];
+  const hatRows = HATS[traits.hat]!;
+  const mouthNormal = MOUTHS[traits.mouth]!;
+  const mouthTalk = TALK_FRAMES[0]!;
+  const bodyNormal = BODIES[traits.body]!;
+  const waveF1 = WAVE_FRAMES[0]!;
+  const waveF2 = WAVE_FRAMES[1]!;
+  const legVariant = LEGS[traits.legs]!;
   const legFrameCount = legVariant.length;
 
   // hat + face + eyes + 2 mouth + 2 body + 1 legs
@@ -691,14 +691,14 @@ export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false, paddin
     let out = "";
     for (let y = 0; y < rows.length; y++) {
       for (let x = 0; x < cols; x++) {
-        out += px(rows[y][x], x * pixelSize + oxPx, (startY + y) * pixelSize + oyPx);
+        out += px(rows[y]![x]!, x * pixelSize + oxPx, (startY + y) * pixelSize + oyPx);
       }
     }
     return out;
   }
 
   // Static rows: hat + face + eyes
-  const staticRects = renderRows([...hatRows, F, EYES[traits.eyes]], 0);
+  const staticRects = renderRows([...hatRows, F, EYES[traits.eyes]!], 0);
 
   // Mouth starts after static rows
   const mY = hatRows.length + 2;
@@ -713,10 +713,10 @@ export function renderLayeredSVG(dna: string, pixelSize = 10, bw = false, paddin
 
   // Legs start after body
   const lY = bY + 2;
-  const legs0 = renderRows([legVariant[0]], lY);
-  const legs1 = legFrameCount > 1 ? renderRows([legVariant[1]], lY) : "";
-  const legs2 = legFrameCount > 2 ? renderRows([legVariant[2]], lY) : "";
-  const legs3 = legFrameCount > 3 ? renderRows([legVariant[3]], lY) : "";
+  const legs0 = renderRows([legVariant[0]!], lY);
+  const legs1 = legFrameCount > 1 ? renderRows([legVariant[1]!], lY) : "";
+  const legs2 = legFrameCount > 2 ? renderRows([legVariant[2]!], lY) : "";
+  const legs3 = legFrameCount > 3 ? renderRows([legVariant[3]!], lY) : "";
 
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges">` +
@@ -809,12 +809,12 @@ export function renderTerminalSmall(dna: string, frame = 0, bw = false): string 
 
   // Process two rows at a time using ▀ (upper half block)
   for (let r = 0; r < grid.length; r += 2) {
-    const topRow = grid[r];
-    const botRow = r + 1 < grid.length ? grid[r + 1] : null;
+    const topRow = grid[r]!;
+    const botRow = r + 1 < grid.length ? grid[r + 1]! : null;
     let line = "";
     for (let c = 0; c < topRow.length; c++) {
-      const top = cellRgb(topRow[c]);
-      const bot = botRow ? cellRgb(botRow[c]) : null;
+      const top = cellRgb(topRow[c]!);
+      const bot = botRow ? cellRgb(botRow[c]!) : null;
       if (top && bot) {
         // ▀ with fg=top, bg=bot
         line += `\x1b[38;2;${top[0]};${top[1]};${top[2]}m\x1b[48;2;${bot[0]};${bot[1]};${bot[2]}m▀${reset}`;
