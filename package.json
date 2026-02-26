@@ -13,6 +13,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./engine": "./src/engine/index.ts",
     "./svelte": "./src/svelte/index.ts",
     "./react": "./src/react/index.ts",
     "./vue": "./src/vue/index.ts",

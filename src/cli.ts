@@ -20,6 +20,7 @@ const args = process.argv.slice(2);
 const flags = new Set<string>();
 const opts: Record<string, string> = {};
 let input: string | undefined;
+const positional: string[] = [];
 
 for (const arg of args) {
   if (arg.startsWith("--")) {
@@ -32,9 +33,20 @@ for (const arg of args) {
     }
   } else if (arg === "-h") {
     flags.add("help");
-  } else if (!input) {
-    input = arg;
+  } else {
+    positional.push(arg);
+    if (!input) input = arg;
   }
+}
+
+// Support "play" as a subcommand: termlings play [./path]
+if (positional[0] === "play") {
+  flags.add("play");
+}
+
+// Support "join" as a subcommand: termlings join <ws-url>
+if (positional[0] === "join") {
+  flags.add("join");
 }
 
 if (flags.has("help") || flags.has("h")) {
@@ -63,15 +75,32 @@ Options:
   --fps=<n>        MP4 frame rate (default: 4)
   --duration=<n>   MP4 duration in seconds (default: 3)
   --play           Launch interactive game mode
+  play <path>      Play a custom map directory (with map.txt)
+  join <ws-url>    Join a multiplayer server
   --info           Show DNA traits info
   --help           Show this help`);
   process.exit(0);
 }
 
-if (flags.has("play")) {
-  // Launch game mode — game.ts takes over the process
+if (flags.has("join")) {
+  // Join a multiplayer server: termlings join ws://localhost:8787/ws/room/test?name=Tommy&dna=0a3f201
+  const wsUrl = positional[1];
+  if (!wsUrl) {
+    console.error("Usage: termlings join <ws-url>");
+    console.error("Example: termlings join ws://localhost:8787/ws/room/test?name=Tommy&dna=0a3f201");
+    process.exit(1);
+  }
+  process.env.TERMLINGS_WS_URL = wsUrl;
   await import("./game.js");
-  // Block here forever — game loop runs via setInterval
+  await new Promise(() => {});
+}
+
+if (flags.has("play")) {
+  // Pass map path to game module via env var
+  // "play ./my-map/" → positional[1] is the path
+  const mapArg = positional[0] === "play" ? positional[1] : null;
+  process.env.TERMLINGS_MAP_PATH = mapArg ?? "";
+  await import("./game.js");
   await new Promise(() => {});
 }
 

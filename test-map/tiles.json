@@ -1,0 +1,6 @@
+{
+  "name": "Test Arena",
+  "tiles": {
+    "~": { "ch": "≈", "fg": [40, 100, 200], "bg": [10, 30, 60], "walkable": false }
+  }
+}

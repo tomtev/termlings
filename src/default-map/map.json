@@ -1,0 +1,1204 @@
+{
+  "name": "Greenhollow Village",
+  "version": 1,
+  "tiles": {
+    " ": {
+      "ch": " ",
+      "fg": null,
+      "walkable": false
+    },
+    ".": {
+      "ch": "░",
+      "fg": [
+        160,
+        140,
+        100
+      ],
+      "walkable": true
+    },
+    ",": {
+      "ch": ",",
+      "fg": [
+        60,
+        120,
+        50
+      ],
+      "walkable": true
+    },
+    "#": {
+      "ch": "█",
+      "fg": [
+        130,
+        130,
+        140
+      ],
+      "walkable": false
+    },
+    "B": {
+      "ch": "█",
+      "fg": [
+        120,
+        75,
+        35
+      ],
+      "walkable": false
+    },
+    "W": {
+      "ch": "█",
+      "fg": [
+        200,
+        195,
+        185
+      ],
+      "walkable": false
+    },
+    "G": {
+      "ch": "█",
+      "fg": [
+        30,
+        90,
+        30
+      ],
+      "walkable": false
+    },
+    "T": {
+      "ch": "♣",
+      "fg": [
+        30,
+        80,
+        30
+      ],
+      "bg": [
+        20,
+        45,
+        20
+      ],
+      "walkable": false
+    },
+    "~": {
+      "ch": "~",
+      "fg": [
+        60,
+        130,
+        210
+      ],
+      "bg": [
+        15,
+        35,
+        70
+      ],
+      "walkable": false
+    },
+    "*": {
+      "ch": "*",
+      "fg": [
+        240,
+        100,
+        150
+      ],
+      "walkable": true
+    },
+    "f": {
+      "ch": "*",
+      "fg": [
+        255,
+        210,
+        50
+      ],
+      "walkable": true
+    },
+    "c": {
+      "ch": "*",
+      "fg": [
+        80,
+        140,
+        240
+      ],
+      "walkable": true
+    },
+    "r": {
+      "ch": "*",
+      "fg": [
+        220,
+        50,
+        50
+      ],
+      "walkable": true
+    },
+    "v": {
+      "ch": "*",
+      "fg": [
+        170,
+        80,
+        220
+      ],
+      "walkable": true
+    },
+    "o": {
+      "ch": "*",
+      "fg": [
+        240,
+        160,
+        40
+      ],
+      "walkable": true
+    },
+    "w": {
+      "ch": "*",
+      "fg": [
+        230,
+        230,
+        240
+      ],
+      "walkable": true
+    },
+    "D": {
+      "ch": "·",
+      "fg": [
+        120,
+        85,
+        50
+      ],
+      "walkable": true
+    },
+    "e": {
+      "ch": ".",
+      "fg": [
+        120,
+        85,
+        50
+      ],
+      "walkable": true
+    },
+    "p": {
+      "ch": "·",
+      "fg": [
+        100,
+        100,
+        110
+      ],
+      "walkable": true
+    },
+    "n": {
+      "ch": ".",
+      "fg": [
+        140,
+        60,
+        60
+      ],
+      "bg": [
+        25,
+        18,
+        18
+      ],
+      "walkable": true
+    },
+    "h": {
+      "ch": "─",
+      "fg": [
+        140,
+        100,
+        60
+      ],
+      "bg": [
+        40,
+        28,
+        15
+      ],
+      "walkable": true
+    }
+  },
+  "grid": [
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,o,,,,,,,,,vw,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,.....,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,f,,c,,,,,w,,,,,,,,,,,,,,.....,,,T,,,,,w,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,*,,,,,,,,,,,T,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,r,,,,,,,,TTTT",
+    "TTTT,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,T,,,BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,w,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,o,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,.....,,,,,,,c,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBcfocfr,oc*c,,,,,,,,,o,,.....,o,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,#######################################################,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,ro,o,,,*w,w,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,T,,,vr,,f,,*r,,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,.....*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,o,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,r,*c*c,c,ovr*,,,,T,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,f,,,o,,,,,cf,,,,,,,,,,,,,,,,,,,,,,c,,BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeBvr,f,r,,wowo,*ffc,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,T,o,o,,,,T,,w,,,,cw,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeBcf,,**To,wT,wcrfo,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,rf,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,wfTTTTTTT,,,,,v,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,*,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,wwTTTTTTTc,c,,,,r,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,w,r,,,,,,,,,,,,,,,,,,,,,,,,,c,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,o,,TTTTTTTTT,,,*cw,,o*,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeBo,r*,,TTTTTTTTTw,,,,,,,.....,,,,,o,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhBv,,r,,r,ow*,,,,,,,,,,,,,*,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,w,,,,fv*,TTTTTTTTTTT*,c,,,,,T,,,,,,,o,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,T,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,c,TTTTTTTTTTTo,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,rccrcf,,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,*o,TTTTTTTTTTTTT,,,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,*,,T,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB*,owoTTTTTTTTTTT,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB*orof,,,c,,rwr,,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,TTTTTTTTTTTTTc,,,,,,,,,,,,c,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,f,,,,,,,,ff,f,,,,,,,,,,w,TTTT",
+    "TTTT,v,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,f,TTTTTTTTTTT,f,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,w,,,ffrc,,ro,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,TTTTTTTTTTTTT,,,,,,,,v,,,,,,,,,,,,T,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,f,ff,,fff,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,TTTTTTTTTTTTT,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,f,wvT,,,,ow,*of,,,,,,,,,,,,,c,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,TTTTTTTTTTTTTTT,,,T,,,,,,,,,,w,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,ff,ff,,,f,,,f,,,,,,,,,TTTT",
+    "TTTT,,,,,w,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,TTTTTTTTTTT,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,fTTTTTTT,f,,c,,,,,,,,,,v,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,TTTTTTTTTTTTT,,,,*,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeBo,,,,,,,,,,,,,,,,,,,fff,,ff,fff,,,,,,,,,,TTTT",
+    "TTTT,,,,v,T,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,TTTTTTTTTTT,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,TTTTTTTTT,co,r,,,,T,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,TTTTTTTTTTTTT,,,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,f,ff,,f,,,,,,fff,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,c,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,oTTTTTTTTTTT,,,,,,,.....,,,c,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhBfTTTTTTTTTfw,v,,,,,,,,T,,,w,,,,r,.....,,r,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,f,,,,TTTTTTTTTTTTT,,,,,,,,,,,,,T,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,f,f,f,,ff,,ff,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,TTTTTTTTT,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,TTTTTTTTTf,,,,,,,,,,,,,r,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,f,,,,TTTTTTTTTTT,,,,,,,,,,,,,,,,,,,r,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,wf,,fffff,ffff,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,TTTTTTT,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhBTTTTTTTTTTT,,,,,,,,,,,,,,,,,,,,,,.....,,,,,T,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,w,,,TTTTTTTTT,,,,,,,,,,f,,,,,,,,,,,c,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,c,,,,,,f,f,f,f,fffff,,f,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,T,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,TTTTTTTTT,,,,,,,,,,,w,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,TTTTTTT,,,,,,,,,,,,,,,v,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,fffff,,fffff,f,,,,,,,,TTTT",
+    "TTTT,,,,,c,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,f,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,,,,.....,,,,f,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,f,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,f,f,,f,,,ff,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,,r,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,T,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,ff,,,,,,f,,ff,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,TTTTTTT,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,,f,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,ff,,fff,,f,,f,,,,,T,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB*,,,,T,,,,,,,,,,,,,,,,,,T,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,f,fff,,fffTf,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,w,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,ff,,fff,fff,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,T,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,ff,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,,,o.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,c.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,r,,,,*,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,o,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,f,,,,*,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,.....,,,,w,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,o,,c,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,T,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,BBBBBBBBBBBBBBBBBBDDDDDDDDBBBBBBBBBBBBBBBBBBB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,T,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,.....,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,T,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,.....,,,,,,,#ppppppppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,T,,,,,,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,...,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,o,T,,,,,TTTT",
+    "TTTT,,,,,,,,,,,BBBBBBBBBBBBBBBBBBBBBDDDDDDDDBBBBBBBBBBBBBBBBBBBBB,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,########################DDDDDDDD#######################,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,...f,,c,c,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,r,,,,,,,T,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f...,*,,,,*,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,T,,,,,,,,,,,,,,,o,,,,,,,.....,,,,,,w,,,,,,,,,,,,,,,f,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,...,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,TTTTTTT,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,*,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,,,,T,,,,,,,,,,,,,,,o,,,,,.....,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,v,,,...,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,oTTTTTTTTT,,,,,,,,f,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,**,*...,,*,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,.....,,,,,,,BBBBBBBBBBBBBBBBBBBBBBBBBBBBDDDDDDDDBBBBBBBBBBBBBBBBBBBBBBBBBBBBB,,,,,,,,,,,,,,,,,,,,,,ooo,,,o,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,*,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTTTTTTTTT,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...*,*,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,o,o,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,w,,,,,,,,,,,,w,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTTTTTTTTT,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,...*,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,...,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,,T,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,T,,,.....,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTTTTTTTTT,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,wf,,,T,,,,,,,,,,*,,**...,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,...,,,w,,,,,,,,,,,,,o,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,vo,,,,o,,ofo,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,r,,,,,,,,c,,,,,,,,,,,,,,,,,,,,~,,,,,,,,,,,,,,,,,.....,,,,,,,,...,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTTTTTTTTTTT,w,,,,,,,TTTT",
+    "TTTT,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,*,*...,,,*,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,o,,o,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,r,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~,,,c,,,,,,.....c,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTTTTTTTTT,,,,,,,,,,TTTT",
+    "TTTT,,,,,,T,,,,,,,,,T,,,,,,,,,,,,,,**,,...*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,.....,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,o,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,r,,rr,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~,,,,,,o,.....,,,,,,c,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTTTTTTTTT,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,**,...*,,*,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,.............,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,,.............,o,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,r,,rr,,r,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~~~~~,T,.............,,,...,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTTTTTTTTT,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,o,,,,,c,,,,*...*,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,.............r,,,,,f,,,,,r,,,f,,,,v,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,.............,*,T,,,,,,,,,,f,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,rr,rrr,,,,,,,*,,,,,~~~~~~~~~~~~~~~~~~~~~~~~~,,.............,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTTTTTTT,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,f,,,,,,,,,,*,,,,,,,,,,,*...**,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.............,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,v,,,,,,,,,,,,,,,,,,,,,,,,,cc,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,.............,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,T,,,,,r,,r,,r,,,w,,,,,,,,,,~~~~~~~~~~~~~~~~~~~~~~~~~~~,.............,,,...,,,,,,,,,,,c,,c,,,,,,,,,,,,,,,,,,,,w,,,,,,,TTTTTTT,,,,,,,,,,,,TTTT",
+    "................................................................................................................................................................................................................................................................................................................................................................................................................",
+    "................................................................................................................................................................................................................................................................................................................................................................................................................",
+    "................................................................................................................................................................................................................................................................................................................................................................................................................",
+    "................................................................................................................................................................................................................................................................................................................................................................................................................",
+    "................................................................................................................................................................................................................................................................................................................................................................................................................",
+    "TTTT,,,TTTTTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.............,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,f,,TTTTTTT,,,,,,,,,,,,w,,c,c,c,,,,,,,,,,,,,,,,,,,,,,,oc,,,,,,.............,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTTTTTTT,f,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~~~~~~~~~,.............,,,,,,,,,,,,,,,,,o,of,,r,*r,f,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,TTTT",
+    "TTTT,,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.............,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTTTTT,,,,,,,,,,,,,cc,,,ccc,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.............,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~~~~~~~,,.............,,,,,,,,,,,,,,,vr,,,,,r,f,,o,v,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,TTTTTTTTT,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,,w,,,,,,,,,,.............,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTTT,,,*,,,,T,,,cc,,cc,cc,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,.............,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~~~~~,,,.............,,,,,,,,,,,,rof,w,rr,f,,,of**,v*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,v,,rcffwrc*,,,,,,,,,,,,,,T,,,.....,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,T,*,,,,,,,,,,,,,,,cc,cT,c,,,,w,,,,,,o,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,f,,,,,,,f,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,TTTTTTT,,,,,,,TT,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~o,,,,,,,.....,,,,,,,,,,,,,,,,,,,,o,,,,,Tr,,,v,c,*f,,,,,,,,,,,,f,,,,,,,,o,,,,,,,,,,,,,,TTTT",
+    "TTTT,TTTTTTTTTTT,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,vcr,o,*o,,w,,*,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,ccc,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,c,,,,,,r*w,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~,,,f,,,,,,.....,,,,,,,,,,,,,,,,,*fo,*,f,,,,vwo,,,**,,,,,,vT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,oc,,coww,,,,,vf,,vv,ocv,,T,,,,,,,,.....,,,,,,,,,,,,,,,,,Tv,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,.....,,,,,,,w,,*fwwvc*vv,,vwfo,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,*,,,,,~,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,v,*,,,o,,,*r,,,r,,,,,,,,,,,,,,,T,,,,,,,,,,,,,T,,,,,,,,,,TTTT",
+    "TTTT,,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,wf,f,*,co,,,,,,,,v*,c,,o,,,,T,,,.....,,,,c,,,,,,,,,,,,,*,,,,,,,,,,,,,,,r,r,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,.....,,,,,,,,,c*,,f,,vr,,vc,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,.....,,,,,,,,,,,,,w,,,,f,f*fv,,,o,,,,,,,cc,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,TTTT",
+    "TTTT,,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,*oc,,,w,ro,,vvr,o*ow,v,fwf,,,,,,,,,,.....,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,w,,,,,,,,,,,f,,,,,,,,,,,,,,,,,.....,,,,,,,,,,v,,w,,,r*w,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,c,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,*cv,,,v,,,*,cf,,,,,,,,,,*,,,,,,,,,,,,f,,,,,,,,,,,,,TTTT",
+    "TTTT,,,TTTTTTT,,,,,,,,,,,T,,,,w,,,,,,,,,,,,,,,,,,,,,,w*vw,,wrwo,,c,*r,,vv,v,,,f,,,,,,,v,.....,,,,,,,,,,,GGGGG,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,r,.....,,,,,,,r,,,,,o,,,c,,,,w,w,,,,,,,,,T,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,rT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,r,c,fw,r,cc*,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,rv,,cffrowc,f,,,,*f*,,o,c,,v,,,,v,,,.....,,,,,,,,,,,G,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,.....,,,,,,v,r,,,,,,,rr,f,f,,rf,,rw,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,vvff,,*f,w,rr,,f,oc,c,,,,,o,,,,,,,,,.....,,,,,r,,,,,G,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,o,r*,,,,,*rf,,,,r,,w,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,v,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,T,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,oc,,,w,,,w,c,o,w,r,o,,,,,,,,,.....,,,,,,,,,,,G,,,,,WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW,,,,,,,,,,,,,,,,,,.....,,,,,,r,,,,v,,,,,,vfw*,,r,,,w,,,,,,,,,,,,,,,,v,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,*,,,cv,,,**v,,w*,,,,cf,,v,,,,,,,,,,.....,*,,,,,,,r,G,o,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,o,,,o,ff,f,,,v*ww,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,wo,*wor,,,,,vf,,*,c,v,f,,,,,,,,,,,.....,,,,,,,T,,oG,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,T,,.....,,,,,,,,,w,,,,f,,wwrT,,*vf,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,.....o,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,o,*,ov,o,,o,,,ovr,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,c,,wv,*,*,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,v,,rrr,*,,,,,,,,,,,,,,,.....,,,,,,,T,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,T,,,c,,,,,,,,,##################################################,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,.....,,,T,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,w,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,T,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB,,,,,,,,,T,,,,,,,o,,,,,,,,,,,,,.....,,,,,,,f,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,To,,,.....,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,T,,,,,,,,,,,,,,,,,,,,,,,,,,c,.....,,,,,,,,,,,GT,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,T,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,c,,,,,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,r,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,v,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,oc,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,T,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,*,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,c,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,c,,,,,,,,,,,,,.....,,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,.....,,,,,,,T,,TG,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,r,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,o,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,c,,,,,,o,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,v,,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,o,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,T,,,,,,,,f,,,,,,,*,,,,,,,,,.....,,,,,r,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,o,T,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,T,,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,*,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,*,,,,,,,,o,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,.....,,,,w,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,T,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,Dpppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,r.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeD,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,v,,.....,,,,,,,,,,,,,ro,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,Dpppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,v,,,,,,,,,,,,,DhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeD,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,.....,,,,,,,,,,wG,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,Dpppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,f,DhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeD,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,................G.....WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW................................................................................Dpppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,DhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,T,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeD...............................................G.....WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW................................................................................Dpppppppppppppppppppppppppppppppppppppppppppppppp#..............................DhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,v,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeD...............................................G.....WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW................................................................................Dpppppppppppppppppppppppppppppppppppppppppppppppp#..............................DhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeD...............................................G.....WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW................................................................................Dpppppppppppppppppppppppppppppppppppppppppppppppp#..............................DhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeD,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,................G.....WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW.......................,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,f,f,,,,,,vr,,*oDpppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,c,.....cc,,,,,,,,,,,,,,,DhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,o,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeD,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,f,,,f,,v,w,,v,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,c,.....,,,,,,,,,,,,,,,,,DhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,T,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,*,,vrw,,,*,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,c,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,T,,,,,,,T,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,f,,,,,,,,,,,,,,.....,,,,,,,v,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,vw,,,oc,,,wo,,,,owr#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,c,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,r,rfww,,,,,,r,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,c,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,c,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,v,,,,,.....,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,c,,,f,,,rv,,*,#pppppppppppppppppppppppppppppppppppppppppppppppp#f,,,,,,,.....,,,,,,,,,,,,w,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB*,,,,,,,TTTT",
+    "TTTT,,T,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,*,,,,,,,,,,,.....,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,vf,,,w*v,vvf,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#r,,,,,,c.....,,,,,,,,,,,T,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,.....,,,,,,,,,,,G,,r,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,T,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,,,T,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,f,,,o,,wr,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,o,,,,,,.....,T,v,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,,TTTTBeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,f,,,,,TTTT",
+    "TTTT,,,TTTTTBeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,cr,,*,,,c,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,T,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,TTTTTBeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....c,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,T,,r,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,*,,,,,,,v,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,TTTTTTBeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,vc,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,,,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,TTTTTBeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeBr,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,.....,,,,r,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,,,.....,,v,,,,,,,,,,,,,,BhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhB,,,,,,,,TTTT",
+    "TTTT,,,TTTTTBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,#pppppppppppppppppppppppppppppppppppppppppppppppp#,,,,,,cr.....,r,,,,,,,,,,r,,T,BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB,,,,,,,,TTTT",
+    "TTTT,,,,TTTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,T,,,,,,,,,,,,.....,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,##################################################,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,Tr,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,c,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,v,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,w,,,,w,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,v,,,,,,,,,,T*,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,v,,,,,,,,,,,,,,,,,,,,,,ff,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,o,,,,,,,,,,,v,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,*,,fc,,ffvf,,f,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,G,,,,,WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWDDDDDDDDWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,r,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,f,f,f,ffff,,,,,,,,,,,,,,,,,vf,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,o,,G,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,f,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,fff,,ff,,f,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,GGGGG,,,v,,,,,,v,,,,o,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,T,.....o,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,f,,ff,,fffff,,,,,,,,,,,,,,,Tc,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,v,w,,T,,w,,T,,,,,,,,,,,,,,,,,,,,,,c,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,*,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,f,fffff,ff,ff,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,.....,,,,,,f,,,,,,,,,*,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,v,*fo,o,oco,,,.....,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,f,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,f,,ff,,ff,,f,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,v...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,oo,w,c,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,w,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,c,,,,,,f,,,f,fff,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,Tf,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,w,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,vw,,v*wwc,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,v,,,,w,,,,,,ff,,ff,,ff,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,.....,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c*,*,o,,o,rwT,,,v*.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,f,,fffcf,,f,,,,,,,,c,,,,,~,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,frw,w,c,vo,,fT*,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,o,f*,,,,,vv,vvv.....,,,,T,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,f,,,,f,,f,,,,,,,,,~~~~~~~~~~~~~,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,v,v,vv,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,v,,*,,,,,,,w,,r,wo,,,Twf*,,r,c,,,,,,,,.....,,,,,,,,,,,,,f,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,rw*c,v,,rv,,f,rc,w,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,~,,,,,,,,,,,,,,,r,,,,,,r,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,fff,f,,,,,,,,,,~~~~~~~~~~~~~~~~~,,,,,,,,,,,,,,,,,,,T,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,w,v,,v,,,,v,,,,,c,,,,,,c,,,,T,...,,,,,,,,,,,,,,,,,,,,,,,o*wv,,,*cc*f,,,,w,c*,,,,,,,,.....,,,,,,,,,,,*,,,,,,,,,,,,TTTTTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,v,,,,,,,,,,,,,,,,,,,,r,,,,rr,,,,*ov,,ovf,,c.....,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,~~~~~~~~~~~~~,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,v,,,,,,,,,,,T,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~~~,,,,,,,,,,,,,,,,,,*,,,,,,,,.....,,,,,,,,,,,,,,,,,,f,,,v,,,v,,,,,,,,,,,,,,,,,,,,,,,,...,,,,w,,,,,,,,,,,,,,,,,,ow,c,v,o,r*,,c,,*,,cvrv,,,,,.....,,,,T,,w,,,,,,,,,,,,,,,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,vv,*,,*,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r~~~~~~~~~~~~~~~~~~~~~~~,,,,,,,,,,,,,,,,,,,,,,,r,,.....,,,,,,,,,,,,,,,,,,,,,,vvv,vvv,,v,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,f,or,*,,v,,wwrwc,v,,,,,v*T,,,,,.....,,,,,,,,,,,,,,,,,,,,,,TTTTTTTTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,Tv,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,wrf,,,,c,*,rwrof.....,,,,,,,,,,,,,,,,,,,,,,,,,oT,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~~~~~,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,v,,,,,,v,vv,T,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,fo,,r,,ocofwff,fw,f,wrc,,,,,.....,,,,,,,,,r,,,,,,,,,f,,,TTTTTTTTT,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,cvcr,,,rw,*,,.....o,w,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,~~~~~~~~~~~~~~~~~~~,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~~~~~~~,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,v,,,,,o,,*,,,,,r,v,v,v,,,vvv,v,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,T,c,,rc,,,,owc,*w*,,v,v,,,f,,,,,.....,,,,,,,,T,c,,,,,,,,,,,TTTTTTTTTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,o,,v*oc,v,fo,.....,,,,,,,,,,,,,,,,o,,,,,,,f,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~~~,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,~~~~~~~~~~~~~~~~~~~~~~~,,,,,,,,,,,,,,,,,,,,,,,w,,.....,,,,,,,,,,,,,,,,,,,,,,,,v,,v,v,,,,,,,,,,,,,,,,,,,,,...,,T,,,,,,,,,,,,,,,,,,,,w,v,v,*,c,f,rro,w,v,o,vc,,,,.....,,v,,,,,,,,,,,,,,,,,,,,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,vr,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~~~~~,,T,,,,,,,,,,,,,,,,,,,,,,,.....,,,,T,,,,,,,,,,,,,,,,,v,,,,v,,vvv,,,,,,,,,,,,,,,,,,...,,,,,,,,,T,,,,,,,,,,,,v,,,,vrw,fc*r,f,c***,w,,c,,,,.....,,,,,,,,,,,,,,,,,,,,,,,TTTTTTTTT,,,,,,,,,,wr,,TT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,c.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~~~~~,,,,,w,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,T,,,,,vv,,v,,v,,,,,,,,,,,,,,,,,,,...,,,,,,,*,,,,,,,,,,,,,f,w,vrfw,,,,,ff,o,,,,,,v,,,.............,,,,,,,,,,,,,,,,,,TTTTTTTTT,,,,,,,,,,,,o,,,,,,,,,,,,,,,c,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~,,,v,,,,,,,,,,f,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~~~~~,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,vfvc,,*r,o,wv,c,,*,w,f,,,.............,,,T,,,,,,w,,,,,,,,TTTTTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,*,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,~~~~~~~~~~~~~,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,v,v,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,vrc,fo,o,r,,*,,,,,,,,.............,,,,,,,,,,,,,,,,,,,,,,T,,,f,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,~,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "................................................................................................................................................................................................................................................................................................................................................................................................................",
+    "................................................................................................................................................................................................................................................................................................................................................................................................................",
+    "................................................................................................................................................................................................................................................................................................................................................................................................................",
+    "................................................................................................................................................................................................................................................................................................................................................................................................................",
+    "................................................................................................................................................................................................................................................................................................................................................................................................................",
+    "TTTT,,,,,,,TTTTTTTTT,,w,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,.............,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,...,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,f,,,,.....,,,,,,,,,,,,,,,,,w,,,,,,,,,,c,...,,c,,r,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,TTTTTTTTT,,,,,,,,,,,,,,,,,,,w,,,,,,,T,...,,,,,,,,,,,,,,,,,*,,,,c,,,,,,,,,,,,,.....,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,.............,,,,,,,,,,,v,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,...,,,,,,,,,,*,,,,,,*,,,T,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,TTTTTTTTT,,,,c,T,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,GGGGGGGGGGG,,,o,,,,,,,,,,,,,,,,,,,...,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,.............,,,,,,,,,,,,,,,,,,,,,,,,,,,r,w,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,...,,,,,,,,,,,,*,,,**,,,,,,vT,,,f,*,,,,,,,,TTTT",
+    "TTTT,,,,,,,,TTTTTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,G,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,r...,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,r,**,*,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,w,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,.....,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,GGGGGGGGGGGWWWWWWWWWWWWWWWWWWWWDDDDDDDDWWWWWWWWWWWWWWWWWWWWWWWWWW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,.....,,,,,w,,,,,,,,,,,,,,,,,,,,,,*,...,,,,o,,,Tc,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,w,,,f,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,...,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BBBBBBBBBBBBBBBBBBBBBDDDDDDDDBBBBBBBBBBBBBBBBBBBBB,,,,,,,,,,,,,.....,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,o,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,c,o,,,,*,,,,,,,,,,,,,...,,,,,,,,,,,c,,,r,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,.....,,,,,,,BBBBBBBBBBBBBBBBBBBBDDDDDDDDBBBBBBBBBBBBBBBBBBBB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,...,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,v,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,c,,,.....,,,,ow*,,r*rcr,,,,,,r,,,,,,,,,v,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,WWWWWWWWWWWWWWWWWWWWDDDDDDDDWWWWWWWWWWWWWWWWWWWW,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,cBeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,.....,,ow,ocv,,c,fc,,,,,,,v,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,o,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,T,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,.....f*wf,f*c**,rfwvr,*,,,,r,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,.....,,,vfc,,,,,,fovc,c,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,To,,r,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,.....w,c,v,,v,,ow,,,,rco,,,,,,,,,,,,c,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,r,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGvv,,,,,,,c,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,T,,,,,,,,,,,,r,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,T,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,Gv,,,*ww.v..cwow*,v,,wwwrv,o,oGf,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,w,,,,v,c,,,,,*fc,c,,,,,,,,,,,.....,,,,,,rBeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,T,,w,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,Gw*rr,o,r.r.vowrfwrr*or,v,r*,oG,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,o,T,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,oo*r,*,o*ovTo,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,c,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,Gw,fr*,o.r..v,*v,,*c,wo*,**,roG,,,,,,v,w,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,**w,,fr,,,f,,,,v,cc,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,Gow,*,vwr...ocvv,rcoow*r*cco*,G,,,,,*w,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,f,*,,o,,cr,fr,,,co,,f,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,f,,,,,,,,,,,,TTTT",
+    "TTTT,,*,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,G,,wofc,w...f,cf,,,,rr,crw,vv,G,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,c*,,*ff,rv,,,,w,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,G,,r*fo,o.wv.,vvwv,ww,,,,rv,rfG,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,v,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,*,,,,,oov,,,,c,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,v,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,o,,,,,,,,,f,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,G,cwo,f,...*.ofr*,owffcr,,,,,,G,,,,,,,,,,,,,,,c,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,rff,,,,,,,,,,wfr,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,GfcT,,,w..*..*fc,oc,c,wv,,f,,,G,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,*,,f,,,,,,,,ocrrff,o,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,r,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,G*,r,wf,o.c..f,,,,vw,,,,o,ccf,G,,,,,,,,,,,v,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,T.....T,,,,,,,,,T,,,,,,,,,T,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,v,,crf,,*,,,,,,,,,,,,,w,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,G,,,,r,,.r...fr,r,,,T,,,,oo,,vG,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,TT.....TT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,T,,,,,c,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,T,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,G,*f,rrooo..f,v,*fTTTTTT,w,f,,G,,,,,,,,,,,,,,,,,w,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,TTT.....TTT,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,TTTTTTT,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,Gv,,,,f*..co.c*fcTrvwvTTvc,vc,G,,,,,,,,,,,,,,,,,,wWnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,TTTT.....TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,TTTTTTTTT,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,G,,f,v,,.c...w,,TwTT*TTcTwv,,,G,,,,,,,,,,,,,,,,wwwWnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,TTTT.....TTTT,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,TTTTTTTTT,TTTT",
+    "TTTT,,,,f,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,Gr,,,,*o.ccooo,,TcofTTcTTr,,,*G,,,,,,,,,,,,,f,v,wwWnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,TTTT.....TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,fT,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,TTTTTTTTT,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG,,,,,,,,,,,,,,w,ww,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,TTTTT.....TTTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,TTTTTTTTTTTTTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,T,,,,,,,.....,,,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,,,,w,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,TTTT.....TTTT,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,TTTTTTTTT,TTTT",
+    "TTTT,,,,,,,,,,,*,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,f,,,,,,,,,.....,,,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,,w,wwWnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,T,TTTT.....TTTT,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,TTTTTTTTT,TTTT",
+    "TTTT,,,,,,*,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,.....,,,TTTTTTTTT,,,,,,,,,,,,,,,,,,,,ow,w,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,TTTT.....TTTTv,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,TTTTTTTTT,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,o,,.....,,,,TTTTTTT,,,v,,,,,,,,,,,,,,,,,,,w*,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,TTT.....TTT,,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,c,,,,,TTTTTTT,,TTTT",
+    "TTTT,,,,,,,c,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,oo,.....,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,TT.....TT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,o,,,,,,T,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,*,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,T.....T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,v,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,o,,oo,,o.....,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,w,,,,,,,,,,,,,,,,,,T,,,,,,,.....,r,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,r,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,o,ooo,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,o,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,o,,,,oo,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,T,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,f,T,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,v,,,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,ooo,,.....,w,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,c,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,f,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,oooo,o,.....,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,or,,,,,,,,,,,,,,,,,,,f,,,,,,,,WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,BeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB,,,,,,oo,oo,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,.....,,,,,,,BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,o,oooo.....w,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,WnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnW,,,,,,,,.....,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,vv,,vvv,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,Tf,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,.....,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,v,v,,v,,,*,,,,,,,,*,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,TTTT",
+    "TTTT,,,v,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,oo,,,,.....,,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,c,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,T,o,,.....,,,,,,,,,,,,,,w,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,f,,,,,,,,,*,,,,,,,,,f,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,.....,,,v,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,r.....,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,.....,,,,,,o,,,,,,,,,,,,,,,,,c,,,,,,,,v,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....*,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,v,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,T,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,T,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o*,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,.....,,f,,,,,,,,,,,,,,,,,,,,,,,c,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,.....,,,,,o,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,*w,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,of,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,v,,,,,,,*,,,,,,,,,v,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,o,,,,,,,,,*,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,*T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,r,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,w,,,,,,o,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T,,,,T,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,v,,,,,,,,,,,,,,,,,,,,,,,,,,f,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,r,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,o,,v,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTT,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,.....,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,TTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT",
+    "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT.....TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+  ],
+  "objects": {},
+  "placements": [
+    {
+      "object": "table",
+      "x": 22,
+      "y": 18
+    },
+    {
+      "object": "table",
+      "x": 22,
+      "y": 28
+    },
+    {
+      "object": "chair",
+      "x": 30,
+      "y": 19
+    },
+    {
+      "object": "bookshelf",
+      "x": 17,
+      "y": 12
+    },
+    {
+      "object": "sofa",
+      "x": 40,
+      "y": 14
+    },
+    {
+      "object": "table",
+      "x": 110,
+      "y": 16
+    },
+    {
+      "object": "table",
+      "x": 110,
+      "y": 26
+    },
+    {
+      "object": "table",
+      "x": 130,
+      "y": 16
+    },
+    {
+      "object": "table",
+      "x": 130,
+      "y": 26
+    },
+    {
+      "object": "chair",
+      "x": 118,
+      "y": 17
+    },
+    {
+      "object": "chair",
+      "x": 118,
+      "y": 27
+    },
+    {
+      "object": "chair",
+      "x": 138,
+      "y": 17
+    },
+    {
+      "object": "chair",
+      "x": 138,
+      "y": 27
+    },
+    {
+      "object": "sofa_large",
+      "x": 105,
+      "y": 36
+    },
+    {
+      "object": "sofa",
+      "x": 145,
+      "y": 12
+    },
+    {
+      "object": "bookshelf",
+      "x": 102,
+      "y": 10
+    },
+    {
+      "object": "bookshelf",
+      "x": 215,
+      "y": 14
+    },
+    {
+      "object": "bookshelf",
+      "x": 215,
+      "y": 18
+    },
+    {
+      "object": "bookshelf",
+      "x": 215,
+      "y": 22
+    },
+    {
+      "object": "bookshelf",
+      "x": 230,
+      "y": 14
+    },
+    {
+      "object": "bookshelf",
+      "x": 230,
+      "y": 18
+    },
+    {
+      "object": "bookshelf",
+      "x": 230,
+      "y": 22
+    },
+    {
+      "object": "bookshelf",
+      "x": 245,
+      "y": 14
+    },
+    {
+      "object": "bookshelf",
+      "x": 245,
+      "y": 18
+    },
+    {
+      "object": "table",
+      "x": 240,
+      "y": 30
+    },
+    {
+      "object": "chair",
+      "x": 248,
+      "y": 31
+    },
+    {
+      "object": "sofa",
+      "x": 220,
+      "y": 32
+    },
+    {
+      "object": "table",
+      "x": 318,
+      "y": 20
+    },
+    {
+      "object": "table",
+      "x": 335,
+      "y": 20
+    },
+    {
+      "object": "chair",
+      "x": 326,
+      "y": 21
+    },
+    {
+      "object": "bookshelf",
+      "x": 314,
+      "y": 14
+    },
+    {
+      "object": "sofa",
+      "x": 18,
+      "y": 84
+    },
+    {
+      "object": "table",
+      "x": 28,
+      "y": 94
+    },
+    {
+      "object": "chair",
+      "x": 36,
+      "y": 95
+    },
+    {
+      "object": "bookshelf",
+      "x": 16,
+      "y": 92
+    },
+    {
+      "object": "bookshelf",
+      "x": 16,
+      "y": 100
+    },
+    {
+      "object": "sofa_large",
+      "x": 118,
+      "y": 78
+    },
+    {
+      "object": "sofa_large",
+      "x": 118,
+      "y": 100
+    },
+    {
+      "object": "table",
+      "x": 140,
+      "y": 86
+    },
+    {
+      "object": "table",
+      "x": 140,
+      "y": 96
+    },
+    {
+      "object": "chair",
+      "x": 148,
+      "y": 87
+    },
+    {
+      "object": "chair",
+      "x": 148,
+      "y": 97
+    },
+    {
+      "object": "bookshelf",
+      "x": 114,
+      "y": 86
+    },
+    {
+      "object": "bookshelf",
+      "x": 114,
+      "y": 92
+    },
+    {
+      "object": "bookshelf",
+      "x": 114,
+      "y": 98
+    },
+    {
+      "object": "table",
+      "x": 160,
+      "y": 80
+    },
+    {
+      "object": "table",
+      "x": 270,
+      "y": 84
+    },
+    {
+      "object": "table",
+      "x": 285,
+      "y": 84
+    },
+    {
+      "object": "bookshelf",
+      "x": 264,
+      "y": 80
+    },
+    {
+      "object": "bookshelf",
+      "x": 264,
+      "y": 86
+    },
+    {
+      "object": "bookshelf",
+      "x": 264,
+      "y": 92
+    },
+    {
+      "object": "bookshelf",
+      "x": 295,
+      "y": 80
+    },
+    {
+      "object": "chair",
+      "x": 278,
+      "y": 95
+    },
+    {
+      "object": "sofa",
+      "x": 348,
+      "y": 84
+    },
+    {
+      "object": "sofa",
+      "x": 348,
+      "y": 98
+    },
+    {
+      "object": "table",
+      "x": 362,
+      "y": 88
+    },
+    {
+      "object": "table",
+      "x": 362,
+      "y": 98
+    },
+    {
+      "object": "chair",
+      "x": 370,
+      "y": 89
+    },
+    {
+      "object": "bookshelf",
+      "x": 344,
+      "y": 92
+    },
+    {
+      "object": "table",
+      "x": 35,
+      "y": 158
+    },
+    {
+      "object": "chair",
+      "x": 43,
+      "y": 159
+    },
+    {
+      "object": "sofa",
+      "x": 50,
+      "y": 154
+    },
+    {
+      "object": "bookshelf",
+      "x": 28,
+      "y": 152
+    },
+    {
+      "object": "bookshelf",
+      "x": 136,
+      "y": 150
+    },
+    {
+      "object": "bookshelf",
+      "x": 136,
+      "y": 156
+    },
+    {
+      "object": "bookshelf",
+      "x": 136,
+      "y": 162
+    },
+    {
+      "object": "bookshelf",
+      "x": 136,
+      "y": 168
+    },
+    {
+      "object": "table",
+      "x": 160,
+      "y": 170
+    },
+    {
+      "object": "sofa_large",
+      "x": 150,
+      "y": 150
+    },
+    {
+      "object": "table",
+      "x": 250,
+      "y": 160
+    },
+    {
+      "object": "bookshelf",
+      "x": 244,
+      "y": 154
+    },
+    {
+      "object": "bookshelf",
+      "x": 244,
+      "y": 160
+    },
+    {
+      "object": "chair",
+      "x": 258,
+      "y": 161
+    },
+    {
+      "object": "sofa",
+      "x": 268,
+      "y": 156
+    },
+    {
+      "object": "table",
+      "x": 340,
+      "y": 158
+    },
+    {
+      "object": "chair",
+      "x": 348,
+      "y": 159
+    },
+    {
+      "object": "sofa",
+      "x": 355,
+      "y": 154
+    },
+    {
+      "object": "bookshelf",
+      "x": 334,
+      "y": 152
+    },
+    {
+      "object": "bookshelf",
+      "x": 334,
+      "y": 158
+    }
+  ],
+  "doors": [
+    {
+      "x": 36,
+      "y": 44,
+      "orientation": "horizontal",
+      "length": 8,
+      "color": [
+        140,
+        95,
+        50
+      ]
+    },
+    {
+      "x": 128,
+      "y": 47,
+      "orientation": "horizontal",
+      "length": 8,
+      "color": [
+        140,
+        95,
+        50
+      ]
+    },
+    {
+      "x": 234,
+      "y": 44,
+      "orientation": "horizontal",
+      "length": 8,
+      "color": [
+        140,
+        95,
+        50
+      ]
+    },
+    {
+      "x": 328,
+      "y": 41,
+      "orientation": "horizontal",
+      "length": 8,
+      "color": [
+        140,
+        95,
+        50
+      ]
+    },
+    {
+      "x": 56,
+      "y": 92,
+      "orientation": "vertical",
+      "length": 8,
+      "color": [
+        140,
+        95,
+        50
+      ]
+    },
+    {
+      "x": 141,
+      "y": 116,
+      "orientation": "horizontal",
+      "length": 8,
+      "color": [
+        140,
+        95,
+        50
+      ]
+    },
+    {
+      "x": 260,
+      "y": 91,
+      "orientation": "vertical",
+      "length": 8,
+      "color": [
+        140,
+        95,
+        50
+      ]
+    },
+    {
+      "x": 340,
+      "y": 92,
+      "orientation": "vertical",
+      "length": 8,
+      "color": [
+        140,
+        95,
+        50
+      ]
+    },
+    {
+      "x": 46,
+      "y": 148,
+      "orientation": "horizontal",
+      "length": 8,
+      "color": [
+        140,
+        95,
+        50
+      ]
+    },
+    {
+      "x": 156,
+      "y": 145,
+      "orientation": "horizontal",
+      "length": 8,
+      "color": [
+        140,
+        95,
+        50
+      ]
+    },
+    {
+      "x": 260,
+      "y": 150,
+      "orientation": "horizontal",
+      "length": 8,
+      "color": [
+        140,
+        95,
+        50
+      ]
+    },
+    {
+      "x": 350,
+      "y": 148,
+      "orientation": "horizontal",
+      "length": 8,
+      "color": [
+        140,
+        95,
+        50
+      ]
+    }
+  ],
+  "spawns": [
+    {
+      "type": "player",
+      "x": 200,
+      "y": 58
+    },
+    {
+      "type": "npc",
+      "x": 21,
+      "y": 16,
+      "name": "Pip"
+    },
+    {
+      "type": "npc",
+      "x": 55,
+      "y": 37,
+      "name": "Mox"
+    },
+    {
+      "type": "npc",
+      "x": 40,
+      "y": 27,
+      "name": "Zara"
+    },
+    {
+      "type": "npc",
+      "x": 106,
+      "y": 14,
+      "name": "Kip"
+    },
+    {
+      "type": "npc",
+      "x": 155,
+      "y": 40,
+      "name": "Luna"
+    },
+    {
+      "type": "npc",
+      "x": 132,
+      "y": 28,
+      "name": "Remy"
+    },
+    {
+      "type": "npc",
+      "x": 216,
+      "y": 16,
+      "name": "Fern"
+    },
+    {
+      "type": "npc",
+      "x": 255,
+      "y": 37,
+      "name": "Ash"
+    },
+    {
+      "type": "npc",
+      "x": 237,
+      "y": 27,
+      "name": "Blix"
+    },
+    {
+      "type": "npc",
+      "x": 316,
+      "y": 18,
+      "name": "Coral"
+    },
+    {
+      "type": "npc",
+      "x": 345,
+      "y": 34,
+      "name": "Dex"
+    },
+    {
+      "type": "npc",
+      "x": 332,
+      "y": 27,
+      "name": "Echo"
+    },
+    {
+      "type": "npc",
+      "x": 18,
+      "y": 84,
+      "name": "Fizz"
+    },
+    {
+      "type": "npc",
+      "x": 47,
+      "y": 105,
+      "name": "Glow"
+    },
+    {
+      "type": "npc",
+      "x": 34,
+      "y": 95,
+      "name": "Hex"
+    },
+    {
+      "type": "npc",
+      "x": 116,
+      "y": 78,
+      "name": "Ivy"
+    },
+    {
+      "type": "npc",
+      "x": 170,
+      "y": 109,
+      "name": "Jazz"
+    },
+    {
+      "type": "npc",
+      "x": 145,
+      "y": 94,
+      "name": "Kit"
+    },
+    {
+      "type": "npc",
+      "x": 266,
+      "y": 82,
+      "name": "Lux"
+    },
+    {
+      "type": "npc",
+      "x": 300,
+      "y": 106,
+      "name": "Nova"
+    },
+    {
+      "type": "npc",
+      "x": 285,
+      "y": 95,
+      "name": "Opal"
+    },
+    {
+      "type": "npc",
+      "x": 346,
+      "y": 84,
+      "name": "Pix"
+    },
+    {
+      "type": "npc",
+      "x": 378,
+      "y": 105,
+      "name": "Rex"
+    },
+    {
+      "type": "npc",
+      "x": 364,
+      "y": 95,
+      "name": "Sky"
+    },
+    {
+      "type": "npc",
+      "x": 31,
+      "y": 154,
+      "name": "Wren"
+    },
+    {
+      "type": "npc",
+      "x": 65,
+      "y": 175,
+      "name": "Thorn"
+    },
+    {
+      "type": "npc",
+      "x": 50,
+      "y": 165,
+      "name": "Ember"
+    },
+    {
+      "type": "npc",
+      "x": 136,
+      "y": 151,
+      "name": "Birch"
+    },
+    {
+      "type": "npc",
+      "x": 180,
+      "y": 177,
+      "name": "Pip"
+    },
+    {
+      "type": "npc",
+      "x": 160,
+      "y": 165,
+      "name": "Mox"
+    },
+    {
+      "type": "npc",
+      "x": 246,
+      "y": 156,
+      "name": "Zara"
+    },
+    {
+      "type": "npc",
+      "x": 278,
+      "y": 174,
+      "name": "Kip"
+    },
+    {
+      "type": "npc",
+      "x": 264,
+      "y": 166,
+      "name": "Luna"
+    },
+    {
+      "type": "npc",
+      "x": 336,
+      "y": 154,
+      "name": "Remy"
+    },
+    {
+      "type": "npc",
+      "x": 368,
+      "y": 175,
+      "name": "Fern"
+    },
+    {
+      "type": "npc",
+      "x": 354,
+      "y": 165,
+      "name": "Ash"
+    },
+    {
+      "type": "npc",
+      "x": 92,
+      "y": 58,
+      "name": "Sage"
+    },
+    {
+      "type": "npc",
+      "x": 200,
+      "y": 138,
+      "name": "Willow"
+    },
+    {
+      "type": "npc",
+      "x": 200,
+      "y": 96,
+      "name": "Brook"
+    },
+    {
+      "type": "npc",
+      "x": 320,
+      "y": 58,
+      "name": "Flint"
+    },
+    {
+      "type": "npc",
+      "x": 145,
+      "y": 58,
+      "name": "Reed"
+    },
+    {
+      "type": "npc",
+      "x": 260,
+      "y": 96,
+      "name": "Hazel"
+    }
+  ]
+}
