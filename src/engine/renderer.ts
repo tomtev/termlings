@@ -76,17 +76,14 @@ let _renderBufSize = 0
 
 /** Render buffer to terminal, returns a Buffer for direct stdout.write() */
 export function renderBuffer(buffer: Cell[][], cols: number, rows: number): Buffer {
-  // Ensure render buffer is large enough (~30 bytes max per cell + 4 per row for \x1b[K\n)
-  const needed = cols * rows * 30 + rows * 4 + 64
+  // Ensure render buffer is large enough (~30 bytes max per cell + 12 per row for cursor positioning)
+  const needed = cols * rows * 30 + rows * 12 + 64
   if (!_renderBuf || _renderBufSize < needed) {
     _renderBufSize = needed
     _renderBuf = Buffer.allocUnsafe(_renderBufSize)
   }
   const buf = _renderBuf
   let o = 0 // write offset
-
-  // Cursor home
-  buf[o++] = 0x1b; buf[o++] = 0x5b; buf[o++] = 0x48 // \x1b[H
 
   // Track last fg/bg by REFERENCE first (fast path for same RGB tuple),
   // fall back to component comparison only when reference differs.
@@ -96,6 +93,12 @@ export function renderBuffer(buffer: Cell[][], cols: number, rows: number): Buff
   let lbr = -1, lbg2 = -1, lbb = -1
 
   for (let y = 0; y < rows; y++) {
+    // Explicit cursor positioning per row: \x1b[{row};1H (1-based)
+    // This is immune to character width issues — no auto-wrap dependency
+    buf[o++] = 0x1b; buf[o++] = 0x5b // \x1b[
+    o = writeUint(buf, o, y + 1)
+    buf[o++] = 0x3b; buf[o++] = 0x31; buf[o++] = 0x48 // ;1H
+
     const row = buffer[y]!
     for (let x = 0; x < cols; x++) {
       const cell = row[x]!
@@ -151,13 +154,8 @@ export function renderBuffer(buffer: Cell[][], cols: number, rows: number): Buff
         o += buf.write(ch, o)
       }
     }
-    // Erase to end of line + newline to prevent auto-wrap drift
-    if (y < rows - 1) {
-      buf[o++] = 0x1b; buf[o++] = 0x5b; buf[o++] = 0x4b // \x1b[K
-      buf[o++] = 0x0a // \n
-    } else {
-      buf[o++] = 0x1b; buf[o++] = 0x5b; buf[o++] = 0x4b // \x1b[K
-    }
+    // Erase remainder of line (clears stale content after resize)
+    buf[o++] = 0x1b; buf[o++] = 0x5b; buf[o++] = 0x4b // \x1b[K
   }
   if (lfr !== -1) { buf[o++] = 0x1b; buf[o++] = 0x5b; buf[o++] = 0x33; buf[o++] = 0x39; buf[o++] = 0x6d }
   if (lbr !== -1) { buf[o++] = 0x1b; buf[o++] = 0x5b; buf[o++] = 0x34; buf[o++] = 0x39; buf[o++] = 0x6d }
