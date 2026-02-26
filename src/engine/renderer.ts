@@ -76,8 +76,8 @@ let _renderBufSize = 0
 
 /** Render buffer to terminal, returns a Buffer for direct stdout.write() */
 export function renderBuffer(buffer: Cell[][], cols: number, rows: number): Buffer {
-  // Ensure render buffer is large enough (~30 bytes max per cell)
-  const needed = cols * rows * 30 + 64
+  // Ensure render buffer is large enough (~30 bytes max per cell + 4 per row for \x1b[K\n)
+  const needed = cols * rows * 30 + rows * 4 + 64
   if (!_renderBuf || _renderBufSize < needed) {
     _renderBufSize = needed
     _renderBuf = Buffer.allocUnsafe(_renderBufSize)
@@ -150,6 +150,13 @@ export function renderBuffer(buffer: Cell[][], cols: number, rows: number): Buff
       } else {
         o += buf.write(ch, o)
       }
+    }
+    // Erase to end of line + newline to prevent auto-wrap drift
+    if (y < rows - 1) {
+      buf[o++] = 0x1b; buf[o++] = 0x5b; buf[o++] = 0x4b // \x1b[K
+      buf[o++] = 0x0a // \n
+    } else {
+      buf[o++] = 0x1b; buf[o++] = 0x5b; buf[o++] = 0x4b // \x1b[K
     }
   }
   if (lfr !== -1) { buf[o++] = 0x1b; buf[o++] = 0x5b; buf[o++] = 0x33; buf[o++] = 0x39; buf[o++] = 0x6d }
