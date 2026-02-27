@@ -16,6 +16,8 @@ Each avatar is encoded as a **7-character hex DNA string** (~32M combinations) t
 
 No install required — just use `npx`:
 
+### Render termlings
+
 ```bash
 # Render a DNA
 npx termlings 0a3f201
@@ -42,6 +44,30 @@ npx termlings 0a3f201 --svg --size=20 --bg=#000 --padding=2
 # Animated SVG with CSS keyframes
 npx termlings 0a3f201 --svg --animated --walk --talk
 ```
+
+### Create an agent
+
+Create a new agent project with an interactive avatar generator:
+
+```bash
+# Interactive mode
+npx termlings create my-agent
+
+# With options
+npx termlings create my-agent --name "My Agent" --owner "Your Name" --purpose "Helps with research"
+
+# Specify directory
+npx termlings create ~/projects/my-agent --name "Researcher"
+```
+
+The `create` command:
+- Downloads the agent template from GitHub (`tomtev/termlings`)
+- Generates a random avatar (you can reroll until you like it)
+- Creates `AGENTS.md` with your agent's personality and capabilities
+- Scaffolds workflows and skills directories
+- Generates an `avatar.svg` from your agent's DNA
+
+After creation, you can run your agent with Claude Code, Codex, or other CLI tools.
 
 ## Install
 
