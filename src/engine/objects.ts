@@ -81,6 +81,8 @@ const STONE_R: RGB = [100, 100, 105] // campfire ring stones
 const FLOWER_P: RGB = [220, 80, 120] // pink flower
 const FLOWER_Y: RGB = [240, 210, 50] // yellow flower
 const FLOWER_B: RGB = [100, 140, 220] // blue flower
+const NOVA: RGB = [180, 100, 220]    // nova crystal (purple/magenta)
+const NOVA_L: RGB = [220, 150, 255]  // nova crystal highlight (light)
 
 // Shorthand: frame block, seat block, visual-only, null
 const F = (fg: RGB) => c("█", fg, null, false)         // solid, blocks
@@ -284,6 +286,32 @@ export const OBJECT_DEFS: Record<string, ObjectDef> = {
     cells: [
       // decorative ground cover (all walkable)
       [V(FLOWER_P), V(FLOWER_Y), V(FLOWER_B)],
+    ],
+  },
+  nova_crystal: {
+    name: "nova_crystal",
+    width: 3,
+    height: 3,
+    cells: [
+      // top point (visual only)
+      [_, V(NOVA_L), _],
+      // upper diamond (visual only)
+      [V(NOVA), V(NOVA_L), V(NOVA)],
+      // base point (blocking)
+      [_, F(NOVA), _],
+    ],
+    emitters: [
+      {
+        name: "sparkles",
+        char: ["✦", "✧", "✴"],
+        fg: [[220, 150, 255], [180, 100, 220], [240, 200, 255]],
+        rate: 6,
+        lifetime: 800,
+        offsetX: [-0.5, 3.5],
+        offsetY: [-0.5, 3],
+        width: 3,
+        height: 3,
+      }
     ],
   },
 }
