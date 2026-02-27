@@ -122,7 +122,12 @@ Commands:
   const _agentDna = process.env.TERMLINGS_AGENT_DNA || undefined;
 
   if (verb === "walk") {
-    const { writeCommand } = await import("./engine/ipc.js");
+    const { readState, writeCommand } = await import("./engine/ipc.js");
+    const _state = readState();
+    if (_state?.map?.mode === "simple") {
+      console.error("Error: walk is disabled in simple mode");
+      process.exit(1);
+    }
     const sessionId = process.env.TERMLINGS_SESSION_ID;
     if (!sessionId) {
       console.error("Error: TERMLINGS_SESSION_ID env var not set");
@@ -185,6 +190,7 @@ Commands:
   if (verb === "map") {
     const { readState } = await import("./engine/ipc.js");
     const { allocBuffer, clearBuffer, renderBuffer, stampEntity } = await import("./engine/renderer.js");
+    const { makeEntity } = await import("./engine/entity.js");
     const { getTileColor, getTileChar } = await import("./engine/map-renderer.js");
 
     const state = readState();
@@ -192,6 +198,32 @@ Commands:
       console.error("No sim state found. Is termlings --play running?");
       process.exit(1);
     }
+
+    // Sessions-only mode: show just session IDs and positions
+    if (flags.has("sessions")) {
+      const mySessionId = process.env.TERMLINGS_SESSION_ID;
+      for (const e of state.entities) {
+        const status = e.idle ? "idle" : "active";
+        const isMe = e.sessionId === mySessionId;
+        console.log(`${e.sessionId.padEnd(16)} (${e.x}, ${e.footY}) [${status}]${isMe ? " (you)" : ""}`);
+      }
+      process.exit(0);
+    }
+
+    // Simple mode: show agent list instead of terrain
+    if (state.map.mode === "simple") {
+      const mySessionId = process.env.TERMLINGS_SESSION_ID;
+      console.log("Simple mode (no map)\n");
+      console.log("Agents:");
+      for (const e of state.entities) {
+        const status = e.idle ? "idle" : "active";
+        const isMe = e.sessionId === mySessionId;
+        console.log(`  ${e.name.padEnd(14)} ${e.sessionId.padEnd(16)} [${status}]${isMe ? "  (you)" : ""}`);
+      }
+      console.log("\nUse: termlings action send <session-id> <message>");
+      process.exit(0);
+    }
+
     const { width, height, name, tiles } = state.map;
     const mySessionId = process.env.TERMLINGS_SESSION_ID;
     const fullMap = flags.has("full");
@@ -307,9 +339,11 @@ Commands:
         }
       }
 
-      // Stamp all entities
+      // Stamp all entities (create proper Entity objects from state data)
       for (const e of state.entities) {
-        stampEntity(buffer, viewW, viewH, e, x0, y0, 1);
+        const entity = makeEntity(e.dna, e.x, e.y, 0, { idle: e.idle });
+        entity.name = e.name;
+        stampEntity(buffer, viewW, viewH, entity, x0, y0, 1);
       }
 
       // Render and output
@@ -385,7 +419,12 @@ Commands:
   }
 
   if (verb === "build") {
-    const { writeCommand } = await import("./engine/ipc.js");
+    const { readState: readStateBuild, writeCommand } = await import("./engine/ipc.js");
+    const _stateBuild = readStateBuild();
+    if (_stateBuild?.map?.mode === "simple") {
+      console.error("Error: build is disabled in simple mode");
+      process.exit(1);
+    }
     const sessionId = process.env.TERMLINGS_SESSION_ID;
     if (!sessionId) {
       console.error("Error: TERMLINGS_SESSION_ID env var not set");
@@ -414,7 +453,12 @@ Commands:
   }
 
   if (verb === "destroy") {
-    const { writeCommand } = await import("./engine/ipc.js");
+    const { readState: readStateDestroy, writeCommand } = await import("./engine/ipc.js");
+    const _stateDestroy = readStateDestroy();
+    if (_stateDestroy?.map?.mode === "simple") {
+      console.error("Error: destroy is disabled in simple mode");
+      process.exit(1);
+    }
     const sessionId = process.env.TERMLINGS_SESSION_ID;
     if (!sessionId) {
       console.error("Error: TERMLINGS_SESSION_ID env var not set");
@@ -724,6 +768,7 @@ if (flags.has("help") || flags.has("h")) {
 Sim (default):
   termlings                Start the sim (default room)
   termlings --room <slug>  Start the sim in a named room
+  termlings --simple       Start in simple mode (no map, agent grid)
 
 Agents:
   claude [flags...]        Start Claude Code as an agent
@@ -758,13 +803,25 @@ Other:
 }
 
 // 7. Default: launch sim
-//    termlings              → default room
-//    termlings --room village → named room
+//    termlings              → default room (shows title screen first)
+//    termlings --room village → named room (skips title)
 //    termlings play [path]  → backward compat for play subcommand
 //    termlings --play       → backward compat for --play flag
 {
-  const room = opts.room || "default";
-  process.env.TERMLINGS_ROOM = room;
+  const selectedRoom = opts.room || "default";
+
+  const { showTitleScreen, roomHasAgents } = await import("./title.js");
+  if (!roomHasAgents(selectedRoom)) {
+    await showTitleScreen(selectedRoom);
+  }
+
+  process.env.TERMLINGS_ROOM = selectedRoom;
+
+  if (flags.has("simple")) {
+    process.env.TERMLINGS_SIMPLE = "1";
+    await import("./simple-sim.js");
+    await new Promise(() => {});
+  }
 
   // Support "play ./path" and "--play" for backward compat
   const mapArg = positional[0] === "play" ? (positional[1] || null) : null;
