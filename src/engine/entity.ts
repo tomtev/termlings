@@ -74,15 +74,6 @@ export function updateAnimations(
     if (doIdle && isIdle) {
       e.walkFrame = (e.walkFrame + 1) % e.legFrames
     }
-
-    // Idle blink
-    if (!e.talking && isIdle) {
-      if (Math.random() < blinkChance) {
-        e.talkFrame = 1
-      } else if (e.talkFrame === 1 && Math.random() < 0.15) {
-        e.talkFrame = 0
-      }
-    }
   }
 }
 
