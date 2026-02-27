@@ -97,7 +97,19 @@ if (agentAdapter) {
     const { selectLocalAgentWithRoom } = await import("./agents/discover.js");
     const selected = await selectLocalAgentWithRoom(localAgents, room);
 
-    if (selected) {
+    if (selected === "create-random") {
+      // Generate random agent
+      const { generateRandomDNA } = await import("./index.js");
+      const randomDna = generateRandomDNA();
+      const randomNames = ["Pixel", "Sprout", "Ember", "Nimbus", "Glitch", "Ziggy", "Quill", "Cosmo", "Maple", "Flint", "Wren", "Dusk", "Byte", "Fern", "Spark", "Nova", "Haze", "Basil", "Reef", "Orbit", "Sage", "Rusty", "Coral", "Luna", "Cinder", "Pip", "Storm", "Ivy", "Blaze", "Mochi"];
+      const randomName = randomNames[Math.floor(Math.random() * randomNames.length)];
+
+      process.env.TERMLINGS_AGENT_NAME = opts.name || randomName;
+      process.env.TERMLINGS_AGENT_DNA = opts.dna || randomDna;
+
+      const { launchAgent } = await import("./agents/launcher.js");
+      await launchAgent(agentAdapter, agentPassthrough, opts);
+    } else if (selected) {
       process.env.TERMLINGS_AGENT_NAME = opts.name || selected.soul?.name;
       process.env.TERMLINGS_AGENT_DNA = opts.dna || selected.soul?.dna;
       const commandName = opts.with || selected.soul?.command || positional[0];
