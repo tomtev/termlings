@@ -1,4 +1,5 @@
 import type { AgentAdapter } from "./types.js"
+import { writeFileSync } from "fs"
 import { resolve as resolvePath } from "path"
 
 const pi: AgentAdapter = {
@@ -6,16 +7,20 @@ const pi: AgentAdapter = {
   defaultName: "Pi",
 
   contextArgs(context) {
-    // Pi accepts @file syntax to inject content from files.
-    // Pass the termling context directly to pi.
+    // Pi auto-discovers APPEND_SYSTEM.md and appends it to the system prompt.
+    // Write the termlings context to a file that pi will read.
     if (!context) return []
 
-    // For pi, we pass the context inline using the @ file syntax
-    // The context is passed as a temporary file argument
     try {
-      const contextPath = resolvePath("src/termling-context.md")
-      return [`@${contextPath}`]
-    } catch {
+      // Write to APPEND_SYSTEM.md in the current working directory
+      // Pi will auto-discover and use this file
+      const appendPath = resolvePath("APPEND_SYSTEM.md")
+      writeFileSync(appendPath, context, "utf8")
+      // No args needed - pi will auto-discover the file
+      return []
+    } catch (e) {
+      // If we can't write the file, still try to run pi
+      // (context via env vars might still work)
       return []
     }
   },
