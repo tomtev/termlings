@@ -1,9 +1,3 @@
-<agent-soul>
-Name: {{AGENT_NAME}}
-Purpose: {{AGENT_PURPOSE}}
-DNA: {{AGENT_DNA}}
-</agent-soul>
-
 <agent-owner>
 Name: {{OWNER_NAME}}
 </agent-owner>

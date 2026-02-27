@@ -204,16 +204,18 @@ async function createAgent(dest: string, vars: Record<string, string>): Promise<
   const extractDir = join(tmpDir, "out");
 
   try {
-    // Replace {{VAR}} placeholders in AGENTS.md
-    const agentsPath = join(extractDir, "AGENTS.md");
-    try {
-      let content = await readFile(agentsPath, "utf-8");
-      for (const [key, value] of Object.entries(resolved)) {
-        content = content.split(`{{${key}}}`).join(value);
+    // Replace {{VAR}} placeholders in AGENTS.md and SOUL.md
+    for (const filename of ["AGENTS.md", "SOUL.md"]) {
+      const filePath = join(extractDir, filename);
+      try {
+        let content = await readFile(filePath, "utf-8");
+        for (const [key, value] of Object.entries(resolved)) {
+          content = content.split(`{{${key}}}`).join(value);
+        }
+        await writeFile(filePath, content);
+      } catch {
+        // File missing or unreadable — skip replacements
       }
-      await writeFile(agentsPath, content);
-    } catch {
-      // AGENTS.md missing or unreadable — skip replacements
     }
 
     // Copy to destination preserving symlinks
