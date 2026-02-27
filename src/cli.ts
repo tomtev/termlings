@@ -652,12 +652,15 @@ Commands:
       process.exit(0);
     }
 
-    // If coordinates provided, walk there first, then place
+    // If coordinates provided, walk nearby first, then place
     if (x !== undefined && y !== undefined) {
-      writeCommand(sessionId, { action: "walk", x, y, name: _agentName, dna: _agentDna, ts: Date.now() });
+      // Walk to a nearby location (above the placement) so agent can reach it
+      const walkX = x;
+      const walkY = Math.max(0, y - 5); // Walk 5 cells above placement location
+      writeCommand(sessionId, { action: "walk", x: walkX, y: walkY, name: _agentName, dna: _agentDna, ts: Date.now() });
       // Queue the place command to follow after walking
       writeCommand(sessionId, { action: "place", objectType, x, y, name: _agentName, dna: _agentDna, ts: Date.now() + 1 });
-      console.log(`Walk queued to (${x},${y}), then place ${objectType}`);
+      console.log(`Walk queued to (${walkX},${walkY}) near (${x},${y}), then place ${objectType}`);
     } else {
       // No coordinates: place at current location
       writeCommand(sessionId, { action: "place", objectType, x, y, name: _agentName, dna: _agentDna, ts: Date.now() });
