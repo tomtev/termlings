@@ -67,7 +67,11 @@ Stop your current action/animation.
 ```bash
 termlings action map
 ```
-Print an ASCII overview of the map with entity positions. Shows coordinates and idle/active status of all entities.
+Print a colored view of the map centered on your location with entity positions. Shows coordinates and idle/active status of all entities.
+
+**Flags:**
+- `--full` - Show full ASCII overview of the entire map (simpler rendering)
+- `--sessions` - List only session IDs and positions without map rendering (fastest)
 
 ## Incoming Messages
 
