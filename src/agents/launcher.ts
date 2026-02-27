@@ -115,11 +115,26 @@ export async function launchAgent(
     agentDna = generateRandomDNA()
   }
 
-  const contextArgs = adapter.contextArgs(context)
-  const finalArgs = [...contextArgs, ...passthroughArgs]
-
   const room = process.env.TERMLINGS_ROOM || "default"
   setRoom(room)
+
+  // Apply context substitutions BEFORE passing to adapter
+  let finalContext = context
+  if (context) {
+    const dynamicFields: Record<string, string> = {
+      NAME: agentName,
+      SESSION_ID: sessionId,
+      DNA: agentDna,
+      ROOM: room,
+      PURPOSE: termlingOpts.purpose || soul.purpose || process.env.TERMLINGS_PURPOSE || "explore and interact",
+    }
+    for (const [field, value] of Object.entries(dynamicFields)) {
+      finalContext = finalContext.replace(new RegExp(`\\$${field}\\b`, "g"), value)
+    }
+  }
+
+  const contextArgs = adapter.contextArgs(finalContext)
+  const finalArgs = [...contextArgs, ...passthroughArgs]
 
   // Install Claude Code hooks for typing animations and tool requests
   if (adapter.bin === "claude") {
@@ -178,25 +193,12 @@ export async function launchAgent(
     TERMLINGS_IPC_DIR: ipcDir(room),
   }
 
+  // Add context to environment (already substituted above)
   if (context) {
-    let finalContext = context
-
-    // Replace dynamic fields
-    const dynamicFields: Record<string, string> = {
-      NAME: agentName,
-      SESSION_ID: sessionId,
-      DNA: agentDna,
-      ROOM: room,
-      PURPOSE: termlingOpts.purpose || soul.purpose || process.env.TERMLINGS_PURPOSE || "explore and interact",
-    }
-
-    // Replace $FIELD placeholders
-    for (const [field, value] of Object.entries(dynamicFields)) {
-      finalContext = finalContext.replace(new RegExp(`\\$${field}\\b`, "g"), value)
-    }
+    let envContext = finalContext
 
     if (process.env.TERMLINGS_SIMPLE === "1") {
-      finalContext += `\n\n## Simple Mode
+      envContext += `\n\n## Simple Mode
 
 This room is running in SIMPLE MODE:
 - There is NO map. Walking is disabled.
@@ -206,7 +208,7 @@ This room is running in SIMPLE MODE:
 - Use \`termlings action send <session-id> <message>\` to communicate.
 - Gestures (talk, wave) and stop still work.`
     }
-    env.TERMLINGS_CONTEXT = finalContext
+    env.TERMLINGS_CONTEXT = envContext
   }
 
   // Announce to the sim so the agent entity spawns immediately
