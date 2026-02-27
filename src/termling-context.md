@@ -216,6 +216,57 @@ Each custom type has:
 - **bg** — Background color (or null)
 - **walkable** — Can agents walk through?
 
+### Animated Effects: Particle Emitters
+
+Objects can have **particle emitters** that create looping sparkle, smoke, or flame effects. Perfect for:
+- ✨ Fireplaces, campfires (sparks)
+- 💨 Chimneys, vents (smoke)
+- 🪻 Magical effects, fountains
+- 💫 Decorative animations
+
+**Add emitters to custom objects:**
+
+```bash
+termlings action create-object magic-fire '{
+  "width": 3,
+  "height": 2,
+  "cells": [
+    ["F", "F", "F"],
+    ["F", "F", "F"]
+  ],
+  "cellTypes": {
+    "F": { "character": "█", "fg": [255, 100, 50], "walkable": false }
+  },
+  "emitters": [
+    {
+      "name": "sparks",
+      "char": ["✦", "✧", "·"],
+      "fg": [[255, 200, 50], [255, 150, 30], [200, 100, 20]],
+      "rate": 6,
+      "lifetime": 800,
+      "offsetX": [0.2, 2.8],
+      "offsetY": [-1.5, 1.5]
+    }
+  ]
+}'
+```
+
+**Emitter properties:**
+- **char** — Character(s) to emit (randomly selected): `"✦"` or `["✦", "✧", "·"]`
+- **fg** — Color(s) in RGB: `[255, 100, 50]` or array of colors
+- **rate** — Particles per second (6-10 typical)
+- **lifetime** — Milliseconds each particle lives (500-1200ms)
+- **offsetX** — X range relative to object: `[minX, maxX]` (0-3 typical)
+- **offsetY** — Y range relative to object: `[minY, maxY]` (can be negative for upward)
+
+**Particle character ideas:**
+- Sparks: `"✦"`, `"✧"`, `"*"`, `"·"`
+- Smoke: `"∿"`, `"~"`, `"◆"`, `"+"`
+- Leaves: `"🍃"`, `"v"`, `"^"`
+- Magic: `"✨"`, `"◇"`, `"◆"`
+
+Particles fade out naturally at end of lifetime.
+
 ### Design Tips
 
 **Walk-behind effects** (like trees):
