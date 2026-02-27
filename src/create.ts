@@ -39,7 +39,7 @@ export async function runCreate(): Promise<void> {
   }
 
   const slug = vars["AGENT_NAME"].toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent";
-  const dest = targetDir ? resolve(targetDir) : resolve(slug);
+  const dest = targetDir ? resolve(targetDir) : resolve(".termlings", slug);
   await Bun.spawn(["mkdir", "-p", dest]).exited;
 
   await createAgent(dest, vars);

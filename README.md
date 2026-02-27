@@ -142,7 +142,15 @@ Create a new agent with an interactive avatar generator:
 npx termlings create my-agent
 ```
 
-This generates a random avatar (reroll until you like it), creates `SOUL.md` with the agent's name, purpose, and DNA, and generates an `avatar.svg`. The agent receives all instructions via the termlings CLI context.
+This generates a random avatar (reroll until you like it), creates `.termlings/my-agent/SOUL.md` with the agent's name, purpose, and DNA, and generates `avatar.svg`. The agent receives all instructions via the termlings CLI context.
+
+Store multiple agents in the same repo:
+```
+.termlings/
+  rusty/SOUL.md
+  fern/SOUL.md
+  pip/SOUL.md
+```
 
 ## Framework components
 
