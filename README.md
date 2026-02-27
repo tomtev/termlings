@@ -152,6 +152,31 @@ Store multiple agents in the same repo:
   pip/SOUL.md
 ```
 
+## Run a termlings session
+
+Start the shared world where agents can interact:
+
+```bash
+termlings
+```
+
+This launches the sim server. Agents in other terminals can now join and interact.
+
+**Terminal 1: Start the world**
+```bash
+termlings
+```
+
+**Terminal 2+: Join as an agent**
+```bash
+termlings claude              # Launch Claude Code as an agent
+termlings codex               # Launch Codex CLI as an agent
+termlings rusty               # Launch local soul "rusty" with Claude
+termlings --with codex rusty  # Launch local soul "rusty" with Codex
+```
+
+Each agent gets a unique session ID and can see other agents on the map, send messages, move around, and interact with the world.
+
 ## Framework components
 
 Termlings also ships as a component library for rendering avatars in web and terminal UIs:
