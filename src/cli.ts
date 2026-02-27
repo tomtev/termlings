@@ -946,6 +946,7 @@ Game management:
 Agents:
   claude [flags...]        Start Claude Code as an agent
   codex [flags...]         Start Codex CLI as an agent
+  pi [flags...]            Start Pi coding agent
   <name> [flags...]        Launch saved agent (e.g., "termlings my-agent")
   --room <slug>            Join a specific room (default: "default")
   --name <name>            Agent display name

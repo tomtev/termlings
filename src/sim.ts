@@ -67,7 +67,7 @@ import {
   type DetectedRoom,
 } from "./engine/index.js"
 import { resolve, join } from "path"
-import { readFileSync, writeFileSync, appendFileSync, existsSync } from "fs"
+import { readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, unlinkSync } from "fs"
 
 // --- Room selection (must happen before ensureIpcDir) ---
 
@@ -915,6 +915,56 @@ function processAgentCommands() {
   })
 }
 
+function processHookEvents() {
+  if (tick % 30 !== 0) return // Poll every 30 ticks (~0.5s)
+
+  // Poll hook files for Claude typing animations and tool requests
+  try {
+    const { readdirSync, unlinkSync } = await import("fs");
+    const hookFiles = readdirSync(IPC_DIR).filter((f) => f.endsWith(".hook.json"));
+    for (const hookFile of hookFiles) {
+      const sessionId = hookFile.replace(".hook.json", "");
+      const session = agentSessions.get(sessionId);
+      if (!session) continue;
+
+      const hookPath = join(IPC_DIR, hookFile);
+      try {
+        const content = readFileSync(hookPath, "utf8");
+        const lines = content.split("\n").filter((l) => l.trim());
+
+        for (const line of lines) {
+          try {
+            const event = JSON.parse(line);
+            if (event.event === "typing_start") {
+              // Claude is typing/processing — show talking animation
+              session.entity.talking = true;
+              session.gestureExpiry = tick + 600; // 10 seconds
+            } else if (event.event === "typing_stop") {
+              // Claude stopped typing
+              session.entity.talking = false;
+              session.entity.talkFrame = 0;
+            } else if (event.event === "permission_request") {
+              // Tool request — brief wave gesture
+              session.entity.waving = true;
+              session.entity.waveFrame = 1;
+              session.gestureExpiry = tick + 120; // 2 seconds
+            }
+          } catch {
+            // Invalid JSON — skip this line
+          }
+        }
+
+        // Clear the hook file
+        unlinkSync(hookPath);
+      } catch {
+        // File doesn't exist or can't be read — skip
+      }
+    }
+  } catch {
+    // IPC_DIR doesn't exist or can't be read — skip
+  }
+}
+
 function updateAgentAI() {
   if (tick % 6 !== 0) return
 
@@ -1065,6 +1115,7 @@ function frame() {
   }
   updateNpcAI()
   processAgentCommands()
+  processHookEvents()
   updateAgentAI()
   writeSimState()
 

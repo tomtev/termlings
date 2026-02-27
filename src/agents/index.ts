@@ -1,6 +1,7 @@
 import type { AgentAdapter } from "./types.js"
 import claude from "./claude.js"
 import codex from "./codex.js"
+import pi from "./pi.js"
 
 export type { AgentAdapter } from "./types.js"
 
@@ -11,4 +12,5 @@ export type { AgentAdapter } from "./types.js"
 export const agents: Record<string, AgentAdapter> = {
   claude,
   codex,
+  pi,
 }
