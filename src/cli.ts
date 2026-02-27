@@ -81,18 +81,8 @@ if (args[0] && _agentRegistry[args[0]]) {
 
 // --- Routing ---
 
-// 1. Agent launcher: termlings <agent> [--room <slug>] [flags...]
-let agentAdapter = _agentRegistry[positional[0] ?? ""];
-
-if (agentAdapter) {
-  const room = opts.room || "default";
-  process.env.TERMLINGS_ROOM = room;
-  const { launchAgent } = await import("./agents/launcher.js");
-  await launchAgent(agentAdapter, agentPassthrough, opts);
-}
-
-// 1b. Selector: show all agents if no command specified
-if (!agentAdapter && positional.length === 0) {
+// 1. Agent launcher: show selector for any agent argument
+if (positional[0]) {
   const { selectAgent } = await import("./agents/discover.js");
   const selected = await selectAgent();
 
