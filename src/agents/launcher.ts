@@ -62,17 +62,17 @@ function encodeBracketedPaste(text: string): Buffer {
 }
 
 /**
- * Launch a local agent soul with claude adapter
+ * Launch a local agent soul with specified adapter (default: claude)
  */
 export async function launchLocalAgent(
   localAgent: any,
   passthroughArgs: string[],
   termlingOpts: Record<string, string>,
+  adapterName: string = "claude",
 ): Promise<never> {
-  // Use claude adapter for local agents
   const { agents } = await import("./index.js")
-  const adapter = agents.claude
-  if (!adapter) throw new Error("Claude adapter not found")
+  const adapter = agents[adapterName]
+  if (!adapter) throw new Error(`Agent adapter not found: ${adapterName}`)
 
   // Override name and dna from local soul
   termlingOpts = { ...termlingOpts }

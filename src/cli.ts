@@ -24,7 +24,7 @@ const positional: string[] = [];
 let agentPassthrough: string[] = [];
 
 // Known flags that take a space-separated value (--room village, --name Foo, etc.)
-const VALUE_FLAGS = new Set(["room", "name", "dna", "owner", "purpose"]);
+const VALUE_FLAGS = new Set(["room", "name", "dna", "owner", "purpose", "with"]);
 
 // Check if first arg is an agent name — if so, pass everything after it through raw
 const { agents: _agentRegistry } = await import("./agents/index.js");
@@ -91,7 +91,9 @@ if (agentAdapter) {
   await launchAgent(agentAdapter, agentPassthrough, opts);
 }
 
-// 1b. Local agent launcher: termlings [soul-name]
+// 1b. Local agent launcher: termlings [soul-name] [--with <adapter>]
+const withAdapter = opts.with || "claude";
+
 if (!agentAdapter && positional.length === 0) {
   // No args, check for local agents
   const { discoverLocalAgents, selectLocalAgent } = await import("./agents/discover.js");
@@ -100,14 +102,13 @@ if (!agentAdapter && positional.length === 0) {
   if (localAgents.length > 0) {
     const selected = await selectLocalAgent();
     if (selected && selected.soul) {
+      const room = opts.room || "default";
+      process.env.TERMLINGS_ROOM = room;
       process.env.TERMLINGS_AGENT_NAME = selected.soul.name;
       process.env.TERMLINGS_AGENT_DNA = selected.soul.dna;
 
-      const room = opts.room || "default";
-      process.env.TERMLINGS_ROOM = room;
-
       const { launchLocalAgent } = await import("./agents/launcher.js");
-      await launchLocalAgent(selected, agentPassthrough, opts);
+      await launchLocalAgent(selected, agentPassthrough, opts, withAdapter);
       process.exit(0);
     }
   }
@@ -118,14 +119,13 @@ if (!agentAdapter && positional.length === 0) {
   const localAgent = localAgents.find(a => a.name === positional[0]);
 
   if (localAgent && localAgent.soul) {
+    const room = opts.room || "default";
+    process.env.TERMLINGS_ROOM = room;
     process.env.TERMLINGS_AGENT_NAME = localAgent.soul.name;
     process.env.TERMLINGS_AGENT_DNA = localAgent.soul.dna;
 
-    const room = opts.room || "default";
-    process.env.TERMLINGS_ROOM = room;
-
     const { launchLocalAgent } = await import("./agents/launcher.js");
-    await launchLocalAgent(localAgent, agentPassthrough, opts);
+    await launchLocalAgent(localAgent, agentPassthrough, opts, withAdapter);
     process.exit(0);
   }
 }
