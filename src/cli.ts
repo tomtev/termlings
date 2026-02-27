@@ -345,20 +345,13 @@ Commands:
         }
       }
 
-      // Load agent-built objects from placements.json
-      interface Placement { def: string; x: number; y: number }
-      let placements: Placement[] = [];
-      const placementsFile = join(IPC_DIR, "placements.json");
-      if (existsSync(placementsFile)) {
-        try {
-          placements = JSON.parse(readFileSync(placementsFile, "utf8")) as Placement[];
-        } catch {}
-      }
+      // Load all objects from state (both map-defined and agent-built)
+      const placements = state.objects || [];
 
       const objectLegend: { num: number; name: string; x: number; y: number }[] = [];
       let objNum = 1;
       for (const p of placements) {
-        const def = OBJECT_DEFS[p.def];
+        const def = OBJECT_DEFS[p.type];
         if (!def) continue;
         const objW = def.width;
         const objH = def.height;
@@ -366,17 +359,17 @@ Commands:
         const vy0 = p.y - y0;
         if (vx0 + objW <= 0 || vx0 >= viewW || vy0 + objH <= 0 || vy0 >= viewH) continue;
 
-        const bracketedName = `[${p.def}]`;
+        const bracketedName = `[${p.type}]`;
         const bracketedNum = `[${objNum}]`;
         let label: string;
         if (objW >= bracketedName.length) {
           label = bracketedName;
         } else if (objW >= bracketedNum.length) {
           label = bracketedNum;
-          objectLegend.push({ num: objNum, name: p.def, x: p.x, y: p.y });
+          objectLegend.push({ num: objNum, name: p.type, x: p.x, y: p.y });
         } else {
           label = `${objNum}`;
-          objectLegend.push({ num: objNum, name: p.def, x: p.x, y: p.y });
+          objectLegend.push({ num: objNum, name: p.type, x: p.x, y: p.y });
         }
         objNum++;
 
@@ -491,25 +484,17 @@ Commands:
       console.log(`  ${eName.padEnd(10)} ${e.sessionId.padEnd(16)} (${ex},${ey})  ${status.padEnd(6)}  ${roomLabel.padEnd(10)}  ${rel}`);
     }
 
-    // Objects section
-    interface Placement { def: string; x: number; y: number }
-    let placements: Placement[] = [];
-    const placementsFile = join(IPC_DIR, "placements.json");
-    if (existsSync(placementsFile)) {
-      try {
-        placements = JSON.parse(readFileSync(placementsFile, "utf8")) as Placement[];
-      } catch {}
-    }
-
-    if (placements.length > 0) {
+    // Objects section — show both map-defined and agent-built objects from state
+    if (state.objects && state.objects.length > 0) {
       console.log();
       console.log("Objects:");
-      for (const p of placements) {
-        const oRoom = findRoom(p.x, p.y);
+      for (const o of state.objects) {
+        const oRoom = findRoom(o.x, o.y);
         const roomLabel = oRoom ? `room${oRoom.id}` : "outdoors";
-        // Show all objects, with roomId indicator
-        const roomInfo = p.roomId !== undefined ? ` [room${p.roomId}]` : "";
-        console.log(`  ${p.def.padEnd(16)} (${p.x},${p.y})  ${roomLabel}${roomInfo}`);
+        // Show object with room indicator
+        const roomInfo = o.roomId !== undefined ? ` [room${o.roomId}]` : "";
+        const occupancy = o.occupants && o.occupants.length > 0 ? ` — ${o.occupants.length} agent(s)` : "";
+        console.log(`  ${o.type.padEnd(16)} (${o.x},${o.y})  ${roomLabel}${roomInfo}${occupancy}`);
       }
     }
 
