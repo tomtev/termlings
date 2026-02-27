@@ -5,7 +5,7 @@ import { createInterface } from "readline";
 export interface LocalAgent {
   name: string;
   path: string;
-  soul?: { name: string; purpose: string; dna: string };
+  soul?: { name: string; purpose: string; dna: string; adapter?: string };
 }
 
 /**
@@ -32,12 +32,14 @@ export function discoverLocalAgents(): LocalAgent[] {
           const nameMatch = content.match(/^# (.+)$/m);
           const purposeMatch = content.match(/\*\*Purpose:\*\* (.+)$/m);
           const dnaMatch = content.match(/\*\*DNA:\*\* (.+)$/m);
+          const adapterMatch = content.match(/\*\*Adapter:\*\* (.+)$/m);
 
           if (nameMatch && dnaMatch) {
             soul = {
               name: nameMatch[1],
               purpose: purposeMatch ? purposeMatch[1] : "",
               dna: dnaMatch[1],
+              adapter: adapterMatch ? adapterMatch[1] : undefined,
             };
           }
         } catch {}

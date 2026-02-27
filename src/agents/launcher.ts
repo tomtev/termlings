@@ -68,11 +68,14 @@ export async function launchLocalAgent(
   localAgent: any,
   passthroughArgs: string[],
   termlingOpts: Record<string, string>,
-  adapterName: string = "claude",
+  adapterName?: string,
 ): Promise<never> {
   const { agents } = await import("./index.js")
-  const adapter = agents[adapterName]
-  if (!adapter) throw new Error(`Agent adapter not found: ${adapterName}`)
+
+  // Use soul's adapter if specified, otherwise use provided adapter or default to claude
+  const finalAdapterName = localAgent.soul?.adapter || adapterName || "claude"
+  const adapter = agents[finalAdapterName]
+  if (!adapter) throw new Error(`Agent adapter not found: ${finalAdapterName}`)
 
   // Override name and dna from local soul
   termlingOpts = { ...termlingOpts }
