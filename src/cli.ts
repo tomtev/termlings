@@ -507,7 +507,9 @@ Commands:
       for (const p of placements) {
         const oRoom = findRoom(p.x, p.y);
         const roomLabel = oRoom ? `room${oRoom.id}` : "outdoors";
-        console.log(`  ${p.def.padEnd(16)} (${p.x},${p.y})  ${roomLabel}`);
+        // Show all objects, with roomId indicator
+        const roomInfo = p.roomId !== undefined ? ` [room${p.roomId}]` : "";
+        console.log(`  ${p.def.padEnd(16)} (${p.x},${p.y})  ${roomLabel}${roomInfo}`);
       }
     }
 

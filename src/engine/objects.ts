@@ -19,6 +19,7 @@ export interface ObjectPlacement {
   x: number
   y: number
   props?: Record<string, unknown>
+  roomId?: number // which logical room this object is in (optional, for compatibility)
 }
 
 // --- Color utilities ---

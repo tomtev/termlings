@@ -866,7 +866,12 @@ function processAgentCommands() {
           chat("system", `Can't place ${cmd.objectType} at (${bx},${by}) — blocked`, [180, 80, 80])
         } else {
           const fromName = entity.name || sessionId
-          objectPlacements.push({ def: cmd.objectType, x: bx, y: by })
+          // Find which room this object is being placed in
+          const agentRoom = detectedRooms.find(r => {
+            const b = r.bounds
+            return bx >= b.x && bx < b.x + b.w && by >= b.y && by < b.y + b.h
+          })
+          objectPlacements.push({ def: cmd.objectType, x: bx, y: by, roomId: agentRoom?.id })
           rebuildObjects()
           chat("system", `${fromName} placed a ${cmd.objectType} at (${bx},${by})`, [80, 180, 80])
         }
