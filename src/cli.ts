@@ -104,8 +104,9 @@ if (!agentAdapter && positional.length === 0) {
     if (selected && selected.soul) {
       const room = opts.room || "default";
       process.env.TERMLINGS_ROOM = room;
-      process.env.TERMLINGS_AGENT_NAME = selected.soul.name;
-      process.env.TERMLINGS_AGENT_DNA = selected.soul.dna;
+      // Allow flags to override soul values
+      process.env.TERMLINGS_AGENT_NAME = opts.name || selected.soul.name;
+      process.env.TERMLINGS_AGENT_DNA = opts.dna || selected.soul.dna;
 
       const { launchLocalAgent } = await import("./agents/launcher.js");
       await launchLocalAgent(selected, agentPassthrough, opts, withAdapter);
@@ -121,8 +122,9 @@ if (!agentAdapter && positional.length === 0) {
   if (localAgent && localAgent.soul) {
     const room = opts.room || "default";
     process.env.TERMLINGS_ROOM = room;
-    process.env.TERMLINGS_AGENT_NAME = localAgent.soul.name;
-    process.env.TERMLINGS_AGENT_DNA = localAgent.soul.dna;
+    // Allow flags to override soul values
+    process.env.TERMLINGS_AGENT_NAME = opts.name || localAgent.soul.name;
+    process.env.TERMLINGS_AGENT_DNA = opts.dna || localAgent.soul.dna;
 
     const { launchLocalAgent } = await import("./agents/launcher.js");
     await launchLocalAgent(localAgent, agentPassthrough, opts, withAdapter);
