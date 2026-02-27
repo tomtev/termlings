@@ -117,11 +117,11 @@ export const OBJECT_DEFS: Record<string, ObjectDef> = {
     width: 7,
     height: 3,
     cells: [
-      // top: visual only — walk behind
-      [V(WOOD), V(WOOD), V(WOOD), V(WOOD), V(WOOD), V(WOOD), V(WOOD)],
-      // mid: visual only
+      // top surface (lighter for highlights, darker edges for depth)
+      [V(WOOD_D), V(WOOD), V(WOOD), V(WOOD), V(WOOD), V(WOOD), V(WOOD_D)],
+      // support rails (visual depth)
       [V(WOOD_D), _, _, _, _, _, V(WOOD_D)],
-      // bot: legs block
+      // legs (blocking)
       [F(WOOD_D), _, _, _, _, _, F(WOOD_D)],
     ],
   },
@@ -130,12 +130,12 @@ export const OBJECT_DEFS: Record<string, ObjectDef> = {
     width: 7,
     height: 3,
     cells: [
-      // top frame (visual only - walk behind)
-      [V(SHELF), V(SHELF), V(SHELF), V(SHELF), V(SHELF), V(SHELF), V(SHELF)],
-      // books row 1 (visual only - walk behind)
-      [V(SHELF), V([130, 50, 40]), V([50, 90, 55]), V([100, 55, 40]), V([60, 70, 110]), V([120, 70, 35]), V(SHELF)],
-      // bottom row (collision)
-      [F(SHELF), F([90, 65, 45]), F([55, 70, 110]), F([130, 55, 35]), F([80, 95, 50]), F([110, 50, 45]), F(SHELF)],
+      // top frame with darker edges for depth
+      [F([50, 35, 18]), V(SHELF), V(SHELF), V(SHELF), V(SHELF), V(SHELF), F([50, 35, 18])],
+      // books with varied colors (visual only - walk behind)
+      [V([50, 35, 18]), V([130, 50, 40]), V([50, 90, 55]), V([100, 55, 40]), V([60, 70, 110]), V([120, 70, 35]), V([50, 35, 18])],
+      // bottom shelf + base (blocking)
+      [F([50, 35, 18]), F([90, 65, 45]), F([55, 70, 110]), F([130, 55, 35]), F([80, 95, 50]), F([110, 50, 45]), F([50, 35, 18])],
     ],
   },
   chair: {
@@ -143,11 +143,11 @@ export const OBJECT_DEFS: Record<string, ObjectDef> = {
     width: 3,
     height: 3,
     cells: [
-      // back (visual only)
-      [V(AMBER), V(AMBER), V(AMBER)],
-      // seat (walkable)
-      [V(AMBER), S(SEAT), V(AMBER)],
-      // front (open)
+      // back support (darker for depth)
+      [F(DARK), V(DARK), F(DARK)],
+      // arms + seat (solid arms on sides, walkable seat in middle)
+      [F(DARK), S(SEAT), F(DARK)],
+      // front (open for approach)
       [_, _, _],
     ],
   },
@@ -156,11 +156,11 @@ export const OBJECT_DEFS: Record<string, ObjectDef> = {
     width: 3,
     height: 3,
     cells: [
-      // back (visual only)
-      [V(GRAY), V(GRAY), V(GRAY)],
-      // seat (walkable)
-      [V(GRAY), S(GRAY_S), V(GRAY)],
-      // front (open)
+      // back support (darker for depth)
+      [F([50, 50, 55]), V([70, 70, 75]), F([50, 50, 55])],
+      // arms + seat (solid arms, walkable seat)
+      [F([50, 50, 55]), S(GRAY_S), F([50, 50, 55])],
+      // front (open for approach)
       [_, _, _],
     ],
   },
