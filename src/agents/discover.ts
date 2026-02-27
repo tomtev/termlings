@@ -97,32 +97,27 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
       const status = a.soul?.dna && activeAgentDnas.has(a.soul.dna) ? " (in room)" : "";
 
       // Get face and hat colors from DNA (same as avatar rendering)
-      let colorStack = "";
+      let hatColor = "";
+      let faceColor = "";
       if (a.soul?.dna) {
         try {
           const traits = decodeDNA(a.soul.dna);
           const colors = getTraitColors(traits, false);
-          const hatColor = `\x1b[38;2;${colors.hatRgb[0]};${colors.hatRgb[1]};${colors.hatRgb[2]}m▪\x1b[0m`;
-          const faceColor = `\x1b[38;2;${colors.faceRgb[0]};${colors.faceRgb[1]};${colors.faceRgb[2]}m█\x1b[0m`;
-          colorStack = `${hatColor}\n  ${faceColor}`;
+          hatColor = `\x1b[38;2;${colors.hatRgb[0]};${colors.hatRgb[1]};${colors.hatRgb[2]}m▪\x1b[0m`;
+          faceColor = `\x1b[38;2;${colors.faceRgb[0]};${colors.faceRgb[1]};${colors.faceRgb[2]}m█\x1b[0m`;
         } catch {
-          colorStack = "▪\n  ●";
+          hatColor = "▪";
+          faceColor = "●";
         }
       } else {
-        colorStack = " \n   ";
+        hatColor = " ";
+        faceColor = " ";
       }
-
-      // Create multi-line label with colors on first line(s) and name after
-      const lines = colorStack.split("\n");
-      const labelLines = [
-        `${lines[0]} ${name}${title}`,
-        lines[1] || ""
-      ];
 
       return {
         value: JSON.stringify({ type: "existing", agent: a }),
-        label: labelLines.join("\n"),
-        description: `${purpose}${status}`,
+        label: `${hatColor} ${name}${title}`,
+        description: `${faceColor} ${purpose}${status}`,
       };
     }),
     {
