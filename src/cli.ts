@@ -660,16 +660,21 @@ Commands:
   // Inspect existing object JSON
   if (verb === "inspect-object") {
     const { OBJECT_DEFS } = await import("./engine/objects.js");
+    const { loadCustomObjects } = await import("./engine/custom-objects.js");
+    const room = process.env.TERMLINGS_ROOM || "default";
     const objectType = positional[2];
     if (!objectType) {
       console.error("Usage: termlings action inspect-object <type>");
       process.exit(1);
     }
 
-    const def = OBJECT_DEFS[objectType];
+    // Check both built-in and custom objects
+    const customObjects = loadCustomObjects(room);
+    const allObjects = { ...OBJECT_DEFS, ...customObjects };
+    const def = allObjects[objectType];
     if (!def) {
       console.error(`Unknown object type: ${objectType}`);
-      console.error(`Available types: ${Object.keys(OBJECT_DEFS).join(", ")}`);
+      console.error(`Available types: ${Object.keys(allObjects).join(", ")}`);
       process.exit(1);
     }
 
@@ -698,7 +703,8 @@ Commands:
 
   // Create custom object
   if (verb === "create-object") {
-    const { createCustomObject, loadCustomObjects } = await import("./engine/custom-objects.js");
+    const { createCustomObject } = await import("./engine/custom-objects.js");
+    const room = process.env.TERMLINGS_ROOM || "default";
     const objectName = positional[2];
     const jsonString = positional[3];
 
@@ -716,13 +722,13 @@ Commands:
       process.exit(1);
     }
 
-    const result = createCustomObject(objectName, definition);
+    const result = createCustomObject(objectName, definition, room);
     if (!result.success) {
       console.error(`Error creating object: ${result.error}`);
       process.exit(1);
     }
 
-    console.log(`✓ Created custom object: ${objectName}`);
+    console.log(`✓ Created custom object: ${objectName} (in ${room})`);
     console.log(`You can now use: termlings action place ${objectName} <x>,<y>`);
     process.exit(0);
   }
