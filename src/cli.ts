@@ -104,8 +104,8 @@ if (agentAdapter) {
       const randomNames = ["Pixel", "Sprout", "Ember", "Nimbus", "Glitch", "Ziggy", "Quill", "Cosmo", "Maple", "Flint", "Wren", "Dusk", "Byte", "Fern", "Spark", "Nova", "Haze", "Basil", "Reef", "Orbit", "Sage", "Rusty", "Coral", "Luna", "Cinder", "Pip", "Storm", "Ivy", "Blaze", "Mochi"];
       const randomName = randomNames[Math.floor(Math.random() * randomNames.length)];
 
-      process.env.TERMLINGS_AGENT_NAME = opts.name || randomName;
-      process.env.TERMLINGS_AGENT_DNA = opts.dna || randomDna;
+      opts.name = opts.name || randomName;
+      opts.dna = opts.dna || randomDna;
 
       const { launchAgent } = await import("./agents/launcher.js");
       await launchAgent(agentAdapter, agentPassthrough, opts);
