@@ -30,15 +30,30 @@ export async function runCreate(): Promise<void> {
     }
   }
 
-  // Interactive prompts for missing fields
-  if (!vars["AGENT_NAME"]) {
-    vars["AGENT_NAME"] = await prompt("Agent name: ") || "My Agent";
+  // Determine slug from target dir or prompt for it
+  let slug: string;
+  if (targetDir) {
+    // Use explicit target path
+    slug = targetDir.split("/").pop() || "agent";
+  } else if (positional.length > 0) {
+    // Use first positional arg as slug
+    slug = positional[0]!.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent";
+  } else {
+    // No target specified
+    slug = "agent";
   }
+
+  // Default agent name from slug (capitalize first letter)
+  const defaultName = slug.charAt(0).toUpperCase() + slug.slice(1);
+  if (!vars["AGENT_NAME"]) {
+    const answer = await prompt(`Agent name (default: ${defaultName}): `);
+    vars["AGENT_NAME"] = answer || defaultName;
+  }
+
   if (!vars["AGENT_PURPOSE"]) {
     vars["AGENT_PURPOSE"] = await prompt("Purpose: ") || "A helpful agent";
   }
 
-  const slug = vars["AGENT_NAME"].toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent";
   const dest = targetDir ? resolve(targetDir) : resolve(".termlings", slug);
   await Bun.spawn(["mkdir", "-p", dest]).exited;
 
