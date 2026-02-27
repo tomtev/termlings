@@ -144,7 +144,7 @@ function createTitleScene(room: string, onReady: () => void): Scene {
   // Typewriter animation state
   const commands = [
     "termlings claude --dangerously-skip-permissions",
-    "termlings codex",
+    "termlings codex --dangerously-bypass-approvals-and-sandbox",
     "termlings pi",
   ]
   let currentCmdIndex = 0
