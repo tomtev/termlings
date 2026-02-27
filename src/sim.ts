@@ -6,6 +6,7 @@ import {
   HATS,
   type DecodedDNA,
 } from "./index.js"
+import { createParticleSystem, updateParticles, getParticleOpacity, type ObjectWithParticles } from "./particles.js"
 import {
   type RGB,
   type Cell,
@@ -151,10 +152,25 @@ function savePersistedPlacements() {
 loadPersistedPlacements()
 objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
 
+// Initialize particle systems for objects with emitters
+const particleSystems: Map<number, ObjectWithParticles> = new Map()
+function initializeParticleSystems() {
+  particleSystems.clear()
+  for (let i = 0; i < objectPlacements.length; i++) {
+    const placement = objectPlacements[i]!
+    const def = mergedDefs[placement.def]
+    if (def?.emitters && def.emitters.length > 0) {
+      particleSystems.set(i, createParticleSystem(def.emitters))
+    }
+  }
+}
+initializeParticleSystems()
+
 function rebuildObjects() {
   objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
   cacheObjectSortYs()
   savePersistedPlacements()
+  initializeParticleSystems()
 }
 
 // --- Doors ---
@@ -742,6 +758,45 @@ function spawnAgentEntity(sessionId: string, cmd: AgentCommand): Entity {
   return entity
 }
 
+function stampParticles(
+  buffer: Cell[][],
+  cols: number,
+  rows: number,
+  placements: ObjectPlacement[],
+  cameraX: number,
+  cameraY: number,
+  scale: number
+) {
+  for (let i = 0; i < placements.length; i++) {
+    const system = particleSystems.get(i)
+    if (!system || system.particles.length === 0) continue
+
+    const placement = placements[i]!
+    for (const particle of system.particles) {
+      const worldX = placement.x + particle.x
+      const worldY = placement.y + particle.y
+      const screenX = Math.round((worldX - cameraX) * scale)
+      const screenY = worldY - cameraY
+
+      if (screenY < 0 || screenY >= rows) continue
+      if (screenX < 0 || screenX >= cols) continue
+
+      const opacity = getParticleOpacity(particle)
+      // Blend particle color with some transparency by dimming it as it ages
+      const dimFactor = opacity
+      const fg: RGB = [
+        Math.round(particle.fg[0] * dimFactor),
+        Math.round(particle.fg[1] * dimFactor),
+        Math.round(particle.fg[2] * dimFactor),
+      ]
+
+      if (buffer[screenY] && buffer[screenY]![screenX]) {
+        buffer[screenY]![screenX] = { ch: particle.char, fg, bg: null }
+      }
+    }
+  }
+}
+
 function processAgentCommands() {
   if (tick % 30 !== 0) return // Poll every 30 ticks (~0.5s)
 
@@ -1200,6 +1255,13 @@ function frame() {
 
   updateDoors(doors, _doorEntities, objectOverlay, tick)
   updateAnimations(_allEntities, tick, config)
+
+  // Update particle systems
+  const dt = 1000 / 60 // ~16.67ms per frame at 60fps
+  for (const system of particleSystems.values()) {
+    updateParticles(system, dt)
+  }
+
   updateCamera()
   clearBuffer(buffer, cols, rows)
 
@@ -1241,6 +1303,9 @@ function frame() {
       stampObjectPiece(buffer, cols, rows, objectPlacements[idx - eLen]!, cameraX, cameraY, scale, mergedDefs)
     }
   }
+
+  // Render particles on top of objects
+  stampParticles(buffer, cols, rows, objectPlacements, cameraX, cameraY, scale)
 
   // Build selection index labels: entity → " (1)", " (2)", etc.
   const selLabels = new Map<Entity, string>()

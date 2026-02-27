@@ -1,4 +1,5 @@
 import { tileKey, type RGB, type Cell, type ObjectOverlay } from "./types.js"
+import type { ParticleEmitter } from "./particles.js"
 
 export interface ObjectCell {
   ch: string
@@ -12,6 +13,7 @@ export interface ObjectDef {
   width: number
   height: number
   cells: (ObjectCell | null)[][] // [row][col], null = transparent/no override
+  emitters?: ParticleEmitter[]    // optional particle emitters for sparkles, flames, etc
 }
 
 export interface ObjectPlacement {
@@ -256,6 +258,19 @@ export const OBJECT_DEFS: Record<string, ObjectDef> = {
       [V(FLAME), V(FLAME_D), V(FLAME)],
       // stone ring (blocking)
       [F(STONE_R), F(STONE_R), F(STONE_R)],
+    ],
+    emitters: [
+      {
+        name: "sparks",
+        char: ["✦", "✧", "·"],
+        fg: [[255, 200, 50], [255, 150, 30], [200, 100, 20]],
+        rate: 8,
+        lifetime: 600,
+        offsetX: [0.5, 2.5],
+        offsetY: [-0.5, 1],
+        width: 3,
+        height: 2,
+      }
     ],
   },
   flower_patch: {
