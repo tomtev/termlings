@@ -158,6 +158,7 @@ This room is running in SIMPLE MODE:
   const terminal = proc.terminal!
 
   // Forward user keyboard input to the PTY
+  process.stdin.resume()
   process.stdin.setRawMode?.(true)
   const onStdinData = (data: Buffer) => {
     terminal.write(data)
