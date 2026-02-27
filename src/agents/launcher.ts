@@ -113,6 +113,9 @@ export async function launchAgent(
   const contextArgs = adapter.contextArgs(context)
   const finalArgs = [...contextArgs, ...passthroughArgs]
 
+  const room = process.env.TERMLINGS_ROOM || "default"
+  setRoom(room)
+
   // Render agent startup message with avatar and name
   if (agentDna) {
     try {
@@ -129,9 +132,9 @@ export async function launchAgent(
       const reset = "\x1b[0m"
 
       const infoLines = [
-        `${bold}${nameColor}${agentName}${reset}`,
-        `${adapter.defaultName}`,
-        `Session: ${sessionId}`
+        `${bold}Joined Termlings ${room}${reset}`,
+        `${bold}${nameColor}with: ${agentName}${reset}`,
+        `${sessionId}`
       ]
 
       const maxLines = Math.max(avatarLines.length, infoLines.length)
@@ -143,16 +146,13 @@ export async function launchAgent(
       }
       console.log()
     } catch {
-      console.log(`Starting ${agentName} with session: ${sessionId}`)
+      console.log(`Joined Termlings ${room} with: ${agentName}`)
       console.log()
     }
   } else {
-    console.log(`Starting ${adapter.defaultName} with session: ${sessionId}`)
+    console.log(`Joined Termlings ${room} with: ${adapter.defaultName}`)
     console.log()
   }
-
-  const room = process.env.TERMLINGS_ROOM || "default"
-  setRoom(room)
 
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
