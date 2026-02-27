@@ -43,10 +43,20 @@ export async function runCreate(): Promise<void> {
     vars["AGENT_PURPOSE"] = await prompt("Purpose: ") || "A helpful agent";
   }
 
+  // Select adapter
+  let adapter = "claude";
+  console.log("\nSelect adapter:");
+  console.log("  (1) claude  - Claude Code");
+  console.log("  (2) codex   - Codex CLI");
+  const adapterChoice = await prompt("Choose (default: 1): ");
+  if (adapterChoice === "2") {
+    adapter = "codex";
+  }
+
   const dest = resolve(".termlings", slug);
   await Bun.spawn(["mkdir", "-p", dest]).exited;
 
-  await createAgent(dest, vars);
+  await createAgent(dest, vars, adapter);
 }
 
 async function detectOwnerName(): Promise<string> {
@@ -59,7 +69,7 @@ async function detectOwnerName(): Promise<string> {
   return require("os").userInfo().username || "Owner";
 }
 
-async function createAgent(dest: string, vars: Record<string, string>): Promise<void> {
+async function createAgent(dest: string, vars: Record<string, string>, adapter: string = "claude"): Promise<void> {
   const agentName = vars["AGENT_NAME"] || "My Agent";
   const ownerName = vars["OWNER_NAME"] || await detectOwnerName();
 
@@ -143,7 +153,7 @@ async function createAgent(dest: string, vars: Record<string, string>): Promise<
   // Create SOUL.md with agent identity
   const soulContent = `# ${agentName}
 
-**Adapter:** claude
+**Adapter:** ${adapter}
 
 **Purpose:** ${vars["AGENT_PURPOSE"] || "A helpful agent"}
 
