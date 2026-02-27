@@ -90,13 +90,32 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
   // Build menu items for existing agents
   const menuItems = [
     ...localAgents.map((a) => {
+      const { decodeDNA } = await import("../index.js");
+
       const name = a.soul?.name || a.name;
       const title = a.soul?.title ? ` — ${a.soul.title}` : "";
       const purpose = a.soul?.purpose || "Autonomous agent";
       const status = a.soul?.dna && activeAgentDnas.has(a.soul.dna) ? " (in room)" : "";
+
+      // Get face color from DNA
+      let colorSquare = "";
+      if (a.soul?.dna) {
+        try {
+          const traits = decodeDNA(a.soul.dna);
+          const faceRgb = [
+            Math.round(200 + Math.sin(traits.faceHue / 12) * 55),
+            Math.round(150 + Math.cos(traits.faceHue / 12) * 55),
+            100
+          ];
+          colorSquare = `\x1b[38;2;${faceRgb[0]};${faceRgb[1]};${faceRgb[2]}m█\x1b[0m `;
+        } catch {
+          colorSquare = "● ";
+        }
+      }
+
       return {
         value: JSON.stringify({ type: "existing", agent: a }),
-        label: `${name}${title}`,
+        label: `${colorSquare}${name}${title}`,
         description: `${purpose}${status}`,
       };
     }),
