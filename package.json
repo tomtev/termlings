@@ -3,7 +3,7 @@
   "version": "0.2.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tomtev/termlings"
+    "url": "git+https://github.com/tomtev/termlings.git"
   },
   "devDependencies": {
     "@opentui/core": "^0.1.82",
@@ -20,7 +20,7 @@
     "./ink": "./src/ink/index.ts"
   },
   "bin": {
-    "termlings": "./bin/termlings.js"
+    "termlings": "bin/termlings.js"
   },
   "description": "Terminal based SIM engine for AI code agents",
   "files": [
