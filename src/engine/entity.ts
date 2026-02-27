@@ -70,10 +70,6 @@ export function updateAnimations(
     if (doWave && e.waving) {
       e.waveFrame = e.waveFrame === 1 ? 2 : 1
     }
-    const isIdle = e.idle || (!e.walking && !e.talking && !e.waving)
-    if (doIdle && isIdle) {
-      e.walkFrame = (e.walkFrame + 1) % e.legFrames
-    }
   }
 }
 
