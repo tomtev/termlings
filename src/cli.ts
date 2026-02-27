@@ -81,6 +81,23 @@ if (args[0] && _agentRegistry[args[0]]) {
 
 // --- Routing ---
 
+// 0. Clear command: termlings --clear [--room <slug>]
+if (flags.has("clear")) {
+  const { rmSync } = await import("fs");
+  const { join } = await import("path");
+  const { homedir } = await import("os");
+  const room = opts.room || "default";
+  const ipcDir = join(homedir(), ".termlings", "rooms", room);
+  try {
+    rmSync(ipcDir, { recursive: true, force: true });
+    console.log(`✓ Cleared game state for room "${room}"`);
+  } catch (e) {
+    console.error(`Failed to clear game state: ${e}`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
 // 1. Agent launcher: termlings <cli> [--room <slug>] [flags...]
 // If there are local agents, show picker. Otherwise launch CLI directly.
 let agentAdapter = _agentRegistry[positional[0] ?? ""];
@@ -904,20 +921,7 @@ if (positional[0] === "render") {
   await new Promise(() => {});
 }
 
-// 4. Join multiplayer: termlings join <ws-url>
-if (positional[0] === "join") {
-  const wsUrl = positional[1];
-  if (!wsUrl) {
-    console.error("Usage: termlings join <ws-url>");
-    console.error("Example: termlings join ws://localhost:8787/ws/room/test?name=Tommy&dna=0a3f201");
-    process.exit(1);
-  }
-  process.env.TERMLINGS_WS_URL = wsUrl;
-  await import("./sim.js");
-  await new Promise(() => {});
-}
-
-// 5. Create agent scaffold: termlings create [folder]
+// 4. Create agent scaffold: termlings create [folder]
 if (positional[0] === "create") {
   const { runCreate } = await import("./create.js");
   await runCreate();
@@ -935,12 +939,23 @@ Sim (default):
   termlings --room <slug>  Start the sim in a named room
   termlings --simple       Start in simple mode (no map, agent grid)
 
+Game management:
+  --clear                  Clear game state (all agents, objects)
+  --clear --room <slug>    Clear a specific room
+
 Agents:
   claude [flags...]        Start Claude Code as an agent
   codex [flags...]         Start Codex CLI as an agent
+  <name> [flags...]        Launch saved agent (e.g., "termlings my-agent")
   --room <slug>            Join a specific room (default: "default")
   --name <name>            Agent display name
   --dna <hex>              Agent avatar DNA
+  --with <cli> <name>      Use different CLI for saved agent
+
+Create:
+  create [folder]          Interactive avatar builder for new agent
+  create --name <name>     Create with specific name
+  create --dna <hex>       Create with specific DNA
 
 Render:
   render [dna|name]        Render a termling in the terminal
@@ -959,11 +974,20 @@ Render:
   render --fps=<n>         MP4 frame rate (default: 4)
   render --duration=<n>    MP4 duration in seconds (default: 3)
 
-Other:
-  action <verb> [args]     Agent IPC commands (walk, map, chat, etc.)
-  join <ws-url>            Join multiplayer server
-  create [folder]          Scaffold a new agent
-  --help                   Show this help`);
+Actions (in-game):
+  action walk <x>,<y>      Walk avatar to coordinates
+  action map [--ascii|--sessions]  See the world
+  action send <id> <msg>   Direct message to agent
+  action chat <msg>        Post to shared chat
+  action inbox             Read messages
+  action build <type> <x>,<y>  Place object (tree, rock, sign, fence, campfire)
+  action destroy <x>,<y>   Remove object
+  action talk              Toggle talk animation
+  action gesture --wave    Wave gesture
+  action stop              Stop current action
+
+Options:
+  --help, -h               Show this help`);
   process.exit(0);
 }
 

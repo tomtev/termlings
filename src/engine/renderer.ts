@@ -99,11 +99,12 @@ export function renderBuffer(buffer: Cell[][], cols: number, rows: number): Buff
     o = writeUint(buf, o, y + 1)
     buf[o++] = 0x3b; buf[o++] = 0x31; buf[o++] = 0x48 // ;1H
 
-    const row = buffer[y]!
+    const row = buffer[y]
+    if (!row) continue
     for (let x = 0; x < cols; x++) {
-      const cell = row[x]!
-      const fg = cell.fg
-      const bg = cell.bg
+      const cell = row[x]
+      const fg = cell?.fg ?? null
+      const bg = cell?.bg ?? null
 
       // Fast path: same RGB reference means same color — skip entirely
       if (fg !== lastFg) {
@@ -146,7 +147,7 @@ export function renderBuffer(buffer: Cell[][], cols: number, rows: number): Buff
       }
 
       // Write character (handle multi-byte UTF-8)
-      const ch = cell.ch
+      const ch = cell?.ch ?? " "
       const code = ch.charCodeAt(0)
       if (code < 0x80) {
         buf[o++] = code
@@ -341,15 +342,17 @@ export function stampUI(
   rows: number,
   hud: { text: string; active?: boolean; fg?: RGB }[],
 ) {
-  const topRow = buffer[0]!
-  const botRow = buffer[rows - 1]!
+  const topRow = buffer[0]
+  const botRow = buffer[rows - 1]
+  if (!topRow || !botRow) return
   for (let x = 0; x < cols; x++) {
-    const tc = topRow[x]!; tc.ch = x === 0 ? "╭" : x === cols - 1 ? "╮" : "─"; tc.fg = _borderFg; tc.bg = null
-    const bc = botRow[x]!; bc.ch = x === 0 ? "╰" : x === cols - 1 ? "╯" : "─"; bc.fg = _borderFg; bc.bg = null
+    const tc = topRow[x]; if (tc) { tc.ch = x === 0 ? "╭" : x === cols - 1 ? "╮" : "─"; tc.fg = _borderFg; tc.bg = null }
+    const bc = botRow[x]; if (bc) { bc.ch = x === 0 ? "╰" : x === cols - 1 ? "╯" : "─"; bc.fg = _borderFg; bc.bg = null }
   }
   for (let y = 1; y < rows - 1; y++) {
-    const lc = buffer[y]![0]!; lc.ch = "│"; lc.fg = _borderFg; lc.bg = null
-    const rc = buffer[y]![cols - 1]!; rc.ch = "│"; rc.fg = _borderFg; rc.bg = null
+    const row = buffer[y]; if (!row) continue
+    const lc = row[0]; if (lc) { lc.ch = "│"; lc.fg = _borderFg; lc.bg = null }
+    const rc = row[cols - 1]; if (rc) { rc.ch = "│"; rc.fg = _borderFg; rc.bg = null }
   }
   let cx = 2
   for (const seg of hud) {
@@ -373,12 +376,12 @@ export function stampText(
   text: string,
   fg: RGB,
 ) {
-  if (y < 0 || y >= rows) return
+  if (y < 0 || y >= rows || !buffer[y]) return
   const row = buffer[y]!
   for (let i = 0; i < text.length; i++) {
     const sx = x + i
     if (sx < 0 || sx >= cols) continue
-    const c = row[sx]!; c.ch = text[i]!; c.fg = fg; c.bg = null
+    const c = row[sx]; if (c) { c.ch = text[i]!; c.fg = fg; c.bg = null }
   }
 }
 
@@ -405,7 +408,7 @@ export function stampChatMessages(
   for (let i = 0; i < recent.length; i++) {
     const msg = recent[recent.length - 1 - i]!
     const row = rows - 3 - i // gap of 1 row above bottom HUD
-    if (row < 1 || row >= rows - 1) continue
+    if (row < 1 || row >= rows - 1 || !buffer[row]) continue
     const bufRow = buffer[row]!
 
     const line = `<${msg.name}> ${msg.text}`
@@ -415,7 +418,7 @@ export function stampChatMessages(
     for (let ci = 0; ci < display.length; ci++) {
       const sx = 1 + ci
       if (sx >= cols - 1) break
-      const c = bufRow[sx]!; c.ch = display[ci]!; c.fg = ci < nameEnd ? msg.fg : _chatDimFg; c.bg = null
+      const c = bufRow[sx]; if (c) { c.ch = display[ci]!; c.fg = ci < nameEnd ? msg.fg : _chatDimFg; c.bg = null }
     }
   }
 }
@@ -432,17 +435,18 @@ export function stampChatInput(
   target?: string,
 ) {
   const y = rows - 1
-  const row = buffer[y]!
+  const row = buffer[y]
+  if (!row) return
 
-  let c = row[0]!; c.ch = "╰"; c.fg = _borderFg; c.bg = null
-  c = row[1]!; c.ch = "─"; c.fg = _borderFg; c.bg = null
-  c = row[cols - 1]!; c.ch = "╯"; c.fg = _borderFg; c.bg = null
+  let c = row[0]; if (c) { c.ch = "╰"; c.fg = _borderFg; c.bg = null }
+  c = row[1]; if (c) { c.ch = "─"; c.fg = _borderFg; c.bg = null }
+  c = row[cols - 1]; if (c) { c.ch = "╯"; c.fg = _borderFg; c.bg = null }
 
   const label = target ? ` [→ ${target}] ` : " [Chat] "
   let cx = 2
   for (let i = 0; i < label.length; i++) {
     if (cx >= cols - 1) break
-    c = row[cx]!; c.ch = label[i]!; c.fg = _chatLabelFg; c.bg = null
+    c = row[cx]; if (c) { c.ch = label[i]!; c.fg = _chatLabelFg; c.bg = null }
     cx++
   }
 
