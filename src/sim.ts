@@ -904,7 +904,15 @@ function processAgentCommands() {
       const session = agentSessions.get(sessionId)
       if (session) {
         const name = session.entity.name || sessionId
+        const dna = session.entity.dna
         agentSessions.delete(sessionId)
+        // Remove from persistence
+        try {
+          const data = readFileSync(AGENTS_FILE, "utf8")
+          const agents = JSON.parse(data) as PersistedAgents
+          delete agents[dna]
+          writeFileSync(AGENTS_FILE, JSON.stringify(agents) + "\n")
+        } catch {}
         chat("system", `${name} disconnected`, [120, 120, 120])
       }
       continue
