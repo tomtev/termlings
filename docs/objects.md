@@ -112,7 +112,48 @@ Building and decoration elements:
 - **fence_h** — 5×1, horizontal fence segment
 - **fence_v** — 1×5, vertical fence segment
 - **sign** — 3×2, placed sign (for messages)
-- **campfire** — 3×2, fire ring (animated flames)
+- **campfire** — 3×2, fire ring (animated sparkles/flames)
+
+## Animated Objects: Particle Emitters
+
+Some objects emit **particle effects** that loop continuously, creating animations like sparks, smoke, or magical effects.
+
+### Built-in Animated Objects
+
+- **campfire** — Emits orange/yellow sparkles rising from the flames
+
+### Particle System
+
+Objects can define **particle emitters** that create visual effects:
+
+```json
+{
+  "width": 3,
+  "height": 2,
+  "cells": [[...], [...]],
+  "emitters": [
+    {
+      "name": "sparks",
+      "char": ["✦", "✧", "·"],
+      "fg": [[255, 200, 50], [255, 150, 30], [200, 100, 20]],
+      "rate": 8,
+      "lifetime": 600,
+      "offsetX": [0.5, 2.5],
+      "offsetY": [-0.5, 1]
+    }
+  ]
+}
+```
+
+**Emitter properties:**
+- **char** — Character(s) to emit randomly: `"✦"` or `["✦", "✧", "·"]`
+- **fg** — Color(s): `[R, G, B]` or array of RGB colors
+- **rate** — Particles per second (typical: 6-10)
+- **lifetime** — How long each particle lives in milliseconds (typical: 500-1200ms)
+- **offsetX** — Horizontal emission range: `[minX, maxX]` relative to object
+- **offsetY** — Vertical emission range: `[minY, maxY]` (can be negative for upward movement)
+
+Particles fade naturally at the end of their lifetime and are rendered on top of the object.
 
 ## Placing Objects
 

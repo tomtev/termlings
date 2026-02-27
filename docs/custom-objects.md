@@ -298,6 +298,120 @@ Custom objects are saved in:
 
 They persist across sessions and survive agent disconnections.
 
+## Animated Objects: Particle Emitters
+
+You can add **particle emitters** to custom objects to create looping animations like sparks, smoke, or magical effects.
+
+### Example: Magic Bonfire
+
+```bash
+termlings action create-object magic-fire '
+{
+  "width": 5,
+  "height": 3,
+  "cells": [
+    [null, null, "F", null, null],
+    [null, "F", "F", "F", null],
+    ["F", "F", "F", "F", "F"]
+  ],
+  "cellTypes": {
+    "F": {
+      "character": "█",
+      "fg": [255, 100, 50],
+      "bg": [100, 50, 0],
+      "walkable": false
+    }
+  },
+  "emitters": [
+    {
+      "name": "sparks",
+      "char": ["✦", "✧", "·", "*"],
+      "fg": [[255, 200, 50], [255, 150, 30], [200, 100, 20], [255, 100, 10]],
+      "rate": 10,
+      "lifetime": 800,
+      "offsetX": [1, 4],
+      "offsetY": [-2, 1.5]
+    }
+  ]
+}
+'
+
+termlings action place magic-fire 50,30
+```
+
+### Emitter Configuration
+
+Each emitter object has these properties:
+
+```json
+{
+  "name": "sparks",           // Emitter name (for reference)
+  "char": ["✦", "✧", "·"],  // Character(s) to emit (randomly selected)
+  "fg": [[255, 200, 50], ...], // Color(s) in RGB format
+  "rate": 8,                 // Particles emitted per second
+  "lifetime": 600,           // Milliseconds each particle lives
+  "offsetX": [0.5, 2.5],     // X range relative to object
+  "offsetY": [-1, 1.5]       // Y range (negative = upward)
+}
+```
+
+**Property Details:**
+
+- **char** — Single character `"✦"` or array `["✦", "✧", "·"]`. Randomly selected for each particle.
+- **fg** — Color format: single `[R, G, B]` or array of colors. One color per particle slot.
+- **rate** — Particles per second. Common values: 5-15 (higher = denser)
+- **lifetime** — How long particles exist in milliseconds. Common: 500-1500ms
+- **offsetX** — `[minX, maxX]` relative to object top-left. Example: `[0.5, 2.5]` for center emission
+- **offsetY** — `[minY, maxY]` relative to object. Negative values emit upward
+
+### Particle Character Ideas
+
+**Sparks/Fire:**
+- `"✦"` `"✧"` `"*"` `"·"` `"+" `"○"`
+
+**Smoke/Steam:**
+- `"∿"` `"~"` `"◆"` `"≈"` `"▪"`
+
+**Magical:**
+- `"✨"` `"◇"` `"◆"` `"⬢"` `"✓"`
+
+**Natural:**
+- `"🍃"` `"v"` `"^"` `"✶"`
+
+### Multiple Emitters
+
+An object can have multiple emitters for complex effects:
+
+```json
+{
+  "width": 7,
+  "height": 5,
+  "cells": [[...]],
+  "emitters": [
+    {
+      "name": "main-sparks",
+      "char": ["✦", "✧"],
+      "fg": [[255, 200, 50], [200, 100, 20]],
+      "rate": 8,
+      "lifetime": 700,
+      "offsetX": [2, 5],
+      "offsetY": [-1, 2]
+    },
+    {
+      "name": "secondary-smoke",
+      "char": ["∿", "~"],
+      "fg": [[150, 150, 150], [100, 100, 100]],
+      "rate": 4,
+      "lifetime": 1000,
+      "offsetX": [2, 5],
+      "offsetY": [-3, 0]
+    }
+  ]
+}
+```
+
+Particles fade naturally at the end of their lifetime and render on top of the object.
+
 ## Troubleshooting
 
 ### Object doesn't appear

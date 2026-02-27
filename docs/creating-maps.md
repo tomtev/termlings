@@ -136,6 +136,42 @@ Reference:
 - **palette** — Character definitions (like tiles, but for objects)
 - **grid** — Object layout using palette characters
 - Space character = empty/transparent
+- **emitters** (optional) — Particle effects for animations
+
+#### Objects with Animations
+
+Add particle emitters to objects for sparks, smoke, or magical effects:
+
+```json
+{
+  "objects": {
+    "magic-stone": {
+      "width": 3,
+      "height": 3,
+      "palette": {
+        "M": { "ch": "●", "fg": [150, 100, 200], "walkable": false },
+        "G": { "ch": "○", "fg": [100, 150, 255], "walkable": false }
+      },
+      "grid": [
+        "MGM",
+        "M●M",
+        "MMM"
+      ],
+      "emitters": [
+        {
+          "name": "glow",
+          "char": ["✦", "✧", "·"],
+          "fg": [[200, 100, 255], [150, 100, 200], [100, 100, 150]],
+          "rate": 6,
+          "lifetime": 700,
+          "offsetX": [0.5, 2.5],
+          "offsetY": [-1, 2]
+        }
+      ]
+    }
+  }
+}
+```
 
 ### 5. Placements (Object Instances)
 
