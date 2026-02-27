@@ -169,26 +169,25 @@ const agentSessions = new Map<string, { entity: Entity; ai: NpcAIState; gestureE
 
 const AGENTS_FILE = join(IPC_DIR, "agents.json")
 
-interface PersistedAgent {
-  sessionId: string
+interface PersistedAgentState {
   name: string
-  dna: string
   x: number
   y: number
   flipped: boolean
 }
 
+type PersistedAgents = Record<string, PersistedAgentState> // keyed by DNA
+
 function saveAgentSessions() {
-  const agents: PersistedAgent[] = []
-  agentSessions.forEach((session, sessionId) => {
-    agents.push({
-      sessionId,
-      name: session.entity.name || sessionId,
-      dna: session.entity.dna,
+  const agents: PersistedAgents = {}
+  agentSessions.forEach((session) => {
+    const dna = session.entity.dna
+    agents[dna] = {
+      name: session.entity.name || dna,
       x: session.entity.x,
       y: session.entity.y,
       flipped: session.entity.flipped,
-    })
+    }
   })
   try { writeFileSync(AGENTS_FILE, JSON.stringify(agents) + "\n") } catch {}
 }
@@ -197,22 +196,30 @@ function loadAgentSessions() {
   if (!existsSync(AGENTS_FILE)) return
   try {
     const data = readFileSync(AGENTS_FILE, "utf8")
-    const agents = JSON.parse(data) as PersistedAgent[]
-    for (const a of agents) {
-      const entity = makeEntity(a.dna, a.x, a.y, zoomLevel, { idle: true, flipped: a.flipped })
-      entity.name = a.name
+    const agents = JSON.parse(data) as PersistedAgents
+    let count = 0
+    for (const [dna, state] of Object.entries(agents)) {
+      // Generate new sessionId for this run, but reuse position from DNA
+      const sessionId = `tl-${Math.random().toString(36).slice(2, 10)}`
+      const entity = makeEntity(dna, state.x, state.y, zoomLevel, { idle: true, flipped: state.flipped })
+      entity.name = state.name
       const ai = createNpcAIState()
       ai.phase = "idle"
       ai.idleRemaining = Infinity
-      agentSessions.set(a.sessionId, { entity, ai, gestureExpiry: 0 })
+      agentSessions.set(sessionId, { entity, ai, gestureExpiry: 0 })
+      count++
     }
-    if (agents.length > 0) {
-      chat("system", `Restored ${agents.length} agent${agents.length !== 1 ? "s" : ""} from previous session`, [120, 180, 120])
+    if (count > 0) {
+      chat("system", `Restored ${count} agent${count !== 1 ? "s" : ""} from previous session`, [120, 180, 120])
     }
   } catch {}
 }
 
 loadAgentSessions()
+
+// --- Title screen return state ---
+let hadAgents = agentSessions.size > 0
+let simPaused = false
 
 // --- Terminal setup ---
 
@@ -669,72 +676,101 @@ function cycleSelection(delta: number) {
   updateCamera()
 }
 
-setupInput(
-  stdin,
-  (dir) => {
-    if (chatMode) return
-    // Arrow keys cycle selection
-    if (dir === "left") cycleSelection(-1)
-    else if (dir === "right") cycleSelection(1)
-  },
-  (ch) => {
-    if (chatMode) {
-      if (ch === "\r") {
-        // Enter — send message
-        sendChat()
-        chatBuffer = ""
-        chatMode = false
-      } else if (ch === "\x1b") {
-        // Escape — cancel
-        chatBuffer = ""
-        chatMode = false
-      } else if (ch === "\x7f" || ch === "\b") {
-        // Backspace
-        chatBuffer = chatBuffer.slice(0, -1)
-      } else if (ch >= " " && ch.length === 1) {
-        // Printable char
-        if (chatBuffer.length < cols - 14) {
-          chatBuffer += ch
-        }
-      }
-      return
-    }
+const simOnArrow = (dir: string) => {
+  if (chatMode) return
+  // Arrow keys cycle selection
+  if (dir === "left") cycleSelection(-1)
+  else if (dir === "right") cycleSelection(1)
+}
 
-    // Number keys 1-9, 0 select entities
-    if (ch >= "1" && ch <= "9") {
-      selectEntity(ch.charCodeAt(0) - "1".charCodeAt(0))
-      return
-    }
-    if (ch === "0") {
-      selectEntity(9)
-      return
-    }
-
-    // Normal mode
-    if (ch === "c") {
-      chatMode = true
+const simOnKey = (ch: string) => {
+  if (chatMode) {
+    if (ch === "\r") {
+      // Enter — send message
+      sendChat()
       chatBuffer = ""
-    } else if (ch === "q" || ch === "\x03") cleanup()
-    else if (ch === "d") {
-      debugMode = !debugMode
-      stdout.write("\x1b[2J")
-    } else if (ch === "s") {
-      toggleSound()
-    } else if (ch === "z") {
-      zoomLevel = zoomLevel === 0 ? 1 : 0
-      const allEntities: Entity[] = isMultiplayer ? [...npcs, ...remotePlayers] : [...npcs]
-      agentSessions.forEach(s => allEntities.push(s.entity))
-      for (const e of allEntities) {
-        const oldH = e.height
-        e.height = entityHeight(e.traits, zoomLevel)
-        e.y += oldH - e.height
+      chatMode = false
+    } else if (ch === "\x1b") {
+      // Escape — cancel
+      chatBuffer = ""
+      chatMode = false
+    } else if (ch === "\x7f" || ch === "\b") {
+      // Backspace
+      chatBuffer = chatBuffer.slice(0, -1)
+    } else if (ch >= " " && ch.length === 1) {
+      // Printable char
+      if (chatBuffer.length < cols - 14) {
+        chatBuffer += ch
       }
-      cameraInitialized = false
-      updateCamera()
-      stdout.write("\x1b[2J")
     }
-  },
-)
+    return
+  }
+
+  // Number keys 1-9, 0 select entities
+  if (ch >= "1" && ch <= "9") {
+    selectEntity(ch.charCodeAt(0) - "1".charCodeAt(0))
+    return
+  }
+  if (ch === "0") {
+    selectEntity(9)
+    return
+  }
+
+  // Normal mode
+  if (ch === "c") {
+    chatMode = true
+    chatBuffer = ""
+  } else if (ch === "q" || ch === "\x03") cleanup()
+  else if (ch === "d") {
+    debugMode = !debugMode
+    stdout.write("\x1b[2J")
+  } else if (ch === "s") {
+    toggleSound()
+  } else if (ch === "z") {
+    zoomLevel = zoomLevel === 0 ? 1 : 0
+    const allEntities: Entity[] = isMultiplayer ? [...npcs, ...remotePlayers] : [...npcs]
+    agentSessions.forEach(s => allEntities.push(s.entity))
+    for (const e of allEntities) {
+      const oldH = e.height
+      e.height = entityHeight(e.traits, zoomLevel)
+      e.y += oldH - e.height
+    }
+    cameraInitialized = false
+    updateCamera()
+    stdout.write("\x1b[2J")
+  }
+}
+
+let removeSimInput = setupInput(stdin, simOnArrow, simOnKey)
+
+// --- Return to title screen when all agents leave ---
+
+async function returnToTitle() {
+  if (simPaused) return
+  simPaused = true
+
+  // Clean up sim input
+  removeSimInput()
+
+  // Save agent state
+  saveAgentSessions()
+
+  // Show title screen (blocks until new agent joins)
+  const { showTitleScreen } = await import("./title.js")
+  await showTitleScreen(roomSlug)
+
+  // Resume sim input
+  stdin.setRawMode!(true)
+  stdin.resume()
+  stdin.setEncoding("utf8")
+  removeSimInput = setupInput(stdin, simOnArrow, simOnKey)
+
+  // Clear screen for fresh sim render
+  stdout.write("\x1b[2J")
+  hadAgents = false
+  simPaused = false
+  loop()
+}
 
 // --- Movement ---
 
@@ -1202,6 +1238,13 @@ function frame() {
   updateAgentAI()
   writeSimState()
 
+  // Track agent presence and return to title when all agents leave
+  if (agentSessions.size > 0) hadAgents = true
+  if (hadAgents && agentSessions.size === 0) {
+    returnToTitle()
+    return
+  }
+
   rebuildEntityArrays()
 
   updateDoors(doors, _doorEntities, furnitureOverlay, tick)
@@ -1335,6 +1378,7 @@ let writeBackpressure = false
 stdout.on("drain", () => { writeBackpressure = false })
 
 function loop() {
+  if (simPaused) return
   if (!writeBackpressure) frame()
   setTimeout(loop, config.frameMs)
 }
