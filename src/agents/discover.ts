@@ -58,13 +58,34 @@ export function discoverLocalAgents(): LocalAgent[] {
 
 /**
  * Show interactive selector for all available agents (built-in + local)
+ * Marks agents already active in the room as taken
  */
-export async function selectAgent(): Promise<{ type: "builtin" | "local"; name: string; agent?: LocalAgent }> {
+export async function selectAgent(room: string = "default"): Promise<{ type: "builtin" | "local"; name: string; agent?: LocalAgent }> {
   const builtins = ["claude", "codex"];
   const localAgents = discoverLocalAgents();
+
+  // Get active agents in this room
+  const activeAgentDnas = new Set<string>();
+  try {
+    const { readState } = await import("../engine/ipc.js");
+    const state = readState();
+    if (state?.entities) {
+      for (const entity of state.entities) {
+        if (entity.dna) activeAgentDnas.add(entity.dna);
+      }
+    }
+  } catch {
+    // No sim running, that's fine
+  }
+
   const allOptions = [
-    ...builtins.map(name => ({ type: "builtin" as const, name, agent: undefined })),
-    ...localAgents.map(a => ({ type: "local" as const, name: a.name, agent: a })),
+    ...builtins.map(name => ({ type: "builtin" as const, name, agent: undefined, taken: false })),
+    ...localAgents.map(a => ({
+      type: "local" as const,
+      name: a.name,
+      agent: a,
+      taken: a.soul?.dna ? activeAgentDnas.has(a.soul.dna) : false
+    })),
   ];
 
   if (allOptions.length === 0) return { type: "builtin", name: "claude" };
@@ -73,13 +94,14 @@ export async function selectAgent(): Promise<{ type: "builtin" | "local"; name: 
   console.log("\nSelect agent:\n");
   for (let i = 0; i < allOptions.length; i++) {
     const opt = allOptions[i];
+    const status = opt.taken ? " (already in room)" : "";
     if (opt.type === "builtin") {
       const label = opt.name === "claude" ? "Claude Code" : "Codex CLI";
-      console.log(`  (${i + 1}) ${opt.name.padEnd(10)} - ${label}`);
+      console.log(`  (${i + 1}) ${opt.name.padEnd(10)} - ${label}${status}`);
     } else {
       const soulName = opt.agent?.soul?.name || opt.name;
       const purpose = opt.agent?.soul?.purpose ? ` — ${opt.agent.soul.purpose}` : "";
-      console.log(`  (${i + 1}) ${soulName}${purpose}`);
+      console.log(`  (${i + 1}) ${soulName}${purpose}${status}`);
     }
   }
 
@@ -89,6 +111,11 @@ export async function selectAgent(): Promise<{ type: "builtin" | "local"; name: 
       rl.close();
       const idx = parseInt(answer, 10) - 1;
       if (idx >= 0 && idx < allOptions.length) {
+        // Still allow choosing taken agents (user can run multiple instances if they want)
+        // Just warn them
+        if (allOptions[idx].taken) {
+          console.log("\nWarning: This agent is already active in this room.");
+        }
         resolve(allOptions[idx]);
       } else {
         resolve(allOptions[0]);
@@ -100,11 +127,11 @@ export async function selectAgent(): Promise<{ type: "builtin" | "local"; name: 
 /**
  * Show interactive selector for local agents (deprecated, use selectAgent)
  */
-export async function selectLocalAgent(): Promise<LocalAgent | null> {
+export async function selectLocalAgent(room: string = "default"): Promise<LocalAgent | null> {
   const agents = discoverLocalAgents();
   if (agents.length === 0) return null;
   if (agents.length === 1) return agents[0];
 
-  const result = await selectAgent();
+  const result = await selectAgent(room);
   return result.type === "local" ? result.agent || null : null;
 }

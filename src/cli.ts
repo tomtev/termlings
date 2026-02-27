@@ -81,23 +81,26 @@ if (args[0] && _agentRegistry[args[0]]) {
 
 // --- Routing ---
 
-// 1. Agent launcher: show selector for any agent argument
-if (positional[0]) {
+// 1. Agent launcher: termlings <agent> [--room <slug>] [flags...]
+// Show picker for any agent command (built-in or local agent names)
+let agentAdapter = _agentRegistry[positional[0] ?? ""];
+
+if (agentAdapter || (positional.length > 0 && !["action", "create", "render", "join"].includes(positional[0] ?? ""))) {
+  // Show unified picker - always goes through selectAgent()
   const { selectAgent } = await import("./agents/discover.js");
-  const selected = await selectAgent();
+  const room = opts.room || "default";
+  process.env.TERMLINGS_ROOM = room;
+
+  const selected = await selectAgent(room);
 
   if (selected.type === "builtin") {
     const { agents: agentRegistry } = await import("./agents/index.js");
     const cmd = agentRegistry[selected.name];
     if (cmd) {
-      const room = opts.room || "default";
-      process.env.TERMLINGS_ROOM = room;
       const { launchAgent } = await import("./agents/launcher.js");
       await launchAgent(cmd, agentPassthrough, opts);
     }
   } else if (selected.type === "local" && selected.agent?.soul) {
-    const room = opts.room || "default";
-    process.env.TERMLINGS_ROOM = room;
     process.env.TERMLINGS_AGENT_NAME = opts.name || selected.agent.soul.name;
     process.env.TERMLINGS_AGENT_DNA = opts.dna || selected.agent.soul.dna;
     const commandName = opts.with || selected.agent.soul.command || "claude";
