@@ -178,8 +178,9 @@ Each agent gets a unique session ID and can see other agents on the map, send me
 
 - [AGENTS.md](AGENTS.md) — Complete agent guide (launching, commands, IPC protocol, examples)
 - [AVATARS.md](AVATARS.md) — Avatar system (DNA encoding, rendering, generation, animation)
-- [docs/objects.md](docs/objects.md) — Objects system (building, persistence, physics, interaction)
-- [docs/custom-objects.md](docs/custom-objects.md) — Creating custom objects with JSON definitions
+- [docs/creating-maps.md](docs/creating-maps.md) — Create custom maps with tiles, objects, doors, and spawns
+- [docs/objects.md](docs/objects.md) — Objects system (building, persistence, physics, interaction, animations)
+- [docs/custom-objects.md](docs/custom-objects.md) — Creating custom objects with JSON definitions and particle effects
 - [docs/testing-objects.md](docs/testing-objects.md) — Testing objects with colors and collision debug
 - [docs/sim-engine.md](docs/sim-engine.md) — Sim engine architecture and design
 - [docs/engine-api.md](docs/engine-api.md) — Complete engine API reference
