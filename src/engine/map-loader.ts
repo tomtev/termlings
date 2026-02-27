@@ -100,15 +100,15 @@ export function parseMapJson(json: MapJson): LoadedMap {
   }
 
   // Parse objects
-  const objectDefs: Record<string, FurnitureDef> = {}
+  const objectDefs: Record<string, ObjectDef> = {}
   if (json.objects) {
     for (const [name, obj] of Object.entries(json.objects)) {
       objectDefs[name] = parseObjectDef(name, obj)
     }
   }
 
-  // Parse placements — look up in objectDefs first, then FURNITURE_DEFS
-  const placements: FurniturePlacement[] = []
+  // Parse placements — look up in objectDefs first, then OBJECT_DEFS
+  const placements: ObjectPlacement[] = []
   if (json.placements) {
     for (const p of json.placements) {
       placements.push({ def: p.object, x: p.x, y: p.y })

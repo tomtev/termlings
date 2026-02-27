@@ -599,11 +599,15 @@ Commands:
     process.exit(0);
   }
 
-  if (verb === "build") {
-    const { readState: readStateBuild, writeCommand } = await import("./engine/ipc.js");
-    const _stateBuild = readStateBuild();
-    if (_stateBuild?.map?.mode === "simple") {
-      console.error("Error: build is disabled in simple mode");
+  if (verb === "place") {
+    const { readState: readStatePlace, writeCommand } = await import("./engine/ipc.js");
+    const { OBJECT_DEFS, renderObjectToTerminal } = await import("./engine/objects.js");
+    const { loadCustomObjects } = await import("./engine/custom-objects.js");
+    const _statePlace = readStatePlace();
+    const room = process.env.TERMLINGS_ROOM || "default";
+    const customObjects = loadCustomObjects(room);
+    if (_statePlace?.map?.mode === "simple") {
+      console.error("Error: place is disabled in simple mode");
       process.exit(1);
     }
     const sessionId = process.env.TERMLINGS_SESSION_ID;
@@ -614,7 +618,7 @@ Commands:
     const objectType = positional[2];
     const coord = positional[3];
     if (!objectType) {
-      console.error("Usage: termlings action build <objectType> <x>,<y>");
+      console.error("Usage: termlings action place <objectType> <x>,<y>");
       process.exit(1);
     }
     let x: number | undefined;
@@ -628,8 +632,144 @@ Commands:
         process.exit(1);
       }
     }
-    writeCommand(sessionId, { action: "build", objectType, x, y, name: _agentName, dna: _agentDna, ts: Date.now() });
-    console.log(`Build command sent: ${objectType}${x !== undefined ? ` at (${x},${y})` : ""}`);
+
+    // Handle --preview flag
+    if (flags.has("preview")) {
+      const color = opts.color
+        ? opts.color.split(",").map((c: string) => parseInt(c.trim(), 10)) as [number, number, number]
+        : undefined;
+
+      // Check both built-in and custom objects
+      const allDefs = { ...OBJECT_DEFS, ...customObjects };
+      if (!allDefs[objectType]) {
+        console.error(`Unknown object type: ${objectType}`);
+        console.error(`Use 'termlings action list-objects' to see available types`);
+        process.exit(1);
+      }
+
+      const colorLabel = color ? ` [color: rgb(${color.join(", ")})]` : "";
+      const coordLabel = x !== undefined ? ` at (${x}, ${y})` : "";
+      console.log(`\nPreview: ${objectType}${colorLabel}${coordLabel}\n`);
+      console.log(renderObjectToTerminal(objectType, color, allDefs));
+      console.log();
+      console.log(`To place this object, run:`);
+      const colorOpt = color ? ` --color "${color.join(",")}"` : "";
+      const coordStr = x !== undefined ? ` ${x},${y}` : "";
+      console.log(`  termlings action place ${objectType}${coordStr}${colorOpt}`);
+      console.log();
+      process.exit(0);
+    }
+
+    writeCommand(sessionId, { action: "place", objectType, x, y, name: _agentName, dna: _agentDna, ts: Date.now() });
+    console.log(`Place command sent: ${objectType}${x !== undefined ? ` at (${x},${y})` : ""}`);
+    process.exit(0);
+  }
+
+  // Inspect existing object JSON
+  if (verb === "inspect-object") {
+    const { OBJECT_DEFS } = await import("./engine/objects.js");
+    const objectType = positional[2];
+    if (!objectType) {
+      console.error("Usage: termlings action inspect-object <type>");
+      process.exit(1);
+    }
+
+    const def = OBJECT_DEFS[objectType];
+    if (!def) {
+      console.error(`Unknown object type: ${objectType}`);
+      console.error(`Available types: ${Object.keys(OBJECT_DEFS).join(", ")}`);
+      process.exit(1);
+    }
+
+    // Format for display
+    const cellsForDisplay = def.cells.map(row =>
+      row.map(cell =>
+        cell === null ? null : {
+          ch: cell.ch,
+          fg: cell.fg,
+          bg: cell.bg,
+          walkable: cell.walkable
+        }
+      )
+    );
+
+    const output = {
+      name: def.name,
+      width: def.width,
+      height: def.height,
+      cells: cellsForDisplay
+    };
+
+    console.log(JSON.stringify(output, null, 2));
+    process.exit(0);
+  }
+
+  // Create custom object
+  if (verb === "create-object") {
+    const { createCustomObject, loadCustomObjects } = await import("./engine/custom-objects.js");
+    const objectName = positional[2];
+    const jsonString = positional[3];
+
+    if (!objectName || !jsonString) {
+      console.error("Usage: termlings action create-object <name> <json-definition>");
+      console.error("Example: termlings action create-object my-bench '{\"width\": 5, \"height\": 2, \"cells\": ...}'");
+      process.exit(1);
+    }
+
+    let definition: unknown;
+    try {
+      definition = JSON.parse(jsonString);
+    } catch (e) {
+      console.error(`Invalid JSON: ${e}`);
+      process.exit(1);
+    }
+
+    const result = createCustomObject(objectName, definition);
+    if (!result.success) {
+      console.error(`Error creating object: ${result.error}`);
+      process.exit(1);
+    }
+
+    console.log(`✓ Created custom object: ${objectName}`);
+    console.log(`You can now use: termlings action place ${objectName} <x>,<y>`);
+    process.exit(0);
+  }
+
+  // List all objects (built-in and custom)
+  if (verb === "list-objects") {
+    const { OBJECT_DEFS } = await import("./engine/objects.js");
+    const { loadCustomObjects } = await import("./engine/custom-objects.js");
+    const room = process.env.TERMLINGS_ROOM || "default";
+    const customObjects = loadCustomObjects(room);
+
+    console.log("\n📦 Built-in Objects:\n");
+    const categories = {
+      "🪑 Furniture": ["sofa", "sofa_large", "table", "bookshelf", "chair", "office_chair"],
+      "🌳 Natural": ["tree", "pine_tree", "rock", "flower_patch"],
+      "🏗️ Structures": ["fence_h", "fence_v", "sign", "campfire"]
+    };
+
+    for (const [category, items] of Object.entries(categories)) {
+      console.log(`${category}:`);
+      for (const item of items) {
+        const def = OBJECT_DEFS[item];
+        console.log(`  • ${item.padEnd(15)} (${def.width}×${def.height})`);
+      }
+      console.log();
+    }
+
+    if (Object.keys(customObjects).length > 0) {
+      console.log("✨ Custom Objects:\n");
+      for (const [name, def] of Object.entries(customObjects)) {
+        console.log(`  • ${name.padEnd(15)} (${def.width}×${def.height})`);
+      }
+      console.log();
+    } else {
+      console.log("No custom objects yet. Create one with:");
+      console.log("  termlings action create-object <name> '<json>'");
+      console.log();
+    }
+
     process.exit(0);
   }
 
@@ -666,10 +806,66 @@ Commands:
   process.exit(1);
 }
 
-// 3. Render subcommand: termlings render [dna|name] [options]
+// 3. Render subcommand: termlings render [avatar|object] [dna|name|type] [options]
 if (positional[0] === "render") {
-  // Use positional[1] as the render input (DNA or name)
-  input = positional[1];
+  const { OBJECT_DEFS, renderObjectToTerminal } = await import("./engine/objects.js");
+
+  // Check if rendering object or avatar
+  let renderType = positional[1] === "object" ? "object" : "avatar";
+  let renderInput = renderType === "object" ? positional[2] : positional[1];
+
+  // Handle object rendering
+  if (renderType === "object") {
+    if (flags.has("list")) {
+      console.log("\nAvailable object types:\n");
+      const types = Object.keys(OBJECT_DEFS);
+      const categories = {
+        "Furniture": ["sofa", "sofa_large", "table", "bookshelf", "chair", "office_chair"],
+        "Natural": ["tree", "pine_tree", "rock", "flower_patch"],
+        "Structures": ["fence_h", "fence_v", "sign", "campfire"]
+      };
+
+      for (const [category, items] of Object.entries(categories)) {
+        console.log(`${category}:`);
+        for (const item of items) {
+          const def = OBJECT_DEFS[item];
+          console.log(`  • ${item} (${def.width}×${def.height})`);
+        }
+        console.log();
+      }
+      process.exit(0);
+    }
+
+    const objectType = renderInput;
+    const color = opts.color
+      ? opts.color.split(",").map((c: string) => parseInt(c.trim(), 10)) as [number, number, number]
+      : undefined;
+
+    if (!OBJECT_DEFS[objectType]) {
+      console.error(`Unknown object type: ${objectType}`);
+      console.error(`Available types: ${Object.keys(OBJECT_DEFS).join(", ")}`);
+      process.exit(1);
+    }
+
+    const debugCollision = flags.has("debug-collision");
+    const debugLabel = debugCollision ? " [collision debug]" : "";
+    console.log(`\n${objectType}${color ? ` [color: rgb(${color.join(", ")})]` : ""}${debugLabel}\n`);
+
+    if (debugCollision) {
+      console.log("Collision legend:");
+      console.log("  · = transparent");
+      console.log("  █ = blocking");
+      console.log("  ░ = walkable");
+      console.log();
+    }
+
+    console.log(renderObjectToTerminal(objectType, color, undefined, debugCollision));
+    console.log();
+    process.exit(0);
+  }
+
+  // Avatar rendering (existing code)
+  input = renderInput;
 
   if (flags.has("random") || !input) {
     input = generateRandomDNA();
@@ -959,19 +1155,23 @@ Create:
   create --dna <hex>       Create with specific DNA
 
 Render:
-  render [dna|name]        Render a termling in the terminal
-  render --svg             Output SVG
-  render --mp4             Export animated MP4
-  render --walk/--talk/--wave  Animate
-  render --compact         Half-height
-  render --info            Show DNA traits
-  render --bw              Black & white
-  render --random          Random termling
-  render --animated        SVG with CSS animation
-  render --size=<px>       SVG pixel size (default: 10)
-  render --bg=<color>      SVG background (hex or "none")
-  render --padding=<n>     SVG padding in pixels (default: 1)
-  render --out=<file>      MP4 output path (default: termling.mp4)
+  render [dna|name]                          Render a termling in the terminal
+  render object <type>                       Render an object
+  render object <type> --color R,G,B         Render object with custom color
+  render object <type> --debug-collision     Show collision boundaries
+  render --svg                               Output SVG
+  render --mp4                               Export animated MP4
+  render --walk/--talk/--wave                Animate
+  render --compact                           Half-height
+  render --info                              Show DNA traits
+  render --bw                                Black & white
+  render --random                            Random termling
+  render --animated                          SVG with CSS animation
+  render --size=<px>                         SVG pixel size (default: 10)
+  render --bg=<color>                        SVG background (hex or "none")
+  render --padding=<n>                       SVG padding in pixels (default: 1)
+  render --out=<file>                        MP4 output path (default: termling.mp4)
+  render object --list                       List all object types
   render --fps=<n>         MP4 frame rate (default: 4)
   render --duration=<n>    MP4 duration in seconds (default: 3)
 
@@ -981,8 +1181,13 @@ Actions (in-game):
   action send <id> <msg>   Direct message to agent
   action chat <msg>        Post to shared chat
   action inbox             Read messages
-  action build <type> <x>,<y>  Place object (tree, rock, sign, fence, campfire)
-  action destroy <x>,<y>   Remove object
+  action place <type> <x>,<y>                Place object at coordinates
+  action place <type> <x>,<y> --preview      Preview object before placing
+  action place <type> <x>,<y> --color R,G,B  Place with custom color
+  action inspect-object <type>                Show object JSON (for inspiration)
+  action create-object <name> '<json>'        Create custom object from JSON
+  action list-objects                         List all objects (built-in + custom)
+  action destroy <x>,<y>                      Remove object
   action talk              Toggle talk animation
   action gesture --wave    Wave gesture
   action stop              Stop current action

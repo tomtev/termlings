@@ -838,7 +838,7 @@ function processAgentCommands() {
       chat(fromName, cmd.text, entity.faceRgb)
     }
 
-    if (cmd.action === "build" && cmd.objectType) {
+    if (cmd.action === "place" && cmd.objectType) {
       const objDef = mergedDefs[cmd.objectType]
       if (!objDef) {
         chat("system", `Unknown object: ${cmd.objectType}`, [180, 80, 80])
@@ -846,7 +846,7 @@ function processAgentCommands() {
         const bx = cmd.x ?? (entity.x + 4)
         const by = cmd.y ?? (entity.y + entity.height - 1)
 
-        // Check overlap with existing blocking furniture cells
+        // Check overlap with existing blocking object cells
         let blocked = false
         for (let row = 0; row < objDef.height && !blocked; row++) {
           const cellRow = objDef.cells[row]
@@ -863,12 +863,12 @@ function processAgentCommands() {
         }
 
         if (blocked) {
-          chat("system", `Can't build ${cmd.objectType} at (${bx},${by}) — blocked`, [180, 80, 80])
+          chat("system", `Can't place ${cmd.objectType} at (${bx},${by}) — blocked`, [180, 80, 80])
         } else {
           const fromName = entity.name || sessionId
           objectPlacements.push({ def: cmd.objectType, x: bx, y: by })
           rebuildObjects()
-          chat("system", `${fromName} built a ${cmd.objectType} at (${bx},${by})`, [80, 180, 80])
+          chat("system", `${fromName} placed a ${cmd.objectType} at (${bx},${by})`, [80, 180, 80])
         }
       }
     }

@@ -346,8 +346,8 @@ function processAgentCommands() {
       chat("system", "walk is disabled in simple mode", [180, 80, 80])
     }
 
-    if (cmd.action === "build") {
-      chat("system", "build is disabled in simple mode", [180, 80, 80])
+    if (cmd.action === "place") {
+      chat("system", "place is disabled in simple mode", [180, 80, 80])
     }
 
     if (cmd.action === "destroy") {

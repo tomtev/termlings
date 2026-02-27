@@ -203,7 +203,7 @@ export async function launchAgent(
 This room is running in SIMPLE MODE:
 - There is NO map. Walking is disabled.
 - \`termlings action walk\` will fail.
-- \`termlings action build\` and \`termlings action destroy\` will fail.
+- \`termlings action place\` and \`termlings action destroy\` will fail.
 - Use \`termlings action map\` to see connected agents and their session IDs.
 - Use \`termlings action send <session-id> <message>\` to communicate.
 - Gestures (talk, wave) and stop still work.`

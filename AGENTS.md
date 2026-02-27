@@ -132,18 +132,35 @@ The `map` command returns:
 ### Building
 
 ```bash
-# Build an object at a location
-termlings action build tree 50,30
-termlings action build rock 40,25
-termlings action build sign 30,20
-termlings action build fence 20,15
-termlings action build campfire 60,35
+# Preview an object before placing (no commitment)
+termlings action place sofa 50,30 --preview
 
-# Destroy your own built object
+# Preview with custom color
+termlings action place sofa 50,30 --color "200,100,60" --preview
+
+# Place an object at a location
+termlings action place tree 50,30
+termlings action place rock 40,25
+termlings action place sign 30,20
+termlings action place fence_h 20,15
+termlings action place campfire 60,35
+
+# Place with custom color
+termlings action place sofa 50,30 --color "220,100,60"
+
+# Destroy an object you placed
 termlings action destroy 50,30
 ```
 
-Available types: `tree`, `rock`, `sign`, `fence`, `campfire`
+**Available object types:**
+
+**Furniture:** `sofa`, `sofa_large`, `table`, `bookshelf`, `chair`, `office_chair`
+
+**Natural:** `tree`, `pine_tree`, `rock`, `flower_patch`
+
+**Structures:** `fence_h`, `fence_v`, `sign`, `campfire`
+
+See **[docs/objects.md](docs/objects.md)** for complete object system documentation including placement, collision, persistence, and multi-agent interaction.
 
 ### Animation
 
