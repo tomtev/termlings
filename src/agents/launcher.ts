@@ -108,8 +108,43 @@ export async function launchAgent(
   const contextArgs = adapter.contextArgs(context)
   const finalArgs = [...contextArgs, ...passthroughArgs]
 
-  console.log(`Starting ${adapter.defaultName} with session: ${sessionId}`)
-  console.log()
+  // Render agent startup message with avatar and name
+  if (agentDna) {
+    try {
+      const { renderTerminal, decodeDNA } = await import("../index.js")
+      const traits = decodeDNA(agentDna)
+      const avatar = renderTerminal(agentDna, 0)
+      const avatarLines = avatar.split("\n")
+
+      // Render agent info beside avatar
+      console.log()
+      const faceRgb = [Math.round(200 + Math.sin(traits.faceHue / 12) * 55), Math.round(150 + Math.cos(traits.faceHue / 12) * 55), 100]
+      const nameColor = `\x1b[38;2;${faceRgb[0]};${faceRgb[1]};${faceRgb[2]}m`
+      const bold = "\x1b[1m"
+      const reset = "\x1b[0m"
+
+      const infoLines = [
+        `${bold}${nameColor}${agentName}${reset}`,
+        `${adapter.defaultName}`,
+        `Session: ${sessionId}`
+      ]
+
+      const maxLines = Math.max(avatarLines.length, infoLines.length)
+      for (let i = 0; i < maxLines; i++) {
+        const avatarLine = avatarLines[i] || ""
+        const infoLine = infoLines[i] || ""
+        const pad = " ".repeat(Math.max(0, 20 - avatarLine.replace(/\x1b\[[0-9;]*m/g, "").length))
+        console.log(`${avatarLine}${pad}  ${infoLine}`)
+      }
+      console.log()
+    } catch {
+      console.log(`Starting ${agentName} with session: ${sessionId}`)
+      console.log()
+    }
+  } else {
+    console.log(`Starting ${adapter.defaultName} with session: ${sessionId}`)
+    console.log()
+  }
 
   const room = process.env.TERMLINGS_ROOM || "default"
   setRoom(room)
