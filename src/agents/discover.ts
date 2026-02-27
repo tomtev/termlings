@@ -86,7 +86,7 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
   }
 
   const { selectMenu } = await import("../interactive-menu.js");
-  const { decodeDNA, hslToRgb } = await import("../index.js");
+  const { decodeDNA, getTraitColors } = await import("../index.js");
 
   // Build menu items for existing agents
   const menuItems = [
@@ -96,16 +96,17 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
       const purpose = a.soul?.purpose || "Autonomous agent";
       const status = a.soul?.dna && activeAgentDnas.has(a.soul.dna) ? " (in room)" : "";
 
-      // Get face color from DNA (same as avatar rendering)
+      // Get face and hat colors from DNA (same as avatar rendering)
       let colorSquare = "";
       if (a.soul?.dna) {
         try {
           const traits = decodeDNA(a.soul.dna);
-          const faceHueDeg = traits.faceHue * 30;
-          const faceRgb = hslToRgb(faceHueDeg, 0.5, 0.5);
-          colorSquare = `\x1b[38;2;${faceRgb[0]};${faceRgb[1]};${faceRgb[2]}m█\x1b[0m `;
+          const colors = getTraitColors(traits, false);
+          const faceColor = `\x1b[38;2;${colors.faceRgb[0]};${colors.faceRgb[1]};${colors.faceRgb[2]}m█\x1b[0m`;
+          const hatColor = `\x1b[38;2;${colors.hatRgb[0]};${colors.hatRgb[1]};${colors.hatRgb[2]}m▮\x1b[0m`;
+          colorSquare = `${faceColor}${hatColor} `;
         } catch {
-          colorSquare = "● ";
+          colorSquare = "●▮ ";
         }
       }
 
