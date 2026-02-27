@@ -88,11 +88,11 @@ function generateTitleTiles(cols: number, rows: number, horizon: number): string
 export function roomHasAgents(room: string): boolean {
   const dir = join(homedir(), ".termlings", "rooms", room)
 
-  // Check for agent command files (agent is trying to connect)
+  // Check for agent command queue files (agent is trying to connect)
   try {
     if (existsSync(dir)) {
       const files = readdirSync(dir)
-      if (files.some(f => f.endsWith(".cmd.json"))) return true
+      if (files.some(f => f.endsWith(".queue.jsonl"))) return true
     }
   } catch {}
 
