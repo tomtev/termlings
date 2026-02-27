@@ -241,11 +241,16 @@ Commands:
   }
 
   if (verb === "map") {
-    const { readState, IPC_DIR } = await import("./engine/ipc.js");
+    const { readState } = await import("./engine/ipc.js");
     const { OBJECT_DEFS } = await import("./engine/objects.js");
     const { describeRelative } = await import("./engine/room-detect.js");
     const { readFileSync, existsSync } = await import("fs");
     const { join } = await import("path");
+    const { homedir } = await import("os");
+
+    // Compute IPC_DIR based on room from environment
+    const room = process.env.TERMLINGS_ROOM || "default";
+    const IPC_DIR = join(homedir(), ".termlings", "rooms", room);
 
     const state = readState();
     if (!state) {
