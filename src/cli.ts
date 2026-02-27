@@ -81,33 +81,35 @@ if (args[0] && _agentRegistry[args[0]]) {
 
 // --- Routing ---
 
-// 1. Agent launcher: termlings <agent> [--room <slug>] [flags...]
-// Show picker for any agent command (built-in or local agent names)
+// 1. Agent launcher: termlings <cli> [--room <slug>] [flags...]
+// If there are local agents, show picker. Otherwise launch CLI directly.
 let agentAdapter = _agentRegistry[positional[0] ?? ""];
 
-if (agentAdapter || (positional.length > 0 && !["action", "create", "render", "join"].includes(positional[0] ?? ""))) {
-  // Show unified picker - always goes through selectAgent()
-  const { selectAgent } = await import("./agents/discover.js");
+if (agentAdapter) {
+  const { discoverLocalAgents } = await import("./agents/discover.js");
+  const localAgents = discoverLocalAgents();
+
   const room = opts.room || "default";
   process.env.TERMLINGS_ROOM = room;
 
-  const selected = await selectAgent(room);
+  // If we have agents, show picker. Otherwise launch CLI directly.
+  if (localAgents.length > 0) {
+    const { selectLocalAgentWithRoom } = await import("./agents/discover.js");
+    const selected = await selectLocalAgentWithRoom(localAgents, room);
 
-  if (selected.type === "builtin") {
-    const { agents: agentRegistry } = await import("./agents/index.js");
-    const cmd = agentRegistry[selected.name];
-    if (cmd) {
-      const { launchAgent } = await import("./agents/launcher.js");
-      await launchAgent(cmd, agentPassthrough, opts);
+    if (selected) {
+      process.env.TERMLINGS_AGENT_NAME = opts.name || selected.soul?.name;
+      process.env.TERMLINGS_AGENT_DNA = opts.dna || selected.soul?.dna;
+      const commandName = opts.with || selected.soul?.command || positional[0];
+
+      const { launchLocalAgent } = await import("./agents/launcher.js");
+      await launchLocalAgent(selected, agentPassthrough, opts, commandName);
+      process.exit(0);
     }
-  } else if (selected.type === "local" && selected.agent?.soul) {
-    process.env.TERMLINGS_AGENT_NAME = opts.name || selected.agent.soul.name;
-    process.env.TERMLINGS_AGENT_DNA = opts.dna || selected.agent.soul.dna;
-    const commandName = opts.with || selected.agent.soul.command || "claude";
-
-    const { launchLocalAgent } = await import("./agents/launcher.js");
-    await launchLocalAgent(selected.agent, agentPassthrough, opts, commandName);
-    process.exit(0);
+  } else {
+    // No agents, just launch the CLI directly
+    const { launchAgent } = await import("./agents/launcher.js");
+    await launchAgent(agentAdapter, agentPassthrough, opts);
   }
 }
 
