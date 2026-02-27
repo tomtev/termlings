@@ -62,20 +62,20 @@ function encodeBracketedPaste(text: string): Buffer {
 }
 
 /**
- * Launch a local agent soul with specified adapter (default: claude)
+ * Launch a local agent soul with specified command (default: claude)
  */
 export async function launchLocalAgent(
   localAgent: any,
   passthroughArgs: string[],
   termlingOpts: Record<string, string>,
-  adapterName?: string,
+  commandName?: string,
 ): Promise<never> {
   const { agents } = await import("./index.js")
 
-  // Use soul's adapter if specified, otherwise use provided adapter or default to claude
-  const finalAdapterName = localAgent.soul?.adapter || adapterName || "claude"
-  const adapter = agents[finalAdapterName]
-  if (!adapter) throw new Error(`Agent adapter not found: ${finalAdapterName}`)
+  // Use soul's command if specified, otherwise use provided command or default to claude
+  const finalCommandName = localAgent.soul?.command || commandName || "claude"
+  const adapter = agents[finalCommandName]
+  if (!adapter) throw new Error(`Agent command not found: ${finalCommandName}`)
 
   // Override name and dna from local soul
   termlingOpts = { ...termlingOpts }

@@ -24,7 +24,7 @@ const positional: string[] = [];
 let agentPassthrough: string[] = [];
 
 // Known flags that take a space-separated value (--room village, --name Foo, etc.)
-const VALUE_FLAGS = new Set(["room", "name", "dna", "owner", "purpose", "with"]);
+const VALUE_FLAGS = new Set(["room", "name", "dna", "owner", "purpose", "with", "dangerous-skip-confirmation"]);
 
 // Check if first arg is an agent name — if so, pass everything after it through raw
 const { agents: _agentRegistry } = await import("./agents/index.js");

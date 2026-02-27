@@ -43,20 +43,22 @@ export async function runCreate(): Promise<void> {
     vars["AGENT_PURPOSE"] = await prompt("Purpose: ") || "A helpful agent";
   }
 
-  // Select adapter
-  let adapter = "claude";
-  console.log("\nSelect adapter:");
-  console.log("  (1) claude  - Claude Code");
-  console.log("  (2) codex   - Codex CLI");
-  const adapterChoice = await prompt("Choose (default: 1): ");
-  if (adapterChoice === "2") {
-    adapter = "codex";
+  // Select command
+  let command = "claude";
+  if (!rawArgs.includes("--dangerous-skip-confirmation")) {
+    console.log("\nSelect command:");
+    console.log("  (1) claude  - Claude Code");
+    console.log("  (2) codex   - Codex CLI");
+    const commandChoice = await prompt("Choose (default: 1): ");
+    if (commandChoice === "2") {
+      command = "codex";
+    }
   }
 
   const dest = resolve(".termlings", slug);
   await Bun.spawn(["mkdir", "-p", dest]).exited;
 
-  await createAgent(dest, vars, adapter);
+  await createAgent(dest, vars, command);
 }
 
 async function detectOwnerName(): Promise<string> {
@@ -69,7 +71,7 @@ async function detectOwnerName(): Promise<string> {
   return require("os").userInfo().username || "Owner";
 }
 
-async function createAgent(dest: string, vars: Record<string, string>, adapter: string = "claude"): Promise<void> {
+async function createAgent(dest: string, vars: Record<string, string>, command: string = "claude"): Promise<void> {
   const agentName = vars["AGENT_NAME"] || "My Agent";
   const ownerName = vars["OWNER_NAME"] || await detectOwnerName();
 
@@ -153,7 +155,7 @@ async function createAgent(dest: string, vars: Record<string, string>, adapter: 
   // Create SOUL.md with agent identity
   const soulContent = `# ${agentName}
 
-**Adapter:** ${adapter}
+**Command:** ${command}
 
 **Purpose:** ${vars["AGENT_PURPOSE"] || "A helpful agent"}
 
@@ -167,6 +169,8 @@ async function createAgent(dest: string, vars: Record<string, string>, adapter: 
     console.log(`\nCreated in ${dest}`);
     console.log(`  SOUL.md (name: ${agentName})`);
     console.log(`  avatar.svg (dna: ${dna})`);
+    console.log(`\nLaunch with: termlings ${slug}`);
+    console.log(`Or auto-confirm (dangerous): termlings ${slug} --dangerous-skip-confirmation`);
   } catch (err) {
     throw new Error(`Failed to create agent files: ${err instanceof Error ? err.message : String(err)}`);
   }
