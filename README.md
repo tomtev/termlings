@@ -279,21 +279,13 @@ See [docs/engine-api.md](docs/engine-api.md) for the full API reference and [doc
 
 ### Custom maps
 
-A map is a directory with `map.txt` (ASCII tile grid) and optional `tiles.json` (custom tile definitions):
-
-```
-##########
-#........#
-#...P....#
-#........#
-##########
-```
-
-Tile legend: `.` floor, `#` wall, `,` grass, `~` water, `T` tree, `D` door, `P` NPC spawn, `S` player spawn
+Create a map directory with `map.json`:
 
 ```bash
 npx termlings play ./my-map/
 ```
+
+See [docs/creating-maps.md](docs/creating-maps.md) for complete guide to map format, objects, doors, and spawns.
 
 ## Architecture
 
