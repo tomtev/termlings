@@ -261,7 +261,7 @@ export function stampFurniturePiece(
     const cellRow = def.cells[row]
     if (!cellRow) continue
     const sy = placement.y + row - cameraY
-    if (sy < 0 || sy >= rows) continue
+    if (sy < 0 || sy >= rows || !buffer[sy]) continue
     for (let col = 0; col < def.width; col++) {
       const cell = cellRow[col]
       if (!cell) continue
@@ -269,8 +269,8 @@ export function stampFurniturePiece(
       for (let ci = 0; ci < scale; ci++) {
         const sx = baseSx + ci
         if (sx < 0 || sx >= cols) continue
-        const bc = buffer[sy]![sx]!
-        bc.ch = cell.ch; bc.fg = cell.fg; bc.bg = cell.bg
+        const bc = buffer[sy]![sx]
+        if (bc) { bc.ch = cell.ch; bc.fg = cell.fg; bc.bg = cell.bg }
       }
     }
   }

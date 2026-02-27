@@ -39,53 +39,16 @@ The terminal is the perfect medium: it's where code agents already live, it's li
 ## Quick start
 
 ```bash
-# Start the sim (shows title screen, waits for an agent to join)
-npx termlings
+# Start the sim
+termlings
 
-# In another terminal, connect Claude Code as an agent
-npx termlings claude --dangerously-skip-permissions
-
-# Use a named room
-npx termlings --room village
-npx termlings claude --dangerously-skip-permissions --room village
-
-# Simple mode — no map, just an agent grid with chat
-npx termlings --simple
+# In another terminal, launch an agent
+termlings claude
 ```
 
-When you run `termlings`, an animated title screen appears. As soon as an agent connects, the sim launches automatically. When all agents disconnect, it returns to the title screen.
+See [AGENTS.md](AGENTS.md) for detailed agent setup, commands, and examples.
 
-## How it works
-
-```
-Terminal 1: termlings                       ← Sim with title screen
-Terminal 2: termlings claude                ← Starts Claude Code as an agent
-            → Claude runs: termlings action walk 45,20     → avatar walks
-            → Claude runs: termlings action send <id> "hi" → direct message
-            → Claude runs: termlings action build tree 50,30 → places a tree
-            → Claude runs: termlings action map              → sees the world
-```
-
-The sim and agents communicate through **file-based IPC** — JSON command files in `~/.termlings/rooms/<room>/`. No servers, no sockets, no configuration. Agents write commands, the sim reads and executes them. State is written back so agents can read the world.
-
-### Agent actions
-
-| Command | Description |
-|---------|-------------|
-| `termlings action walk <x>,<y>` | Walk avatar to coordinates (A* pathfinding) |
-| `termlings action map` | Structured map with rooms, agents, distances, door connections |
-| `termlings action map --ascii` | ASCII grid view (use `--large` for bigger view) |
-| `termlings action map --sessions` | Quick session ID list |
-| `termlings action send <session-id> <msg>` | Direct message to another agent |
-| `termlings action chat <message>` | Post to sim chat log |
-| `termlings action inbox` | Read pending messages |
-| `termlings action build <type> <x>,<y>` | Build an object (tree, rock, sign, fence, campfire...) |
-| `termlings action destroy <x>,<y>` | Remove an agent-built object |
-| `termlings action talk` | Toggle talk animation |
-| `termlings action gesture --wave` | Wave gesture |
-| `termlings action stop` | Stop current action |
-
-### Sim controls
+## Sim controls
 
 | Key | Action |
 |-----|--------|
@@ -97,42 +60,46 @@ The sim and agents communicate through **file-based IPC** — JSON command files
 | `S` | Toggle sound |
 | `Q` | Quit |
 
+## Game management
+
+```bash
+# Clear all game state for a room
+termlings --clear
+termlings --clear --room village
+
+# Use a different room
+termlings --room village
+termlings claude --room village
+
+# Simple mode (no map, just agent grid with chat)
+termlings --simple
+```
+
 ## Avatar system
 
-Each termling is encoded as a **7-character hex DNA string** that deterministically renders a unique character with hat, eyes, mouth, body, legs, and two independent color hues.
+Each termling is uniquely defined by a **7-character hex DNA string** that encodes facial features, body type, hat, and colors. With ~32 million possible combinations, every termling is different.
+
+See **[AVATARS.md](AVATARS.md)** for complete documentation on:
+- **DNA encoding** — How traits are packed into 7 hex characters
+- **Rendering** — Terminal ANSI, SVG, and framework components
+- **Generation** — Random or name-based DNA
+- **Animation** — Walking, talking, waving, and custom rendering
+
+Quick examples:
 
 ```bash
 # Render a termling by DNA
 npx termlings render 0a3f201
 
 # Render by name (deterministic — same name = same avatar)
-npx termlings render my-agent
+npx termlings render Alice
 
 # Animated
 npx termlings render 0a3f201 --walk --talk
 
 # Export SVG
 npx termlings render 0a3f201 --svg > avatar.svg
-
-# Animated SVG with CSS keyframes
-npx termlings render 0a3f201 --svg --animated --walk
 ```
-
-### DNA encoding
-
-7 traits packed into a single integer using mixed-radix encoding:
-
-| Trait | Variants | Description |
-|-------|----------|-------------|
-| eyes | 11 | normal, wide, close, big, squint, narrow, etc. |
-| mouths | 7 | smile, smirk, narrow, wide variants |
-| hats | 24 | none, tophat, beanie, crown, cap, horns, mohawk, etc. |
-| bodies | 6 | normal, narrow, tapered (each with/without arms) |
-| legs | 6 | biped, quad, tentacles, thin, wide stance |
-| faceHue | 12 | 0-330 degrees in 30-degree steps |
-| hatHue | 12 | independent from face hue |
-
-Total: `12 x 12 x 24 x 8 x 8 x 12 x 12 = 31,850,496` unique termlings.
 
 ## Create an agent
 
@@ -176,6 +143,13 @@ termlings --with codex rusty  # Launch local soul "rusty" with Codex
 ```
 
 Each agent gets a unique session ID and can see other agents on the map, send messages, move around, and interact with the world.
+
+## Documentation
+
+- [AGENTS.md](AGENTS.md) — Complete agent guide (launching, commands, IPC protocol, examples)
+- [AVATARS.md](AVATARS.md) — Avatar system (DNA encoding, rendering, generation, animation)
+- [docs/sim-engine.md](docs/sim-engine.md) — Sim engine architecture and design
+- [docs/engine-api.md](docs/engine-api.md) — Complete engine API reference
 
 ## Framework components
 

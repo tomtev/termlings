@@ -74,11 +74,6 @@ import { readFileSync, writeFileSync, appendFileSync, existsSync } from "fs"
 const roomSlug = process.env.TERMLINGS_ROOM || "default"
 setRoom(roomSlug)
 
-// --- Multiplayer detection ---
-
-const wsUrl = process.env.TERMLINGS_WS_URL || null
-const isMultiplayer = !!wsUrl
-
 // --- CLI args ---
 
 const rawArgs = process.argv.slice(2)
@@ -243,7 +238,6 @@ stdout.write("\x1b[?1049h\x1b[?25l")
 
 function cleanup() {
   saveAgentSessions()
-  if (isMultiplayer && net) net.close()
   cleanupIpc()
   stdout.write("\x1b[?25h\x1b[?1049l")
   process.exit(0)
@@ -437,17 +431,8 @@ function getSelected(): Entity | null {
   return list[selectedIdx] ?? null
 }
 
-let npcs: Entity[] = isMultiplayer ? [] : []
+let npcs: Entity[] = []
 updateCamera()
-
-// --- Multiplayer state ---
-
-let net: import("./engine/net.js").NetClient | null = null
-let myId = ""
-let remotePlayers: Entity[] = []
-let remotePlayerIds = new Map<string, Entity>() // id → entity
-let connectionStatus = isMultiplayer ? "connecting" : ""
-let playerCount = 1
 // --- NPC bubble state ---
 
 const npcBubbles = new Map<Entity, { text: string; expiresAt: number }>()
@@ -489,187 +474,30 @@ let chatMode = false
 let chatBuffer = ""
 const chatMessages: ChatMessage[] = loadChatLog()
 
-// --- Multiplayer setup ---
-
-if (isMultiplayer) {
-  setupMultiplayer()
-}
-
-async function setupMultiplayer() {
-  const { createNetClient } = await import("./engine/net.js")
-  net = createNetClient()
-
-  // Extract name and dna from URL query params
-  const url = new URL(wsUrl!)
-  const urlName = url.searchParams.get("name") || "Anon"
-  const urlDna = url.searchParams.get("dna") || generateRandomDNA()
-
-  net.onOpen(() => {
-    connectionStatus = "connected"
-    net!.send({ t: "join", dna: urlDna, name: urlName })
-  })
-
-  net.onMessage((msg: Record<string, unknown>) => {
-    const t = msg.t as string
-
-    if (t === "init") {
-      myId = msg.id as string
-      updateCamera()
-
-      // Create remote players
-      const players = msg.players as Array<{
-        id: string; name: string; dna: string
-        x: number; y: number; f: number; w: number; tk: number; wv: number
-      }>
-      for (const p of players) {
-        addRemotePlayer(p)
-      }
-
-      // Sync NPC states from server
-      const npcStates = msg.npcs as Array<{
-        i: number; x: number; y: number; f: number; w: number; tk: number; wv: number
-      }>
-      syncNpcsFromServer(npcStates)
-
-      playerCount = remotePlayers.length + 1
-    }
-
-    if (t === "pjoin") {
-      const p = msg.player as {
-        id: string; name: string; dna: string
-        x: number; y: number; f: number; w: number; tk: number; wv: number
-      }
-      addRemotePlayer(p)
-      playerCount = remotePlayers.length + 1
-    }
-
-    if (t === "pleave") {
-      const id = msg.id as string
-      const entity = remotePlayerIds.get(id)
-      if (entity) {
-        remotePlayers = remotePlayers.filter(e => e !== entity)
-        remotePlayerIds.delete(id)
-      }
-      playerCount = remotePlayers.length + 1
-    }
-
-    if (t === "pmv") {
-      const id = msg.id as string
-      const entity = remotePlayerIds.get(id)
-      if (entity) {
-        entity.x = msg.x as number
-        entity.y = msg.y as number
-        entity.flipped = (msg.f as number) === 1
-        entity.walking = true
-      }
-    }
-
-    if (t === "pan") {
-      const id = msg.id as string
-      const entity = remotePlayerIds.get(id)
-      if (entity) {
-        entity.walking = (msg.w as number) === 1
-        entity.talking = (msg.tk as number) === 1
-        entity.waving = (msg.wv as number) === 1
-        if (entity.waving && entity.waveFrame === 0) entity.waveFrame = 1
-        if (!entity.waving) entity.waveFrame = 0
-      }
-    }
-
-    if (t === "chat") {
-      const senderId = msg.id as string
-      const senderName = msg.name as string
-      const text = msg.text as string
-      const senderEntity = remotePlayerIds.get(senderId)
-      const fg: RGB = senderEntity?.faceRgb ?? [200, 200, 200]
-      chat(senderName, text, fg)
-    }
-
-    if (t === "tick") {
-      const npcStates = msg.npcs as Array<{
-        i: number; x: number; y: number; f: number; w: number; tk: number; wv: number
-      }>
-      syncNpcsFromServer(npcStates)
-    }
-  })
-
-  net.onClose(() => {
-    connectionStatus = "disconnected"
-  })
-
-  net.connect(wsUrl!)
-}
-
-function addRemotePlayer(p: {
-  id: string; name: string; dna: string
-  x: number; y: number; f: number; w: number; tk: number; wv: number
-}) {
-  const h = spriteHeight(p.dna)
-  const entity = makeEntity(p.dna, p.x, p.y, zoomLevel, {
-    walking: p.w === 1,
-    talking: p.tk === 1,
-    waving: p.wv === 1,
-    flipped: p.f === 1,
-  })
-  entity.name = p.name
-  remotePlayers.push(entity)
-  remotePlayerIds.set(p.id, entity)
-}
-
-function syncNpcsFromServer(npcStates: Array<{
-  i: number; x: number; y: number; f: number; w: number; tk: number; wv: number
-}>) {
-  // Ensure we have enough NPC entities
-  while (npcs.length < npcStates.length) {
-    const dna = generateRandomDNA()
-    const e = makeEntity(dna, 0, 0, zoomLevel, { idle: true })
-    e.name = NPC_NAMES[npcs.length % NPC_NAMES.length]
-    npcs.push(e)
-  }
-
-  for (const state of npcStates) {
-    const npc = npcs[state.i]
-    if (!npc) continue
-    npc.x = state.x
-    npc.y = state.y
-    npc.flipped = state.f === 1
-    npc.walking = state.w === 1
-    npc.talking = state.tk === 1
-    npc.waving = state.wv === 1
-    if (npc.waving && npc.waveFrame === 0) npc.waveFrame = 1
-    if (!npc.waving) npc.waveFrame = 0
-    npc.idle = !npc.walking && !npc.talking && !npc.waving
-  }
-}
-
 // --- Input ---
 
 const stdin = process.stdin
-stdin.setRawMode!(true)
+if (stdin.setRawMode) stdin.setRawMode(true)
 stdin.resume()
 stdin.setEncoding("utf8")
 
 function sendChat() {
   const text = chatBuffer.trim()
   if (!text) return
-  if (isMultiplayer && net) {
-    net.send({ t: "chat", text })
-  } else {
-    // Deliver to selected agent via IPC
-    const sel = getSelected()
-    let targetName: string | null = null
-    if (sel) {
-      let targetSessionId: string | null = null
-      agentSessions.forEach((session, sessionId) => {
-        if (session.entity === sel) { targetSessionId = sessionId; targetName = session.entity.name || sessionId }
-      })
-      if (targetSessionId) {
-        writeMessages(targetSessionId, [{ from: "spectator", fromName: "Spectator", text, ts: Date.now() }])
-      }
+  // Deliver to selected agent via IPC
+  const sel = getSelected()
+  let targetName: string | null = null
+  if (sel) {
+    let targetSessionId: string | null = null
+    agentSessions.forEach((session, sessionId) => {
+      if (session.entity === sel) { targetSessionId = sessionId; targetName = session.entity.name || sessionId }
+    })
+    if (targetSessionId) {
+      writeMessages(targetSessionId, [{ from: "spectator", fromName: "Spectator", text, ts: Date.now() }])
     }
-    const label = targetName ? `You → ${targetName}` : "You"
-    chat(label, text, [180, 180, 180])
   }
+  const label = targetName ? `You → ${targetName}` : "You"
+  chat(label, text, [180, 180, 180])
 }
 
 function selectEntity(idx: number) {
@@ -740,7 +568,7 @@ const simOnKey = (ch: string) => {
     toggleSound()
   } else if (ch === "z") {
     zoomLevel = zoomLevel === 0 ? 1 : 0
-    const allEntities: Entity[] = isMultiplayer ? [...npcs, ...remotePlayers] : [...npcs]
+    const allEntities: Entity[] = [...npcs]
     agentSessions.forEach(s => allEntities.push(s.entity))
     for (const e of allEntities) {
       const oldH = e.height
@@ -805,7 +633,6 @@ let fpsValue = 0
 let fpsLastTime = Date.now()
 
 function updateNpcAI() {
-  if (isMultiplayer) return // Server handles NPC AI
   if (tick % 6 !== 0) return // NPCs step every 6 ticks (matching old move rate)
 
   for (const npc of npcs) {
@@ -906,7 +733,6 @@ function spawnAgentEntity(sessionId: string, cmd: AgentCommand): Entity {
 }
 
 function processAgentCommands() {
-  if (isMultiplayer) return
   if (tick % 30 !== 0) return // Poll every 30 ticks (~0.5s)
 
   const commands = pollCommands()
@@ -1090,7 +916,6 @@ function processAgentCommands() {
 }
 
 function updateAgentAI() {
-  if (isMultiplayer) return
   if (tick % 6 !== 0) return
 
   agentSessions.forEach((session) => {
@@ -1102,7 +927,6 @@ function updateAgentAI() {
 }
 
 function writeSimState() {
-  if (isMultiplayer) return
   if (tick % 120 !== 0) return // Every ~2s
   saveAgentSessions()
 
@@ -1173,13 +997,6 @@ function buildHud(): { text: string; active?: boolean; fg?: RGB }[] {
     { text: " | Q: quit " },
   )
 
-  if (isMultiplayer) {
-    hud.push(
-      { text: `| ${playerCount} player${playerCount !== 1 ? "s" : ""} ` },
-      { text: `| ${connectionStatus} ` },
-    )
-  }
-
   return hud
 }
 
@@ -1196,16 +1013,15 @@ function stampDebug(e: Entity) {
   const scale = tileScaleX(zoomLevel)
   const footY = e.y + e.height - 1 - cameraY
 
-  if (footY < 0 || footY >= rows) return
+  if (footY < 0 || footY >= rows || !buffer[footY]) return
   const bufRow = buffer[footY]!
   for (let dx = 1; dx < 8; dx++) {
     const baseSx = (e.x + dx - cameraX) * scale
     for (let ci = 0; ci < scale; ci++) {
       const sx = baseSx + ci
       if (sx < 0 || sx >= cols) continue
-      const c = bufRow[sx]!
-      if (c.ch === " ") c.ch = "·"
-      c.fg = _debugFg; c.bg = _debugBg
+      const c = bufRow[sx]
+      if (c) { if (c.ch === " ") c.ch = "·"; c.fg = _debugFg; c.bg = _debugBg }
     }
   }
 }
@@ -1231,12 +1047,6 @@ function rebuildEntityArrays() {
   for (let i = 0; i < npcs.length; i++) {
     _allEntities.push(npcs[i]!)
     _doorEntities.push(npcs[i]!) // NPCs trigger door opening too
-  }
-  if (isMultiplayer) {
-    for (let i = 0; i < remotePlayers.length; i++) {
-      _allEntities.push(remotePlayers[i]!)
-      _doorEntities.push(remotePlayers[i]!)
-    }
   }
   agentSessions.forEach((session) => {
     _allEntities.push(session.entity)
@@ -1318,12 +1128,9 @@ function frame() {
     selLabels.set(selList[i]!, ` (${i + 1})`)
   }
 
-  // For names, iterate npcs + remotePlayers + agents directly (no allocation)
+  // For names, iterate npcs + agents directly (no allocation)
   // Spectator mode: pass null so all names are shown
   stampNames(buffer, cols, rows, npcs, null, cameraX, cameraY, scale, config.nameProximity, selLabels)
-  if (isMultiplayer) {
-    stampNames(buffer, cols, rows, remotePlayers, null, cameraX, cameraY, scale, config.nameProximity, selLabels)
-  }
   if (agentSessions.size > 0) {
     const agentEntities: Entity[] = []
     agentSessions.forEach(s => agentEntities.push(s.entity))
@@ -1353,20 +1160,14 @@ function frame() {
   if (debugMode) {
     for (let sy = 0; sy < rows; sy++) {
       const ty = sy + cameraY
-      if (ty < 0 || ty >= mapHeight) continue
+      if (ty < 0 || ty >= mapHeight || !buffer[sy]) continue
       const bufRow = buffer[sy]!
       for (let sx = 0; sx < cols; sx++) {
         const tx = Math.floor(sx / scale) + cameraX
         if (tx < 0 || tx >= mapWidth) continue
         if (!isWalkable(tiles, tileDefs, mapWidth, mapHeight, tx, ty, furnitureOverlay)) {
-          const c = bufRow[sx]!
-          if (c.ch === " ") c.ch = "░"
-          const isFurniture = furnitureOverlay.walkable.has(tileKey(tx, ty))
-          if (isFurniture) {
-            c.fg = _debugFurFg; c.bg = _debugFurBg
-          } else {
-            c.fg = c.fg ?? _debugWallFg; c.bg = _debugWallBg
-          }
+          const c = bufRow[sx]
+          if (c) { if (c.ch === " ") c.ch = "░"; const isFurniture = furnitureOverlay.walkable.has(tileKey(tx, ty)); if (isFurniture) { c.fg = _debugFurFg; c.bg = _debugFurBg } else { c.fg = c.fg ?? _debugWallFg; c.bg = _debugWallBg } }
         }
       }
     }

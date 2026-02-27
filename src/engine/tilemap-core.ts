@@ -139,7 +139,7 @@ export function stampTiles(
 
   for (let sy = 0; sy < rows; sy++) {
     const ty = sy + cameraY
-    if (ty < 0 || ty >= mapHeight) continue
+    if (ty < 0 || ty >= mapHeight || !tiles[ty]) continue
     const tileRow = tiles[ty]!
     const bufRow = buffer[sy]!
     let lastTx = -1 // deduplicate tile lookups across scaled columns

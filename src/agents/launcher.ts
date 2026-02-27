@@ -85,8 +85,11 @@ export async function launchLocalAgent(
   if (!termlingOpts.dna && localAgent.soul?.dna) {
     termlingOpts.dna = localAgent.soul.dna
   }
+  if (!termlingOpts.purpose && localAgent.soul?.purpose) {
+    termlingOpts.purpose = localAgent.soul.purpose
+  }
 
-  return launchAgent(adapter, passthroughArgs, termlingOpts)
+  return launchAgent(adapter, passthroughArgs, termlingOpts, localAgent.soul)
 }
 
 /**
@@ -97,10 +100,11 @@ export async function launchAgent(
   adapter: AgentAdapter,
   passthroughArgs: string[],
   termlingOpts: Record<string, string>,
+  soulData?: { name: string; purpose: string; dna: string; command?: string },
 ): Promise<never> {
   const sessionId = `tl-${randomBytes(4).toString("hex")}`
   const context = loadContext()
-  const soul = parseSoul()
+  const soul = soulData || parseSoul()
 
   const agentName = termlingOpts.name || soul.name || pickRandomName()
   // Generate random DNA if not provided
@@ -164,6 +168,21 @@ export async function launchAgent(
 
   if (context) {
     let finalContext = context
+
+    // Replace dynamic fields
+    const dynamicFields: Record<string, string> = {
+      NAME: agentName,
+      SESSION_ID: sessionId,
+      DNA: agentDna,
+      ROOM: room,
+      PURPOSE: termlingOpts.purpose || soul.purpose || process.env.TERMLINGS_PURPOSE || "explore and interact",
+    }
+
+    // Replace $FIELD placeholders
+    for (const [field, value] of Object.entries(dynamicFields)) {
+      finalContext = finalContext.replace(new RegExp(`\\$${field}\\b`, "g"), value)
+    }
+
     if (process.env.TERMLINGS_SIMPLE === "1") {
       finalContext += `\n\n## Simple Mode
 

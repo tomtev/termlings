@@ -146,9 +146,9 @@ export function stampDoors(
       const baseSx = (tx - cameraX) * scale
       for (let ci = 0; ci < scale; ci++) {
         const sx = baseSx + ci
-        if (sx < 0 || sx >= cols) continue
-        const bc = buffer[sy]![sx]!
-        bc.ch = "█"; bc.fg = color; bc.bg = null
+        if (sx < 0 || sx >= cols || !buffer[sy]) continue
+        const bc = buffer[sy]![sx]
+        if (bc) { bc.ch = "█"; bc.fg = color; bc.bg = null }
       }
     }
   }

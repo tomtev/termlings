@@ -124,12 +124,12 @@ export function stampBubbles(
 
   // Render each bubble
   for (const b of positioned) {
-    if (b.row < 0 || b.row >= rows) continue
+    if (b.row < 0 || b.row >= rows || !buffer[b.row]) continue
     const bufRow = buffer[b.row]!
     for (let i = 0; i < b.text.length; i++) {
       const sx = b.colStart + i
       if (sx < 0 || sx >= cols) continue
-      const c = bufRow[sx]!; c.ch = b.text[i]!; c.fg = b.fg; c.bg = null
+      const c = bufRow[sx]; if (c) { c.ch = b.text[i]!; c.fg = b.fg; c.bg = null }
     }
   }
 }
@@ -166,12 +166,12 @@ export function stampNames(
     const nameX = Math.round(entityScreenX + spriteScreenW / 2 - nameScreenW / 2)
     const nameY = npc.y - cameraY - 1
 
-    if (nameY < 0 || nameY >= rows) continue
+    if (nameY < 0 || nameY >= rows || !buffer[nameY]) continue
     const bufRow = buffer[nameY]!
     for (let i = 0; i < displayName.length; i++) {
       const sx = nameX + i
       if (sx < 0 || sx >= cols) continue
-      const c = bufRow[sx]!; c.ch = displayName[i]!; c.fg = npc.faceRgb; c.bg = null
+      const c = bufRow[sx]; if (c) { c.ch = displayName[i]!; c.fg = npc.faceRgb; c.bg = null }
     }
   }
 }
