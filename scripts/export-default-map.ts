@@ -1,5 +1,5 @@
 /**
- * Migration script: reads src/default-map/map.txt + hardcoded game data
+ * Migration script: reads src/default-map/map.txt + hardcoded sim data
  * and produces src/default-map/map.json in the unified format.
  *
  * Usage: bun scripts/export-default-map.ts
@@ -16,7 +16,7 @@ const outputPath = join(__dirname, "..", "src", "default-map", "map.json")
 const raw = readFileSync(mapTxtPath, "utf-8")
 const lines = raw.split("\n").filter(l => l.length > 0)
 
-// --- NPC names (same order as game.ts) ---
+// --- NPC names (same order as sim.ts) ---
 
 const NPC_NAMES = [
   "Pip", "Mox", "Zara", "Kip", "Luna", "Remy", "Fern", "Ash",
@@ -83,7 +83,7 @@ for (const [key, def] of Object.entries(DEFAULT_TILE_DEFS)) {
   tiles[key] = entry
 }
 
-// --- Furniture placements (from game.ts hardcoded data) ---
+// --- Furniture placements (from sim.ts hardcoded data) ---
 
 const placements = [
   { object: "sofa_large", x: 3, y: 2 },
@@ -102,7 +102,7 @@ const placements = [
   { object: "bookshelf", x: 165, y: 66 },
 ]
 
-// --- Door definitions (from game.ts hardcoded data) ---
+// --- Door definitions (from sim.ts hardcoded data) ---
 // Wood color for all doors, full corridor width
 
 type RGB = [number, number, number]

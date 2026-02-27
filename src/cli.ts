@@ -108,7 +108,9 @@ Commands:
   talk                       Toggle talk animation
   gesture --wave             Wave gesture
   stop                       Stop current action
-  map                        Show ASCII map with entity positions
+  map                        Structured map with rooms, agents, distances
+  map --ascii [--large]      ASCII grid (--large for bigger view)
+  map --sessions             Quick session ID list
   chat <message>             Post to sim chat log (visible to owner)
   send <session-id> <msg>    Direct message to a specific agent
   inbox                      Read messages from other agents
@@ -188,10 +190,11 @@ Commands:
   }
 
   if (verb === "map") {
-    const { readState } = await import("./engine/ipc.js");
-    const { allocBuffer, clearBuffer, renderBuffer, stampEntity } = await import("./engine/renderer.js");
-    const { makeEntity } = await import("./engine/entity.js");
-    const { getTileColor, getTileChar } = await import("./engine/map-renderer.js");
+    const { readState, IPC_DIR } = await import("./engine/ipc.js");
+    const { FURNITURE_DEFS } = await import("./engine/furniture.js");
+    const { describeRelative } = await import("./engine/room-detect.js");
+    const { readFileSync, existsSync } = await import("fs");
+    const { join } = await import("path");
 
     const state = readState();
     if (!state) {
@@ -224,17 +227,27 @@ Commands:
       process.exit(0);
     }
 
-    const { width, height, name, tiles } = state.map;
+    const { width, height, name, tiles, rooms: stateRooms } = state.map;
     const mySessionId = process.env.TERMLINGS_SESSION_ID;
-    const fullMap = flags.has("full");
 
     // Find "me" for centering the local view
     const me = state.entities.find(e => e.sessionId === mySessionId);
     const centerX = me ? me.x : (state.entities[0]?.x ?? Math.floor(width / 2));
     const centerY = me ? me.footY : (state.entities[0]?.footY ?? Math.floor(height / 2));
 
-    if (fullMap) {
-      // ASCII overview mode (existing behavior)
+    // Helper: find which room a coordinate is in
+    type StateRoom = NonNullable<typeof stateRooms>[number];
+    function findRoom(x: number, y: number): StateRoom | null {
+      if (!stateRooms) return null;
+      for (const r of stateRooms) {
+        const b = r.bounds;
+        if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) return r;
+      }
+      return null;
+    }
+
+    // --- ASCII mode (--ascii flag) ---
+    if (flags.has("ascii")) {
       const tileChar: Record<string, string> = {
         " ": " ", ".": "·", ",": ",", "#": "#", "B": "#", "W": "#", "G": "#",
         "T": "T", "~": "~", "D": "D", "e": ".", "p": ".", "n": ".", "h": ".",
@@ -242,9 +255,9 @@ Commands:
         "P": ".", "S": ".",
       };
 
-      // Local view: 1:1 scale, 70 wide x 30 tall centered on caller
-      const viewW = 70;
-      const viewH = 30;
+      const largeMap = flags.has("large");
+      const viewW = largeMap ? 140 : 70;
+      const viewH = largeMap ? 60 : 30;
       const x0 = Math.max(0, Math.min(centerX - Math.floor(viewW / 2), width - viewW));
       const y0 = Math.max(0, Math.min(centerY - Math.floor(viewH / 2), height - viewH));
 
@@ -259,33 +272,76 @@ Commands:
         })
       );
 
-      // Convert door markers to - or | based on neighbor orientation
+      // Convert door markers to [door] label
       for (let vy = 0; vy < viewH; vy++) {
         for (let vx = 0; vx < viewW; vx++) {
           if (grid[vy]![vx] !== "D") continue;
-          // Check if horizontal (neighbor door left or right) or vertical
           const leftDoor = vx > 0 && grid[vy]![vx - 1] === "D";
-          const rightDoor = vx < viewW - 1 && grid[vy]![vx + 1] === "D";
-          if (leftDoor || rightDoor) {
-            grid[vy]![vx] = "-";
+          const upDoor = vy > 0 && grid[vy - 1]![vx] === "D";
+          if (!leftDoor && !upDoor) {
+            const label = "[door]";
+            for (let c = 0; c < label.length; c++) {
+              if (vx + c < viewW) grid[vy]![vx + c] = label[c]!;
+            }
           } else {
-            grid[vy]![vx] = "|";
+            if (grid[vy]![vx] === "D") grid[vy]![vx] = " ";
           }
         }
       }
 
-      // Place entities — stamp [Name] across the 8-wide foot area
+      // Load agent-built objects from placements.json
+      interface Placement { def: string; x: number; y: number }
+      let placements: Placement[] = [];
+      const placementsFile = join(IPC_DIR, "placements.json");
+      if (existsSync(placementsFile)) {
+        try {
+          placements = JSON.parse(readFileSync(placementsFile, "utf8")) as Placement[];
+        } catch {}
+      }
+
+      const objectLegend: { num: number; name: string; x: number; y: number }[] = [];
+      let objNum = 1;
+      for (const p of placements) {
+        const def = FURNITURE_DEFS[p.def];
+        if (!def) continue;
+        const objW = def.width;
+        const objH = def.height;
+        const vx0 = p.x - x0;
+        const vy0 = p.y - y0;
+        if (vx0 + objW <= 0 || vx0 >= viewW || vy0 + objH <= 0 || vy0 >= viewH) continue;
+
+        const bracketedName = `[${p.def}]`;
+        const bracketedNum = `[${objNum}]`;
+        let label: string;
+        if (objW >= bracketedName.length) {
+          label = bracketedName;
+        } else if (objW >= bracketedNum.length) {
+          label = bracketedNum;
+          objectLegend.push({ num: objNum, name: p.def, x: p.x, y: p.y });
+        } else {
+          label = `${objNum}`;
+          objectLegend.push({ num: objNum, name: p.def, x: p.x, y: p.y });
+        }
+        objNum++;
+
+        const startCol = vx0 + Math.max(0, Math.floor((objW - label.length) / 2));
+        const stampY = Math.max(0, vy0);
+        if (stampY >= viewH) continue;
+        for (let c = 0; c < label.length; c++) {
+          const gx = startCol + c;
+          if (gx >= 0 && gx < viewW) grid[stampY]![gx] = label[c]!;
+        }
+      }
+
+      // Place entities
       for (let i = 0; i < state.entities.length; i++) {
         const e = state.entities[i]!;
-        const footLeft = e.x + 1 - x0; // foot spans x+1..x+7
+        const footLeft = e.x + 1 - x0;
         const gy = e.footY - y0;
         if (gy < 0 || gy >= viewH) continue;
-
-        const name = e.name || "???";
-        // Build label: [ Name ] padded to 7 chars
-        const inner = name.length <= 5 ? name.padStart(Math.ceil((5 + name.length) / 2)).padEnd(5) : name.slice(0, 5);
-        const label = `[${inner}]`; // 7 chars total
-
+        const eName = e.name || "???";
+        const inner = eName.length <= 5 ? eName.padStart(Math.ceil((5 + eName.length) / 2)).padEnd(5) : eName.slice(0, 5);
+        const label = `[${inner}]`;
         for (let c = 0; c < 7; c++) {
           const gx = footLeft + c;
           if (gx < 0 || gx >= viewW) continue;
@@ -293,75 +349,149 @@ Commands:
         }
       }
 
-      for (const row of grid) {
-        console.log(row.join(""));
-      }
+      for (const row of grid) console.log(row.join(""));
 
-      // Entity list
       console.log();
       console.log("Agents:");
       for (let i = 0; i < state.entities.length; i++) {
         const e = state.entities[i]!;
         const status = e.idle ? "idle" : "active";
         const isMe = e.sessionId === mySessionId;
-        const name = e.name || "???";
-        console.log(`  [${name.padEnd(5).slice(0, 5)}]  ${name.padEnd(14)} ${e.sessionId.padEnd(16)} (${e.x + 4}, ${e.footY}) [${status}]${isMe ? " (you)" : ""}`);
+        const eName = e.name || "???";
+        console.log(`  [${eName.padEnd(5).slice(0, 5)}]  ${eName.padEnd(14)} ${e.sessionId.padEnd(16)} (${e.x + 4}, ${e.footY}) [${status}]${isMe ? " (you)" : ""}`);
       }
 
-      console.log();
-      console.log("Legend: [Name] = agent footprint");
-      console.log("        # = wall  T = tree  ~ = water  , = grass  · = path  -| = door");
-    } else {
-      // Colored local view mode (default)
-      const viewW = 80;
-      const viewH = 24;
-      const x0 = Math.max(0, Math.min(centerX - Math.floor(viewW / 2), width - viewW));
-      const y0 = Math.max(0, Math.min(centerY - Math.floor(viewH / 2), height - viewH));
-
-      const buffer = allocBuffer(viewW, viewH);
-      clearBuffer(buffer, viewW, viewH);
-
-      // Draw terrain with colors
-      for (let vy = 0; vy < viewH; vy++) {
-        for (let vx = 0; vx < viewW; vx++) {
-          const wx = x0 + vx;
-          const wy = y0 + vy;
-          if (wx < 0 || wx >= width || wy < 0 || wy >= height) continue;
-
-          const tile = tiles?.[wy]?.[wx] ?? " ";
-          const color = getTileColor(tile);
-          const char = getTileChar(tile);
-
-          if (buffer[vy] && buffer[vy]![vx]) {
-            buffer[vy]![vx]!.ch = char;
-            buffer[vy]![vx]!.fg = color;
-          }
+      if (objectLegend.length > 0) {
+        console.log();
+        console.log("Objects:");
+        for (const obj of objectLegend) {
+          console.log(`  [${obj.num}] ${obj.name.padEnd(14)} (${obj.x}, ${obj.y})`);
         }
       }
 
-      // Stamp all entities (create proper Entity objects from state data)
-      for (const e of state.entities) {
-        const entity = makeEntity(e.dna, e.x, e.y, 0, { idle: e.idle });
-        entity.name = e.name;
-        stampEntity(buffer, viewW, viewH, entity, x0, y0, 1);
-      }
-
-      // Render and output
-      const ansiOutput = renderBuffer(buffer, viewW, viewH);
-      process.stdout.write(ansiOutput);
-
-      // Print entity list below the map
-      console.log(`\nMap: ${name || "unknown"} (${width}x${height})  View: (${x0},${y0}) to (${x0 + viewW},${y0 + viewH})`);
-      console.log("\nAgents:");
-      for (let i = 0; i < state.entities.length; i++) {
-        const e = state.entities[i]!;
-        const status = e.idle ? "idle" : "active";
-        const isMe = e.sessionId === mySessionId;
-        const name = e.name || "???";
-        console.log(`  ${name.padEnd(14)} ${e.sessionId.padEnd(16)} (${e.x}, ${e.footY}) [${status}]${isMe ? " (you)" : ""}`);
-      }
-      console.log("\nUse --full for overview map");
+      console.log();
+      console.log("Legend: [Name] = agent  # = wall  T = tree  ~ = water  , = grass  · = path  [door] = door");
+      if (!flags.has("large")) console.log("Use --large for a bigger view");
+      process.exit(0);
     }
+
+    // --- Structured output (default) ---
+
+    const myRoom = me ? findRoom(me.x + 4, me.footY) : null;
+    const myX = me ? me.x + 4 : centerX;
+    const myY = me ? me.footY : centerY;
+
+    // Header
+    console.log(`Map: ${name || "unknown"} (${width}x${height})`);
+    if (me) {
+      const roomLabel = myRoom ? `in ${myRoom.wallType} room (room${myRoom.id})` : "outdoors";
+      console.log(`You: (${myX}, ${myY}) — ${roomLabel}`);
+    }
+
+    // Rooms section
+    if (stateRooms && stateRooms.length > 0) {
+      console.log();
+      console.log(`Rooms (${stateRooms.length}):`);
+      for (const r of stateRooms) {
+        const b = r.bounds;
+        // Group doors by direction+target to avoid listing 8 individual door tiles
+        const doorGroups = new Map<string, { dir: string; target: string; count: number; x: number; y: number }>();
+        for (const d of r.doors) {
+          let dir = "";
+          if (d.x <= b.x) dir = "west";
+          else if (d.x >= b.x + b.w - 1) dir = "east";
+          else if (d.y <= b.y) dir = "north";
+          else dir = "south";
+          const target = d.toRoom ? `room${d.toRoom}` : "outside";
+          const key = `${dir}-${target}`;
+          const existing = doorGroups.get(key);
+          if (existing) {
+            existing.count++;
+          } else {
+            doorGroups.set(key, { dir, target, count: 1, x: d.x, y: d.y });
+          }
+        }
+        const doorParts: string[] = [];
+        for (const g of doorGroups.values()) {
+          doorParts.push(`${g.dir}(${g.x},${g.y})->${g.target}`);
+        }
+        const doorsStr = doorParts.length > 0 ? `  doors: ${doorParts.join(" ")}` : "";
+        console.log(`  room${String(r.id).padEnd(4)} ${r.wallType.padEnd(6)} (${b.x},${b.y})-(${b.x + b.w},${b.y + b.h})${doorsStr}`);
+      }
+    }
+
+    // Agents section
+    console.log();
+    console.log("Agents:");
+    for (const e of state.entities) {
+      const status = e.idle ? "idle" : "active";
+      const isMe = e.sessionId === mySessionId;
+      const eName = e.name || "???";
+      const ex = e.x + 4;
+      const ey = e.footY;
+      const eRoom = findRoom(ex, ey);
+      const roomLabel = eRoom ? `room${eRoom.id}` : "outdoors";
+      const rel = isMe ? "(you)" : describeRelative(myX, myY, ex, ey);
+      console.log(`  ${eName.padEnd(10)} ${e.sessionId.padEnd(16)} (${ex},${ey})  ${status.padEnd(6)}  ${roomLabel.padEnd(10)}  ${rel}`);
+    }
+
+    // Objects section
+    interface Placement { def: string; x: number; y: number }
+    let placements: Placement[] = [];
+    const placementsFile = join(IPC_DIR, "placements.json");
+    if (existsSync(placementsFile)) {
+      try {
+        placements = JSON.parse(readFileSync(placementsFile, "utf8")) as Placement[];
+      } catch {}
+    }
+
+    if (placements.length > 0) {
+      console.log();
+      console.log("Objects:");
+      for (const p of placements) {
+        const oRoom = findRoom(p.x, p.y);
+        const roomLabel = oRoom ? `room${oRoom.id}` : "outdoors";
+        console.log(`  ${p.def.padEnd(16)} (${p.x},${p.y})  ${roomLabel}`);
+      }
+    }
+
+    // Nearby doors from "me"
+    if (me && stateRooms && stateRooms.length > 0) {
+      const allDoors: { x: number; y: number; toRoom: number | null; fromRoom: number }[] = [];
+      for (const r of stateRooms) {
+        for (const d of r.doors) {
+          allDoors.push({ ...d, fromRoom: r.id });
+        }
+      }
+      // Sort by distance from me
+      allDoors.sort((a, b) => {
+        const da = Math.abs(a.x - myX) + Math.abs(a.y - myY);
+        const db = Math.abs(b.x - myX) + Math.abs(b.y - myY);
+        return da - db;
+      });
+      // Show closest 5 unique doors
+      const shown = new Set<string>();
+      const nearby: typeof allDoors = [];
+      for (const d of allDoors) {
+        const key = `${d.x},${d.y}`;
+        if (shown.has(key)) continue;
+        shown.add(key);
+        nearby.push(d);
+        if (nearby.length >= 5) break;
+      }
+      if (nearby.length > 0) {
+        console.log();
+        console.log("Nearby doors:");
+        for (const d of nearby) {
+          const target = d.toRoom ? `room${d.toRoom}` : "outside";
+          const rel = describeRelative(myX, myY, d.x, d.y);
+          console.log(`  (${d.x},${d.y}) -> ${target.padEnd(10)}  ${rel}`);
+        }
+      }
+    }
+
+    console.log();
+    console.log("Use --ascii for visual map, --sessions for session IDs only");
     process.exit(0);
   }
 

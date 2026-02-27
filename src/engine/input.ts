@@ -1,4 +1,4 @@
-import type { GameConfig } from "./types.js"
+import type { SimConfig } from "./types.js"
 
 export interface InputState {
   lastPressTime: Record<string, number>
@@ -7,7 +7,7 @@ export interface InputState {
   moveInterval: number
 }
 
-export function createInputState(config: GameConfig): InputState {
+export function createInputState(config: SimConfig): InputState {
   return {
     lastPressTime: { up: 0, down: 0, left: 0, right: 0 },
     pending: { up: false, down: false, left: false, right: false },

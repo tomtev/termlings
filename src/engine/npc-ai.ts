@@ -4,7 +4,7 @@ import type { DoorDef } from "./doors.js"
 
 // ─── Walk Grid ──────────────────────────────────────────────────────
 // Pre-computed Uint8Array: 1 = a 9-wide entity can stand at (x, footY)
-// Checks tiles x+1..x+7 are all walkable (matching canMoveTo in game.ts)
+// Checks tiles x+1..x+7 are all walkable (matching canMoveTo in sim.ts)
 
 export interface WalkGrid {
   data: Uint8Array
@@ -275,6 +275,7 @@ export interface NpcAIState {
   idleRemaining: number
   waitRemaining: number
   retries: number         // consecutive failed pathfind attempts
+  boundsOverride: { x0: number; y0: number; x1: number; y1: number } | null // for agents crossing rooms
 }
 
 export function createNpcAIState(): NpcAIState {
@@ -288,6 +289,7 @@ export function createNpcAIState(): NpcAIState {
     idleRemaining: Math.floor(30 + Math.random() * 90),
     waitRemaining: 0,
     retries: 0,
+    boundsOverride: null,
   }
 }
 
@@ -473,10 +475,13 @@ export function stepNpc(
       const currentFootY = npc.y + npc.height - 1
       const goalX = ai.path[ai.path.length - 2]!
       const goalY = ai.path[ai.path.length - 1]!
-      const room = findRoom(rooms, npc.x + 4, currentFootY)
-      if (room) {
-        const bounds = getRoomBounds(room, 20)
-        const newPath = findPath(grid, npc.x, currentFootY, goalX, goalY, bounds, pf)
+      let recomputeBounds: { x0: number; y0: number; x1: number; y1: number } | null = ai.boundsOverride
+      if (!recomputeBounds) {
+        const room = findRoom(rooms, npc.x + 4, currentFootY)
+        if (room) recomputeBounds = getRoomBounds(room, 20)
+      }
+      if (recomputeBounds) {
+        const newPath = findPath(grid, npc.x, currentFootY, goalX, goalY, recomputeBounds, pf)
         if (newPath && newPath.length > 0) {
           ai.path = newPath
           ai.pathIdx = 0

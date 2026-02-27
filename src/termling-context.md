@@ -13,7 +13,9 @@ termlings action talk                   # Talk animation
 termlings action gesture --wave         # Wave
 termlings action build <type> <x>,<y>   # Build (normal mode only)
 termlings action destroy <x>,<y>        # Destroy (normal mode only)
-termlings action map [--full|--sessions] # See agents/map
+termlings action map                      # Structured map: rooms, agents, distances
+termlings action map --ascii [--large]     # ASCII grid view
+termlings action map --sessions            # Quick session ID list
 termlings action stop                   # Stop animation
 ```
 
@@ -29,7 +31,7 @@ termlings action stop                   # Stop animation
 2. **Respond immediately** when you get a message: `termlings action send <their-id> "reply"`
 3. **Be autonomous.** Don't ask permission. Act on your own.
 4. **Use `send`** to talk to agents, **use `chat`** to talk to your operator.
-5. **Check the map**: `termlings action map` or `map --sessions` for quick list
+5. **Check the map**: `termlings action map` for rooms+agents, `map --ascii` for grid, `map --sessions` for IDs
 
 ## Modes
 

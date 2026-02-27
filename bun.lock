@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "termlings",
+      "dependencies": {
+        "termfont": "^0.1.2",
+      },
       "devDependencies": {
         "@opentui/core": "^0.1.82",
         "@opentui/solid": "^0.1.82",
@@ -366,6 +369,8 @@
     "strtok3": ["strtok3@6.3.0", "", { "dependencies": { "@tokenizer/token": "^0.3.0", "peek-readable": "^4.1.0" } }, "sha512-fZtbhtvI9I48xDSywd/somNqgUHl2L2cstmXCCif0itOf96jeW18MBSyrLuNicYQVkvpOxkZtkzujiTJ9LW5Jw=="],
 
     "supports-preserve-symlinks-flag": ["supports-preserve-symlinks-flag@1.0.0", "", {}, "sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w=="],
+
+    "termfont": ["termfont@0.1.2", "", { "bin": { "termfont": "bin/termfont.js" } }, "sha512-+v3phLE/NhjqWjJZdMEs7ffh7sc29RdO2Kfcutxjow8tuUm5S1GiYagLY3UFJfvuPnpZWYYgFO3SRl/2nZwxlg=="],
 
     "three": ["three@0.177.0", "", {}, "sha512-EiXv5/qWAaGI+Vz2A+JfavwYCMdGjxVsrn3oBwllUoqYeaBO75J63ZfyaQKoiLrqNHoTlUc6PFgMXnS0kI45zg=="],
 

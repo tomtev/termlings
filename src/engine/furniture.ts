@@ -33,6 +33,25 @@ const SHELF: RGB = [70, 45, 25]     // bookshelf frame
 const GRAY: RGB = [55, 55, 60]      // office chair frame
 const GRAY_S: RGB = [70, 70, 75]    // office chair seat
 
+// Natural / buildable colors
+const LEAF: RGB = [40, 130, 50]     // tree foliage
+const LEAF_D: RGB = [30, 100, 40]   // darker foliage
+const TRUNK: RGB = [100, 65, 30]    // tree trunk
+const TRUNK_D: RGB = [80, 50, 20]   // trunk base (darker)
+const PINE: RGB = [25, 90, 35]      // pine needles
+const PINE_D: RGB = [18, 70, 28]    // dark pine
+const STONE: RGB = [120, 120, 125]  // rock surface
+const STONE_D: RGB = [90, 90, 95]   // rock base
+const FENCE: RGB = [140, 100, 50]   // fence planks
+const SIGN_F: RGB = [160, 130, 70]  // sign face
+const SIGN_P: RGB = [100, 70, 35]   // sign post
+const FLAME: RGB = [230, 140, 30]   // campfire flames
+const FLAME_D: RGB = [200, 80, 20]  // campfire ember
+const STONE_R: RGB = [100, 100, 105] // campfire ring stones
+const FLOWER_P: RGB = [220, 80, 120] // pink flower
+const FLOWER_Y: RGB = [240, 210, 50] // yellow flower
+const FLOWER_B: RGB = [100, 140, 220] // blue flower
+
 // Shorthand: frame block, seat block, visual-only, null
 const F = (fg: RGB) => c("█", fg, null, false)         // solid, blocks
 const S = (fg: RGB) => c("█", fg, null, true)           // walkable seat
@@ -118,6 +137,108 @@ export const FURNITURE_DEFS: Record<string, FurnitureDef> = {
       [V(GRAY), S(GRAY_S), V(GRAY)],
       // front (open)
       [_, _, _],
+    ],
+  },
+
+  // --- Natural / buildable objects ---
+
+  tree: {
+    name: "tree",
+    width: 5,
+    height: 5,
+    cells: [
+      // canopy row 1 (visual only — walk behind)
+      [_, V(LEAF), V(LEAF), V(LEAF), _],
+      // canopy row 2
+      [V(LEAF), V(LEAF_D), V(LEAF), V(LEAF_D), V(LEAF)],
+      // canopy row 3
+      [V(LEAF), V(LEAF), V(LEAF_D), V(LEAF), V(LEAF)],
+      // trunk (visual only)
+      [_, _, V(TRUNK), _, _],
+      // trunk base (blocking)
+      [_, _, F(TRUNK_D), _, _],
+    ],
+  },
+  pine_tree: {
+    name: "pine_tree",
+    width: 3,
+    height: 6,
+    cells: [
+      // tip (visual only)
+      [_, V(PINE), _],
+      // upper needles
+      [V(PINE), V(PINE_D), V(PINE)],
+      // mid needles
+      [V(PINE_D), V(PINE), V(PINE_D)],
+      // lower needles
+      [V(PINE), V(PINE_D), V(PINE)],
+      // trunk (visual only)
+      [_, V(TRUNK), _],
+      // trunk base (blocking)
+      [_, F(TRUNK_D), _],
+    ],
+  },
+  rock: {
+    name: "rock",
+    width: 3,
+    height: 2,
+    cells: [
+      // top (visual only — walk behind)
+      [V(STONE), V(STONE), V(STONE)],
+      // base (blocking)
+      [F(STONE_D), F(STONE_D), F(STONE_D)],
+    ],
+  },
+  fence_h: {
+    name: "fence_h",
+    width: 5,
+    height: 1,
+    cells: [
+      // all blocking
+      [F(FENCE), F(FENCE), F(FENCE), F(FENCE), F(FENCE)],
+    ],
+  },
+  fence_v: {
+    name: "fence_v",
+    width: 1,
+    height: 5,
+    cells: [
+      [F(FENCE)],
+      [F(FENCE)],
+      [F(FENCE)],
+      [F(FENCE)],
+      [F(FENCE)],
+    ],
+  },
+  sign: {
+    name: "sign",
+    width: 3,
+    height: 2,
+    cells: [
+      // sign face (visual only — walk behind)
+      [V(SIGN_F), V(SIGN_F), V(SIGN_F)],
+      // post (blocking)
+      [_, F(SIGN_P), _],
+    ],
+  },
+  campfire: {
+    name: "campfire",
+    width: 3,
+    height: 2,
+    cells: [
+      // flames (visual only)
+      [V(FLAME), V(FLAME_D), V(FLAME)],
+      // stone ring (blocking)
+      [F(STONE_R), F(STONE_R), F(STONE_R)],
+    ],
+  },
+  flower_patch: {
+    name: "flower_patch",
+    width: 3,
+    height: 1,
+    cells: [
+      // decorative ground cover (all walkable)
+      [V(FLOWER_P), V(FLOWER_Y), V(FLOWER_B)],
     ],
   },
 }

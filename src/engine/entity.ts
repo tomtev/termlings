@@ -4,7 +4,7 @@ import {
   HATS,
   LEGS,
 } from "../index.js"
-import type { RGB, Cell, Entity, GameConfig } from "./types.js"
+import type { RGB, Cell, Entity, SimConfig } from "./types.js"
 
 export function spriteHeight(dna: string): number {
   return HATS[decodeDNA(dna).hat]!.length + 7
@@ -51,7 +51,7 @@ export function makeEntity(
 export function updateAnimations(
   entities: Entity[],
   tick: number,
-  config: GameConfig,
+  config: SimConfig,
 ) {
   const { walkTicks, talkTicks, waveTicks, idleTicks, blinkChance } = config.animation
   const doWalk = tick % walkTicks === 0
@@ -147,27 +147,33 @@ export function stampBubbles(
   }
 }
 
-/** Show NPC names above heads if player is nearby */
+/** Show NPC names above heads. When player is null (spectator mode), show all names.
+ *  labels: optional map of entity → suffix like " (1)" for selection index */
 export function stampNames(
   buffer: Cell[][],
   cols: number,
   rows: number,
   npcs: Entity[],
-  player: Entity,
+  player: Entity | null,
   cameraX: number,
   cameraY: number,
   scale: number,
   proximity: number,
+  labels?: Map<Entity, string>,
 ) {
   const spriteW = 9
 
   for (const npc of npcs) {
     if (!npc.name) continue
-    const dx = Math.abs((npc.x + 4) - (player.x + 4))
-    const dy = Math.abs((npc.y + npc.height) - (player.y + player.height))
-    if (dx > proximity || dy > proximity) continue
+    if (player) {
+      const dx = Math.abs((npc.x + 4) - (player.x + 4))
+      const dy = Math.abs((npc.y + npc.height) - (player.y + player.height))
+      if (dx > proximity || dy > proximity) continue
+    }
 
-    const nameScreenW = npc.name.length
+    const suffix = labels?.get(npc) ?? ""
+    const displayName = npc.name + suffix
+    const nameScreenW = displayName.length
     const spriteScreenW = spriteW * scale
     const entityScreenX = (npc.x - cameraX) * scale
     const nameX = Math.round(entityScreenX + spriteScreenW / 2 - nameScreenW / 2)
@@ -175,10 +181,10 @@ export function stampNames(
 
     if (nameY < 0 || nameY >= rows) continue
     const bufRow = buffer[nameY]!
-    for (let i = 0; i < npc.name.length; i++) {
+    for (let i = 0; i < displayName.length; i++) {
       const sx = nameX + i
       if (sx < 0 || sx >= cols) continue
-      const c = bufRow[sx]!; c.ch = npc.name[i]!; c.fg = npc.faceRgb; c.bg = null
+      const c = bufRow[sx]!; c.ch = displayName[i]!; c.fg = npc.faceRgb; c.bg = null
     }
   }
 }

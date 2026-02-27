@@ -63,6 +63,8 @@ import {
   findPath,
   type AgentCommand,
   setRoom,
+  detectBuildings,
+  type DetectedRoom,
 } from "./engine/index.js"
 import { resolve, join } from "path"
 import { readFileSync, writeFileSync, appendFileSync, existsSync } from "fs"
@@ -103,6 +105,16 @@ if (mapPath) {
 }
 
 const { tiles, width: mapWidth, height: mapHeight, npcSpawns, playerSpawn, rooms, tileDefs } = world
+
+// --- Room detection (flood-fill with door boundaries) ---
+
+const detectedRoomMap = detectBuildings(tiles, mapWidth, mapHeight, tileDefs)
+const detectedRooms = detectedRoomMap.rooms
+const detectedRoomsSerialized = detectedRooms.map(r => ({
+  id: r.id, wallType: r.wallType,
+  bounds: r.bounds, center: r.center,
+  doors: r.doors,
+}))
 
 // --- Furniture (merge map-defined objects with built-in defs) ---
 
@@ -1123,7 +1135,7 @@ function writeSimState() {
 
   writeState({
     entities,
-    map: { width: mapWidth, height: mapHeight, name: world.name, tiles },
+    map: { width: mapWidth, height: mapHeight, name: world.name, tiles, rooms: detectedRoomsSerialized },
   })
 }
 

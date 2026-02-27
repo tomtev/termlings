@@ -160,7 +160,20 @@ export function renderBuffer(buffer: Cell[][], cols: number, rows: number): Buff
   if (lfr !== -1) { buf[o++] = 0x1b; buf[o++] = 0x5b; buf[o++] = 0x33; buf[o++] = 0x39; buf[o++] = 0x6d }
   if (lbr !== -1) { buf[o++] = 0x1b; buf[o++] = 0x5b; buf[o++] = 0x34; buf[o++] = 0x39; buf[o++] = 0x6d }
 
+  // Park cursor at home to prevent bottom-right-corner scroll
+  buf[o++] = 0x1b; buf[o++] = 0x5b; buf[o++] = 0x48 // \x1b[H
+
   return buf.subarray(0, o)
+}
+
+/** Enter full-screen mode: alternate screen, clear, clear scrollback, disable auto-wrap, hide cursor */
+export function enterScreen(rows: number): string {
+  return `\x1b[?1049h\x1b[2J\x1b[3J\x1b[?7l\x1b[?25l\x1b[1;${rows}r`
+}
+
+/** Exit full-screen mode: reset scroll region, re-enable auto-wrap, show cursor, restore main screen */
+export function exitScreen(): string {
+  return `\x1b[r\x1b[?7h\x1b[?25h\x1b[?1049l`
 }
 
 /** Write unsigned int (0-255) as ASCII digits into buffer */
@@ -391,25 +404,18 @@ export function stampChatMessages(
 
   for (let i = 0; i < recent.length; i++) {
     const msg = recent[recent.length - 1 - i]!
-    const row = rows - 2 - i
+    const row = rows - 3 - i // gap of 1 row above bottom HUD
     if (row < 1 || row >= rows - 1) continue
     const bufRow = buffer[row]!
 
     const line = `<${msg.name}> ${msg.text}`
-    const x = cols - 2 - line.length
     const nameEnd = msg.name.length + 2
-    if (x < 1) {
-      const maxLen = cols - 3
-      const truncated = line.slice(0, maxLen)
-      for (let ci = 0; ci < truncated.length; ci++) {
-        const c = bufRow[1 + ci]!; c.ch = truncated[ci]!; c.fg = ci < nameEnd ? msg.fg : _chatDimFg; c.bg = null
-      }
-    } else {
-      for (let ci = 0; ci < line.length; ci++) {
-        const sx = x + ci
-        if (sx < 1 || sx >= cols - 1) continue
-        const c = bufRow[sx]!; c.ch = line[ci]!; c.fg = ci < nameEnd ? msg.fg : _chatDimFg; c.bg = null
-      }
+    const maxLen = cols - 2
+    const display = line.length > maxLen ? line.slice(0, maxLen) : line
+    for (let ci = 0; ci < display.length; ci++) {
+      const sx = 1 + ci
+      if (sx >= cols - 1) break
+      const c = bufRow[sx]!; c.ch = display[ci]!; c.fg = ci < nameEnd ? msg.fg : _chatDimFg; c.bg = null
     }
   }
 }
@@ -423,6 +429,7 @@ export function stampChatInput(
   cols: number,
   rows: number,
   text: string,
+  target?: string,
 ) {
   const y = rows - 1
   const row = buffer[y]!
@@ -431,7 +438,7 @@ export function stampChatInput(
   c = row[1]!; c.ch = "─"; c.fg = _borderFg; c.bg = null
   c = row[cols - 1]!; c.ch = "╯"; c.fg = _borderFg; c.bg = null
 
-  const label = " [Chat] "
+  const label = target ? ` [→ ${target}] ` : " [Chat] "
   let cx = 2
   for (let i = 0; i < label.length; i++) {
     if (cx >= cols - 1) break

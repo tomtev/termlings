@@ -77,7 +77,7 @@ export interface Entity {
   _cacheKeySmall?: number // packed animation state for small grid cache
 }
 
-export interface GameConfig {
+export interface SimConfig {
   frameMs: number
   moveInterval: number
   holdWindow: number
@@ -94,7 +94,7 @@ export interface GameConfig {
   }
 }
 
-export const DEFAULT_CONFIG: GameConfig = {
+export const DEFAULT_CONFIG: SimConfig = {
   frameMs: 16,
   moveInterval: 30,
   holdWindow: 250,

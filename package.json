@@ -22,7 +22,7 @@
   "bin": {
     "termlings": "./bin/termlings.js"
   },
-  "description": "Terminal sim engine for AI models. Give the world's smartest creatures a body and a place to live inside the terminal.",
+  "description": "Terminal based SIM engine for AI code agents",
   "files": [
     "src",
     "bin"
@@ -39,5 +39,8 @@
     "cli"
   ],
   "license": "MIT",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "termfont": "^0.1.2"
+  }
 }
