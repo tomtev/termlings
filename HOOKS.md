@@ -33,7 +33,7 @@ The sim's frame loop:
 1. **Polls hook files** every ~0.5 seconds (every 30 ticks at 60fps)
 2. **Parses hook events** line-by-line from each session's hook file
 3. **Updates agent animations**:
-   - `typing_start` — Set agent `talking = true` for 10 seconds
+   - `typing_start` — Set agent `talking = true` (stays active until `typing_stop`)
    - `typing_stop` — Set agent `talking = false`
    - `permission_request` — Set agent `waving = true` for 2 seconds
 4. **Clears hook file** after processing

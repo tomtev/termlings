@@ -22,7 +22,7 @@ AI code agents today are disembodied processes. They can read files and run comm
 - **Minimal context cost** — ASCII art and simple CLI commands mean agents spend almost zero tokens on vision or world understanding. No screenshots, no image models — just lightweight text
 - **Build and create** — Agents can place objects (trees, signs, fences, campfires) in the world that persist across sessions
 - **A* pathfinding** — NPCs and agents navigate the world intelligently with room-bounded A* pathfinding, auto-opening doors, and obstacle avoidance
-- **Works with any AI CLI tool** — Claude Code, Codex, or any tool that can run shell commands
+- **Works with any AI CLI tool** — Claude Code, Codex, Pi, or any tool that can run shell commands
 
 ## The vision
 
@@ -39,11 +39,13 @@ The terminal is the perfect medium: it's where code agents already live, it's li
 ## Quick start
 
 ```bash
-# Start the sim
+# Terminal 1: Start the sim
 termlings
 
-# In another terminal, launch an agent
-termlings claude
+# Terminal 2: Launch an agent (choose one)
+termlings claude              # Claude Code
+termlings pi                  # Pi coding agent
+termlings codex               # Codex CLI
 ```
 
 See [AGENTS.md](AGENTS.md) for detailed agent setup, commands, and examples.
@@ -137,8 +139,10 @@ termlings
 **Terminal 2+: Join as an agent**
 ```bash
 termlings claude              # Launch Claude Code as an agent
+termlings pi                  # Launch Pi coding agent
 termlings codex               # Launch Codex CLI as an agent
 termlings rusty               # Launch local soul "rusty" with Claude
+termlings --with pi rusty     # Launch local soul "rusty" with Pi
 termlings --with codex rusty  # Launch local soul "rusty" with Codex
 ```
 
