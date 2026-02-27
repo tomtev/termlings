@@ -236,7 +236,8 @@ export function stampEntity(
     const sy = ey + gy
     if (sy < 0 || sy >= rows) continue
     const row = grid[gy]!
-    const bufRow = buffer[sy]!
+    const bufRow = buffer[sy]
+    if (!bufRow) continue // Safety check: skip if row doesn't exist
     for (let gx = 0; gx < row.length; gx++) {
       const p = row[gx]!
       if (p === "_") continue
@@ -263,9 +264,9 @@ export function stampEntity(
 
       const sx = ex + gx * 2
       let bx = sx
-      if (bx >= 0 && bx < cols) { const bc = bufRow[bx]!; bc.ch = c0; bc.fg = fg; bc.bg = bg }
+      if (bx >= 0 && bx < cols) { const bc = bufRow[bx]; if (bc) { bc.ch = c0; bc.fg = fg; bc.bg = bg } }
       bx = sx + 1
-      if (bx >= 0 && bx < cols) { const bc = bufRow[bx]!; bc.ch = c1; bc.fg = fg; bc.bg = bg }
+      if (bx >= 0 && bx < cols) { const bc = bufRow[bx]; if (bc) { bc.ch = c1; bc.fg = fg; bc.bg = bg } }
     }
   }
 }
@@ -429,7 +430,7 @@ export function stampChatMessages(
   messages: ChatMessage[],
 ) {
   const now = Date.now()
-  const maxWidth = Math.floor(cols * 0.33) // Max 33% of left side with wrapping
+  const maxWidth = cols - 2 // Full width minus borders
   const recent = messages.filter((m) => now - m.time < 600000) // Keep chats for 10 minutes
 
   let currentRow = rows - 3 // gap of 1 row above bottom HUD
