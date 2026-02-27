@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(termlings action map)",
+      "Bash(termlings action map --ascii)",
+      "Bash(termlings action map --sessions)",
+      "Bash(termlings action walk *)",
+      "Bash(termlings action send *)",
+      "Bash(termlings action chat *)",
+      "Bash(termlings action place *)",
+      "Bash(termlings action destroy *)",
+      "Bash(termlings action create-object *)",
+      "Bash(termlings action inspect-object *)",
+      "Bash(termlings action list-objects)",
+      "Bash(termlings action talk)",
+      "Bash(termlings action gesture *)",
+      "Bash(termlings action inbox)",
+      "Bash(termlings action stop)",
+      "Bash(termlings --clear)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push)"
+    ]
+  }
+}
