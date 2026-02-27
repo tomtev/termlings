@@ -458,13 +458,6 @@ export function stepNpc(
     npc.y = newY
     ai.stuckTicks = 0
     result.moved = true
-
-    // Micro-pause: ~10% chance per step, 10-20 tick pause
-    if (Math.random() < 0.10) {
-      ai.phase = "waiting"
-      ai.waitRemaining = 10 + Math.floor(Math.random() * 10)
-      npc.walking = false
-    }
   } else {
     ai.stuckTicks++
 
