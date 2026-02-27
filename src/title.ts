@@ -141,6 +141,13 @@ function createTitleScene(room: string, onReady: () => void): Scene {
   let titleRoom: RoomRegion = { name: "title", x: 0, y: 0, w: 80, h: 24 }
   const pf = createPathfinderState()
 
+  // Compute path from home for display (once, not every frame)
+  const home = homedir()
+  const cwd = process.cwd()
+  const pathFromHome = cwd.startsWith(home)
+    ? "~/" + cwd.slice(home.length + 1)
+    : cwd
+
   // Typewriter animation state
   const commands = [
     "termlings claude --dangerously-skip-permissions",
@@ -314,8 +321,8 @@ function createTitleScene(room: string, onReady: () => void): Scene {
       const waitX = Math.floor((cols - waitText.length) / 2)
       if (hintY > 0 && hintY < rows) stampText(buffer, cols, rows, waitX, hintY, waitText, dimGray)
 
-      // Show "Run in [folder]:" instruction
-      const instructText = `Run in ./${process.cwd().split("/").pop()}:`
+      // Show "Run in [path]:" instruction (relative to home)
+      const instructText = `Run in ${pathFromHome}:`
       const instructY = hintY + 2
       const instructX = Math.floor((cols - instructText.length) / 2)
       if (instructY > 0 && instructY < rows) stampText(buffer, cols, rows, instructX, instructY, instructText, readyGreen)
