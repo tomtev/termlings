@@ -86,12 +86,11 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
   }
 
   const { selectMenu } = await import("../interactive-menu.js");
+  const { decodeDNA } = await import("../index.js");
 
   // Build menu items for existing agents
   const menuItems = [
     ...localAgents.map((a) => {
-      const { decodeDNA } = await import("../index.js");
-
       const name = a.soul?.name || a.name;
       const title = a.soul?.title ? ` — ${a.soul.title}` : "";
       const purpose = a.soul?.purpose || "Autonomous agent";
