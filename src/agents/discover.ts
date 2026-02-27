@@ -57,19 +57,30 @@ export function discoverLocalAgents(): LocalAgent[] {
 }
 
 /**
- * Show interactive selector for local agents
+ * Show interactive selector for all available agents (built-in + local)
  */
-export async function selectLocalAgent(): Promise<LocalAgent | null> {
-  const agents = discoverLocalAgents();
-  if (agents.length === 0) return null;
-  if (agents.length === 1) return agents[0];
+export async function selectAgent(): Promise<{ type: "builtin" | "local"; name: string; agent?: LocalAgent }> {
+  const builtins = ["claude", "codex"];
+  const localAgents = discoverLocalAgents();
+  const allOptions = [
+    ...builtins.map(name => ({ type: "builtin" as const, name, agent: undefined })),
+    ...localAgents.map(a => ({ type: "local" as const, name: a.name, agent: a })),
+  ];
+
+  if (allOptions.length === 0) return { type: "builtin", name: "claude" };
+  if (allOptions.length === 1) return allOptions[0];
 
   console.log("\nSelect agent:\n");
-  for (let i = 0; i < agents.length; i++) {
-    const agent = agents[i];
-    const soulName = agent.soul?.name || agent.name;
-    const purpose = agent.soul?.purpose ? ` — ${agent.soul.purpose}` : "";
-    console.log(`  (${i + 1}) ${soulName}${purpose}`);
+  for (let i = 0; i < allOptions.length; i++) {
+    const opt = allOptions[i];
+    if (opt.type === "builtin") {
+      const label = opt.name === "claude" ? "Claude Code" : "Codex CLI";
+      console.log(`  (${i + 1}) ${opt.name.padEnd(10)} - ${label}`);
+    } else {
+      const soulName = opt.agent?.soul?.name || opt.name;
+      const purpose = opt.agent?.soul?.purpose ? ` — ${opt.agent.soul.purpose}` : "";
+      console.log(`  (${i + 1}) ${soulName}${purpose}`);
+    }
   }
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -77,11 +88,23 @@ export async function selectLocalAgent(): Promise<LocalAgent | null> {
     rl.question("\nChoose: ", (answer) => {
       rl.close();
       const idx = parseInt(answer, 10) - 1;
-      if (idx >= 0 && idx < agents.length) {
-        resolve(agents[idx]);
+      if (idx >= 0 && idx < allOptions.length) {
+        resolve(allOptions[idx]);
       } else {
-        resolve(null);
+        resolve(allOptions[0]);
       }
     });
   });
+}
+
+/**
+ * Show interactive selector for local agents (deprecated, use selectAgent)
+ */
+export async function selectLocalAgent(): Promise<LocalAgent | null> {
+  const agents = discoverLocalAgents();
+  if (agents.length === 0) return null;
+  if (agents.length === 1) return agents[0];
+
+  const result = await selectAgent();
+  return result.type === "local" ? result.agent || null : null;
 }

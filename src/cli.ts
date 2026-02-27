@@ -91,43 +91,29 @@ if (agentAdapter) {
   await launchAgent(agentAdapter, agentPassthrough, opts);
 }
 
-// 1b. Local agent launcher: termlings [soul-name] [--with <adapter>]
-const withAdapter = opts.with || "claude";
-
+// 1b. Selector: show all agents if no command specified
 if (!agentAdapter && positional.length === 0) {
-  // No args, check for local agents
-  const { discoverLocalAgents, selectLocalAgent } = await import("./agents/discover.js");
-  const localAgents = discoverLocalAgents();
+  const { selectAgent } = await import("./agents/discover.js");
+  const selected = await selectAgent();
 
-  if (localAgents.length > 0) {
-    const selected = await selectLocalAgent();
-    if (selected && selected.soul) {
+  if (selected.type === "builtin") {
+    const { agents: agentRegistry } = await import("./agents/index.js");
+    const cmd = agentRegistry[selected.name];
+    if (cmd) {
       const room = opts.room || "default";
       process.env.TERMLINGS_ROOM = room;
-      // Allow flags to override soul values
-      process.env.TERMLINGS_AGENT_NAME = opts.name || selected.soul.name;
-      process.env.TERMLINGS_AGENT_DNA = opts.dna || selected.soul.dna;
-
-      const { launchLocalAgent } = await import("./agents/launcher.js");
-      await launchLocalAgent(selected, agentPassthrough, opts, withAdapter);
-      process.exit(0);
+      const { launchAgent } = await import("./agents/launcher.js");
+      await launchAgent(cmd, agentPassthrough, opts);
     }
-  }
-} else if (!agentAdapter && positional.length > 0) {
-  // Check if first arg is a local agent name
-  const { discoverLocalAgents } = await import("./agents/discover.js");
-  const localAgents = discoverLocalAgents();
-  const localAgent = localAgents.find(a => a.name === positional[0]);
-
-  if (localAgent && localAgent.soul) {
+  } else if (selected.type === "local" && selected.agent?.soul) {
     const room = opts.room || "default";
     process.env.TERMLINGS_ROOM = room;
-    // Allow flags to override soul values
-    process.env.TERMLINGS_AGENT_NAME = opts.name || localAgent.soul.name;
-    process.env.TERMLINGS_AGENT_DNA = opts.dna || localAgent.soul.dna;
+    process.env.TERMLINGS_AGENT_NAME = opts.name || selected.agent.soul.name;
+    process.env.TERMLINGS_AGENT_DNA = opts.dna || selected.agent.soul.dna;
+    const commandName = opts.with || selected.agent.soul.command || "claude";
 
     const { launchLocalAgent } = await import("./agents/launcher.js");
-    await launchLocalAgent(localAgent, agentPassthrough, opts, withAdapter);
+    await launchLocalAgent(selected.agent, agentPassthrough, opts, commandName);
     process.exit(0);
   }
 }
