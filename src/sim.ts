@@ -135,6 +135,16 @@ function loadPersistedPlacements() {
 function savePersistedPlacements() {
   // Only persist agent-built objects (those beyond the original map placements)
   const agentBuilt = objectPlacements.slice(world.placements.length)
+  // Ensure all placements have roomId
+  for (const p of agentBuilt) {
+    if (p.roomId === undefined) {
+      const room = detectedRooms.find(r => {
+        const b = r.bounds
+        return p.x >= b.x && p.x < b.x + b.w && p.y >= b.y && p.y < b.y + b.h
+      })
+      p.roomId = room?.id
+    }
+  }
   try { writeFileSync(PLACEMENTS_FILE, JSON.stringify(agentBuilt) + "\n") } catch {}
 }
 
