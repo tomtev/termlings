@@ -18,7 +18,28 @@ export interface ObjectPlacement {
   def: string // key into OBJECT_DEFS
   x: number
   y: number
+  props?: Record<string, unknown>
 }
+
+// --- Color utilities ---
+
+export function lighten(rgb: RGB, factor = 1.3): RGB {
+  return [
+    Math.min(255, Math.floor(rgb[0] * factor)),
+    Math.min(255, Math.floor(rgb[1] * factor)),
+    Math.min(255, Math.floor(rgb[2] * factor))
+  ]
+}
+
+export function darken(rgb: RGB, factor = 0.7): RGB {
+  return [
+    Math.floor(rgb[0] * factor),
+    Math.floor(rgb[1] * factor),
+    Math.floor(rgb[2] * factor)
+  ]
+}
+
+// --- Object cell creation ---
 
 function c(ch: string, fg: RGB | null, bg: RGB | null, walkable: boolean): ObjectCell {
   return { ch, fg, bg, walkable }
@@ -306,4 +327,70 @@ export function buildObjectOverlay(placements: ObjectPlacement[], defs?: Record<
   }
 
   return { visual, walkable }
+}
+
+/** Render an object with optional custom color to a terminal grid */
+export function renderObjectToTerminal(
+  objectType: string,
+  color?: RGB,
+  defs?: Record<string, ObjectDef>,
+  debugCollision = false
+): string {
+  const def = (defs ?? OBJECT_DEFS)[objectType]
+  if (!def) return `Unknown object: ${objectType}`
+
+  const colorMap = color ? {
+    primary: color,
+    light: lighten(color),
+    dark: darken(color)
+  } : null
+
+  // Build terminal output
+  const lines: string[] = []
+  for (let row = 0; row < def.height; row++) {
+    const cellRow = def.cells[row]
+    if (!cellRow) {
+      lines.push("")
+      continue
+    }
+
+    let line = ""
+    for (let col = 0; col < def.width; col++) {
+      const cell = cellRow[col]
+
+      // Debug collision mode: show blocking cells
+      if (debugCollision) {
+        if (!cell) {
+          line += "·" // transparent
+        } else if (!cell.walkable) {
+          line += "█" // blocking
+        } else {
+          line += "░" // walkable
+        }
+        continue
+      }
+
+      if (!cell) {
+        line += " "
+        continue
+      }
+
+      // Apply color substitution if provided
+      let fg = cell.fg
+      if (colorMap && cell.fg) {
+        // Simple heuristic: darker cells get dark color, bright cells get light color
+        const brightness = (cell.fg[0] + cell.fg[1] + cell.fg[2]) / 3
+        if (brightness > 150) fg = colorMap.light
+        else if (brightness < 100) fg = colorMap.dark
+        else fg = colorMap.primary
+      }
+
+      const ansi = fg ? `\x1b[38;2;${fg[0]};${fg[1]};${fg[2]}m` : ""
+      const reset = fg ? "\x1b[0m" : ""
+      line += `${ansi}${cell.ch}${reset}`
+    }
+    lines.push(line)
+  }
+
+  return lines.join("\n")
 }

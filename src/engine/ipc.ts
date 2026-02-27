@@ -19,7 +19,7 @@ export function ensureIpcDir(): void {
 // --- Command IPC ---
 
 export interface AgentCommand {
-  action: "walk" | "gesture" | "stop" | "send" | "chat" | "join" | "leave" | "build" | "destroy"
+  action: "walk" | "gesture" | "stop" | "send" | "chat" | "join" | "leave" | "place" | "destroy"
   x?: number
   y?: number
   type?: "wave" | "talk"
