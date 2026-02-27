@@ -154,9 +154,9 @@ Place objects in the world:
 - **object** — Built-in object name OR custom object from `objects` section
 - **x, y** — Top-left position in the grid
 
-### 6. Doors (Doorway Definitions)
+### 6. Doors (Dynamic Room Transitions)
 
-Create passages between rooms:
+Doors create passages between rooms. They **auto-open when agents approach** and **auto-close after agents leave**.
 
 ```json
 {
@@ -172,12 +172,61 @@ Create passages between rooms:
 }
 ```
 
-- **x, y** — Door position on map
-- **orientation** — "horizontal" or "vertical"
-- **length** — How many cells the door spans
-- **color** — Door visual color (RGB)
+**Door Properties:**
+- **x, y** — Top-left position of the door
+- **orientation** — `"horizontal"` (door spans left-right) or `"vertical"` (door spans up-down)
+- **length** — How many cells the door spans (e.g., 8 cells)
+- **color** — Door appearance in RGB (e.g., brown wood color)
 
-**Important:** Place doors on walkable tiles (`.`, `,`, etc.) to create transitions between rooms.
+**How Doors Work:**
+1. Initially **CLOSED** (blocks agent movement)
+2. Agent approaches within 6 cells → door **AUTO-OPENS**
+3. Opens over 4 animation frames (smooth transition)
+4. Agent walks through → door is **PASSABLE**
+5. Agent leaves → closeTimer starts
+6. After ~1.5 seconds → door **AUTO-CLOSES**
+
+**Example: Horizontal Door (8 cells wide)**
+```
+Grid:
+####D D D D D D D D####
+#.................#
+
+Door at (4, 0):
+- orientation: "horizontal"
+- length: 8
+- Spans positions (4,0), (5,0), (6,0), (7,0), (8,0), (9,0), (10,0), (11,0)
+```
+
+**Example: Vertical Door (6 cells tall)**
+```
+Grid:
+##
+#D
+#D
+#D
+#D
+#D
+##
+
+Door at (1, 1):
+- orientation: "vertical"
+- length: 6
+- Spans positions (1,1), (1,2), (1,3), (1,4), (1,5), (1,6)
+```
+
+**Important Rules:**
+- ✓ Place doors **on walkable tiles** (`.`, `,`, spaces, etc.)
+- ✓ Doors should be at **room boundaries** (between walls)
+- ✓ Match door length to the opening width/height
+- ✓ Use realistic door colors (wood, metal, etc.) matching adjacent walls
+- ✗ Don't place doors on walls (`#`) or solid tiles
+- ✗ Don't create overlapping doors
+
+**Common Door Configurations:**
+- **Room entrance**: 8-cell horizontal door
+- **Narrow passage**: 4-cell vertical door
+- **Wide corridor**: 12-16 cell horizontal door
 
 ### 7. Spawns (Starting Positions)
 
@@ -209,7 +258,7 @@ You can reference these in `placements` without defining them in `objects`:
 **Natural:**
 - `tree`, `pine_tree`, `rock`, `flower_patch`
 
-## Example: Simple Village
+## Example: Simple Village with Rooms
 
 ```json
 {
@@ -218,32 +267,56 @@ You can reference these in `placements` without defining them in `objects`:
   "tiles": {
     ".": { "ch": "·", "fg": [100, 100, 100], "walkable": true },
     "#": { "ch": "█", "fg": [80, 80, 80], "walkable": false },
-    ",": { "ch": ",", "fg": [60, 120, 50], "walkable": true },
-    "~": { "ch": "~", "fg": [100, 150, 220], "walkable": false }
+    ",": { "ch": ",", "fg": [60, 120, 50], "walkable": true }
   },
   "grid": [
-    "######################",
-    "#,,,,,,,,,,,,,,,,,,,#",
-    "#,......#......,....#",
-    "#,.....#........,....#",
-    "#,......#......,....#",
-    "#,,,,,,,,,,,,,,,,,,,#",
-    "######################"
+    "#################,#################",
+    "#......#.......,#.,......#.......",
+    "#......#.......,#.,......#.......",
+    "#......#.......,#.,......#.......",
+    "#.....D.......#...#.....D........",
+    "#......#......#...#......#.......",
+    "#......#......,#.,......#.......",
+    "#......#.......,#.,......#.......",
+    "#################,#################"
   ],
   "objects": {},
   "placements": [
-    { "object": "sofa", "x": 3, "y": 2 },
-    { "object": "table", "x": 10, "y": 2 },
-    { "object": "tree", "x": 15, "y": 2 }
+    { "object": "sofa", "x": 2, "y": 2 },
+    { "object": "table", "x": 8, "y": 2 },
+    { "object": "sofa", "x": 20, "y": 2 },
+    { "object": "table", "x": 28, "y": 2 }
   ],
   "doors": [
-    { "x": 8, "y": 2, "orientation": "vertical", "length": 3, "color": [140, 95, 50] }
+    {
+      "x": 7,
+      "y": 4,
+      "orientation": "horizontal",
+      "length": 1,
+      "color": [140, 95, 50]
+    },
+    {
+      "x": 27,
+      "y": 4,
+      "orientation": "horizontal",
+      "length": 1,
+      "color": [140, 95, 50]
+    }
   ],
   "spawns": [
-    { "type": "player", "x": 4, "y": 4 }
+    { "type": "player", "x": 5, "y": 5 },
+    { "type": "npc", "x": 25, "y": 5, "name": "Greeter" }
   ]
 }
 ```
+
+**What this creates:**
+- Left room with sofa and table
+- Middle outdoor area with path
+- Right room with sofa and table
+- Two doors connect rooms (auto-open when agents approach)
+- Player starts in left room
+- NPC starts in right room
 
 ## Loading a Custom Map
 
