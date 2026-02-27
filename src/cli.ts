@@ -926,6 +926,7 @@ if (positional[0] === "join") {
 if (positional[0] === "create") {
   const { runCreate } = await import("./create.js");
   await runCreate();
+  process.exit(0);
 }
 
 // 6. Help
