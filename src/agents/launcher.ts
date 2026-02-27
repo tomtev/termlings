@@ -103,7 +103,12 @@ export async function launchAgent(
   const soul = parseSoul()
 
   const agentName = termlingOpts.name || soul.name || pickRandomName()
-  const agentDna = termlingOpts.dna || soul.dna || ""
+  // Generate random DNA if not provided
+  let agentDna = termlingOpts.dna || soul.dna
+  if (!agentDna) {
+    const { generateRandomDNA } = await import("../index.js")
+    agentDna = generateRandomDNA()
+  }
 
   const contextArgs = adapter.contextArgs(context)
   const finalArgs = [...contextArgs, ...passthroughArgs]
