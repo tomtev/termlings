@@ -98,7 +98,7 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[], room: 
     const status = opt.taken ? " (already in room)" : "";
     console.log(`  (${opt.index + 1}) ${soulName}${purpose}${status}`);
   }
-  console.log(`  (${createOption.index + 1}) [Create random agent]`);
+  console.log(`  (${createOption.index + 1}) [Spawn random agent]`);
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
