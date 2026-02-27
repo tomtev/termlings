@@ -1,33 +1,47 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs"
 import { join } from "path"
-import { homedir } from "os"
+
 import type { ObjectDef, ObjectPlacement } from "./objects.js"
 
 function customObjectsDir(room = "default"): string {
-  return join(homedir(), ".termlings", "rooms", room)
+  return join(process.cwd(), ".termlings")
 }
 
 function customObjectsFile(room = "default"): string {
-  return join(customObjectsDir(room), "custom-objects.json")
+  return join(customObjectsDir, "custom-objects.json")
 }
 
 export function loadCustomObjects(room = "default"): Record<string, ObjectDef> {
-  const file = customObjectsFile(room)
-  if (!existsSync(file)) return {}
+  const file = customObjectsFile
+  if (!existsSync(file)) {
+    return {}
+  }
 
   try {
     const data = readFileSync(file, "utf-8")
-    return JSON.parse(data)
+    const objects = JSON.parse(data)
+    const count = Object.keys(objects).length
+    if (count > 0) {
+      console.log(`✓ Loaded ${count} custom object(s) from ${room}`)
+    }
+    return objects
   } catch (e) {
-    console.error(`Error loading custom objects: ${e}`)
+    console.error(`Error loading custom objects from ${file}: ${e}`)
     return {}
   }
 }
 
-export function saveCustomObjects(objects: Record<string, ObjectDef>, room = "default"): void {
-  mkdirSync(customObjectsDir(room), { recursive: true })
-  const file = customObjectsFile(room)
-  writeFileSync(file, JSON.stringify(objects, null, 2) + "\n")
+export function saveCustomObjects(objects: Record<string, ObjectDef>): void {
+  try {
+    mkdirSync(customObjectsDir, { recursive: true })
+    const file = customObjectsFile
+    writeFileSync(file, JSON.stringify(objects, null, 2) + "\n")
+    const count = Object.keys(objects).length
+    console.log(`✓ Saved ${count} custom object(s) to ${file}`)
+  } catch (e) {
+    console.error(`Error saving custom objects: ${e}`)
+    throw e
+  }
 }
 
 export function createCustomObject(
@@ -91,9 +105,9 @@ export function createCustomObject(
   }
 
   // Save custom object
-  const objects = loadCustomObjects(room)
+  const objects = loadCustomObjects()
   objects[name] = objectDef
-  saveCustomObjects(objects, room)
+  saveCustomObjects(objects)
 
   return { success: true }
 }

@@ -430,7 +430,7 @@ export function stampChatMessages(
   messages: ChatMessage[],
 ) {
   const now = Date.now()
-  const maxWidth = cols - 2 // Full width minus borders
+  const maxWidth = Math.floor(cols * 0.33) // Max 33% of left side with wrapping
   const recent = messages.filter((m) => now - m.time < 600000) // Keep chats for 10 minutes
 
   let currentRow = rows - 3 // gap of 1 row above bottom HUD
@@ -438,6 +438,8 @@ export function stampChatMessages(
     const msg = recent[i]!
     const line = `<${msg.name}> ${msg.text}`
     const nameEnd = msg.name.length + 2
+    // Use provided color or default to yellow (bright and visible)
+    const nameFg = msg.fg || [255, 255, 100] as RGB
 
     // Wrap the message if too long
     const wrappedLines = wrapText(line, maxWidth)
@@ -461,7 +463,7 @@ export function stampChatMessages(
         if (c) {
           c.ch = displayLine[ci]!
           // Color name differently from text, but only on first line
-          c.fg = isFirstLine && ci < nameEnd ? msg.fg : _chatDimFg
+          c.fg = isFirstLine && ci < nameEnd ? nameFg : _chatDimFg
           c.bg = null
         }
       }

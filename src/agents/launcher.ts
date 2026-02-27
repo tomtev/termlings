@@ -4,7 +4,7 @@ import { readFileSync, existsSync, unlinkSync } from "fs"
 import { resolve as resolvePath, dirname as dirName, join as joinPath } from "path"
 import { fileURLToPath } from "url"
 import { homedir } from "os"
-import { writeCommand, readMessages, setRoom, ipcDir } from "../engine/ipc.js"
+import { writeCommand, readMessages, getIpcDir } from "../engine/ipc.js"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirName(__filename)
@@ -115,9 +115,6 @@ export async function launchAgent(
     agentDna = generateRandomDNA()
   }
 
-  const room = process.env.TERMLINGS_ROOM || "default"
-  setRoom(room)
-
   // Apply context substitutions BEFORE passing to adapter
   let finalContext = context
   if (context) {
@@ -125,7 +122,7 @@ export async function launchAgent(
       NAME: agentName,
       SESSION_ID: sessionId,
       DNA: agentDna,
-      ROOM: room,
+      ROOM: "default",
       PURPOSE: termlingOpts.purpose || soul.purpose || process.env.TERMLINGS_PURPOSE || "explore and interact",
     }
     for (const [field, value] of Object.entries(dynamicFields)) {
@@ -162,8 +159,8 @@ export async function launchAgent(
       const reset = "\x1b[0m"
 
       const infoLines = [
-        `${bold}Joined Termlings ${room}${reset}`,
-        `${bold}${nameColor}with: ${agentName}${reset}`,
+        `${bold}Joined Termlings${reset}`,
+        `${bold}${nameColor}${agentName}${reset}`,
         `${sessionId}`
       ]
 
@@ -176,11 +173,11 @@ export async function launchAgent(
       }
       console.log()
     } catch {
-      console.log(`Joined Termlings ${room} with: ${agentName}`)
+      console.log(`Joined Termlings as ${agentName}`)
       console.log()
     }
   } else {
-    console.log(`Joined Termlings ${room} with: ${adapter.defaultName}`)
+    console.log(`Joined Termlings as ${adapter.defaultName}`)
     console.log()
   }
 
@@ -189,8 +186,7 @@ export async function launchAgent(
     TERMLINGS_SESSION_ID: sessionId,
     TERMLINGS_AGENT_NAME: agentName,
     TERMLINGS_AGENT_DNA: agentDna,
-    TERMLINGS_ROOM: room,
-    TERMLINGS_IPC_DIR: ipcDir(room),
+    TERMLINGS_IPC_DIR: getIpcDir(),
   }
 
   // Add context to environment (already substituted above)
@@ -279,17 +275,8 @@ This room is running in SIMPLE MODE:
     process.stdin.setRawMode?.(false)
 
     // Send leave command to announce departure
+    // The sim will process this command and pollCommands() will delete the queue file
     writeCommand(sessionId, { action: "leave" as any, name: agentName, ts: Date.now() })
-
-    // Clean up queue file to prevent stale agent sessions
-    try {
-      const queueFile = joinPath(ipcDir(room), `${sessionId}.queue.jsonl`)
-      if (existsSync(queueFile)) {
-        unlinkSync(queueFile)
-      }
-    } catch {
-      // Ignore cleanup errors
-    }
   }
 
   // Forward signals to child and cleanup

@@ -262,7 +262,7 @@ Commands:
     const { homedir } = await import("os");
 
     // Compute IPC_DIR based on room from environment
-    const IPC_DIR = join(process.cwd(), ".termlings");
+    const IPC_DIR = join(homedir(), ".termlings", "rooms", room);
 
     const state = readState();
     if (!state) {
@@ -688,7 +688,7 @@ Commands:
     const { OBJECT_DEFS, renderObjectToTerminal } = await import("./engine/objects.js");
     const { loadCustomObjects } = await import("./engine/custom-objects.js");
     const _statePlace = readStatePlace();
-    const customObjects = loadCustomObjects("default");
+    const customObjects = loadCustomObjects(room);
     if (_statePlace?.map?.mode === "simple") {
       console.error("Error: place is disabled in simple mode");
       process.exit(1);
@@ -771,7 +771,7 @@ Commands:
     }
 
     // Check both built-in and custom objects
-    const customObjects = loadCustomObjects("default");
+    const customObjects = loadCustomObjects(room);
     const allObjects = { ...OBJECT_DEFS, ...customObjects };
     const def = allObjects[objectType];
     if (!def) {
@@ -823,13 +823,13 @@ Commands:
       process.exit(1);
     }
 
-    const result = createCustomObject(objectName, definition, "default");
+    const result = createCustomObject(objectName, definition, room);
     if (!result.success) {
       console.error(`Error creating object: ${result.error}`);
       process.exit(1);
     }
 
-    console.log(`✓ Created custom object: ${objectName}`);
+    console.log(`✓ Created custom object: ${objectName} (in ${room})`);
     console.log(`You can now use: termlings action place ${objectName} <x>,<y>`);
     process.exit(0);
   }
@@ -837,7 +837,7 @@ Commands:
   // List all objects (built-in and custom)
   if (verb === "list-objects") {
     const { loadCustomObjects } = await import("./engine/custom-objects.js");
-    const customObjects = loadCustomObjects("default");
+    const customObjects = loadCustomObjects(room);
 
     if (Object.keys(customObjects).length > 0) {
       console.log("\n✨ Custom Objects:\n");
@@ -944,7 +944,7 @@ Commands:
         console.error("Usage: termlings action task claim <task-id>");
         process.exit(1);
       }
-      const task = claimTask(taskId, sessionId, agentName, "default");
+      const task = claimTask(taskId, sessionId, agentName, room);
       if (!task) {
         console.error(`Cannot claim task: ${taskId} (not found or already claimed)`);
         process.exit(1);
@@ -960,7 +960,7 @@ Commands:
         console.error("Usage: termlings action task status <task-id> <open|claimed|in-progress|completed|blocked> [note]");
         process.exit(1);
       }
-      const task = updateTaskStatus(taskId, newStatus as any, sessionId, agentName, note || undefined, "default");
+      const task = updateTaskStatus(taskId, newStatus as any, sessionId, agentName, note || undefined, room);
       if (!task) {
         console.error(`Task not found: ${taskId}`);
         process.exit(1);
@@ -975,7 +975,7 @@ Commands:
         console.error("Usage: termlings action task note <task-id> <note...>");
         process.exit(1);
       }
-      const task = addTaskNote(taskId, text, sessionId, agentName, "default");
+      const task = addTaskNote(taskId, text, sessionId, agentName, room);
       if (!task) {
         console.error(`Task not found: ${taskId}`);
         process.exit(1);
@@ -1043,7 +1043,7 @@ if (positional[0] === "cron") {
 
     // Get agent name from session if available
     const agentName = positional[2] || "Unknown";
-    const cron = createCronJob(agentId, agentName, schedule, message, "default");
+    const cron = createCronJob(agentId, agentName, schedule, message, room);
 
     console.log(`✓ Cron job created: ${cron.id}`);
     console.log(`Schedule: ${formatSchedule(cron.schedule)}`);
@@ -1067,7 +1067,7 @@ if (positional[0] === "cron") {
       process.exit(1);
     }
 
-    const cron = getCron(cronId, "default");
+    const cron = getCron(cronId, room);
     if (!cron) {
       console.error(`Cron not found: ${cronId}`);
       process.exit(1);
@@ -1176,7 +1176,7 @@ if (positional[0] === "task") {
       process.exit(1);
     }
 
-    const task = createTask(title, description, priority, undefined, "default");
+    const task = createTask(title, description, priority, undefined, room);
     console.log(`✓ Task created: ${task.id}`);
     console.log(formatTask(task));
     process.exit(0);
@@ -1213,7 +1213,7 @@ if (positional[0] === "task") {
       process.exit(1);
     }
 
-    const task = assignTask(taskId, agentId, agentName, "default");
+    const task = assignTask(taskId, agentId, agentName, room);
     if (!task) {
       console.error(`Task not found: ${taskId}`);
       process.exit(1);
@@ -1228,7 +1228,7 @@ if (positional[0] === "task") {
       console.error("Usage: termlings task delete <task-id>");
       process.exit(1);
     }
-    if (deleteTask(taskId, "default")) {
+    if (deleteTask(taskId, room)) {
       console.log(`✓ Task deleted`);
     } else {
       console.error(`Task not found: ${taskId}`);
@@ -1248,7 +1248,7 @@ if (positional[0] === "scheduler") {
   if (flags.has("daemon")) {
     // Run as background daemon (keeps running)
     console.log("⏰ Starting cron scheduler daemon (press Ctrl+C to stop)");
-    const interval = startScheduler("default", 60); // Check every 60 seconds
+    const interval = startScheduler(room, 60); // Check every 60 seconds
 
     // Handle graceful shutdown
     process.on("SIGINT", () => {
@@ -1258,7 +1258,7 @@ if (positional[0] === "scheduler") {
     });
   } else {
     // Single check
-    const results = executeScheduledCrons("default");
+    const results = executeScheduledCrons(room);
     if (results.length > 0) {
       console.log(formatExecutionResults(results));
     } else {
@@ -1331,7 +1331,7 @@ if (positional[0] === "render") {
   if (renderType === "object") {
     if (flags.has("list")) {
       const { loadCustomObjects } = await import("./engine/custom-objects.js");
-      const customObjects = loadCustomObjects("default");
+      const customObjects = loadCustomObjects(room);
       const allObjects = { ...OBJECT_DEFS, ...customObjects };
 
       console.log("\nAvailable object types:\n");
@@ -1353,7 +1353,7 @@ if (positional[0] === "render") {
       : undefined;
 
     const { loadCustomObjects } = await import("./engine/custom-objects.js");
-    const customObjects = loadCustomObjects("default");
+    const customObjects = loadCustomObjects(room);
     const allObjects = { ...OBJECT_DEFS, ...customObjects };
 
     if (!allObjects[objectType]) {
@@ -1674,6 +1674,7 @@ if (flags.has("help") || flags.has("h")) {
 
 Sim (default):
   termlings                Start the sim
+  termlings --web          Start the web version (browser-based)
   termlings --simple       Start in simple mode (no map, agent grid)
 
 Game management:
@@ -1764,7 +1765,8 @@ Options:
 }
 
 // 7. Default: launch sim
-//    termlings              → start sim (shows title screen first)
+//    termlings              → default room (shows title screen first)
+//    termlings --room village → named room (skips title)
 //    termlings play [path]  → backward compat for play subcommand
 //    termlings --play       → backward compat for --play flag
 {
@@ -1816,115 +1818,38 @@ Options:
     console.log(`${yellow}          Build AI worker teams${reset}`);
     console.log();
     console.log(`${yellow}    ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦${reset}`);
-    console.log();
 
-    // Ask whether to create single agent or team
-    const { selectMenu } = await import("./interactive-menu.js");
-    const setupChoice = await selectMenu(
-      [
-        { label: "Single Agent", value: "single", description: "Create one agent to start" },
-        { label: "5-Person Team", value: "team", description: "Create a full SaaS Strike Team (CEO, CTO, CMO, CRO, COO)" },
-      ],
-      "How would you like to set up your project?"
-    );
+    // Create first agent interactively
+    console.log("🎨 Creating your first agent...\n");
 
-    const useTeam = setupChoice === "team";
+    const rl2 = createInterface({ input: process.stdin, output: process.stdout });
+
+    const agentName = await new Promise<string>((resolve) => {
+      rl2.question("Agent name (or Enter for random): ", (answer) => {
+        rl2.close();
+        resolve(answer.trim() || "");
+      });
+    });
+
+    // Use create command to set up the agent
+    const { generateRandomDNA, encodeDNA, traitsFromName } = await import("./index.js");
+    const randomNames = ["Pixel", "Sprout", "Ember", "Nimbus", "Glitch", "Ziggy", "Quill", "Cosmo", "Maple", "Flint", "Wren", "Dusk", "Byte", "Fern", "Spark", "Nova", "Haze", "Basil", "Reef", "Orbit", "Sage", "Rusty", "Coral", "Luna", "Cinder", "Pip", "Storm", "Ivy", "Blaze", "Mochi"];
+
+    const finalName = agentName || randomNames[Math.floor(Math.random() * randomNames.length)]!;
+    const dna = agentName ? encodeDNA(traitsFromName(agentName)) : generateRandomDNA();
 
     // Create .termlings directory structure
     const { mkdirSync } = await import("fs");
     mkdirSync(termlingsDir, { recursive: true });
     mkdirSync(join(termlingsDir, "_data"), { recursive: true });
 
-    // Use create command to set up agents
-    const { generateRandomDNA, encodeDNA, traitsFromName } = await import("./index.js");
+    // Create agent directory (agents live at .termlings/agent-name/)
+    const agentDir = join(termlingsDir, finalName.toLowerCase());
+    mkdirSync(agentDir, { recursive: true });
+
+    // Write SOUL.md
     const { writeFileSync } = await import("fs");
-
-    if (useTeam) {
-      // Create 5-person leadership team
-      console.log("\n👥 Creating 5-person SaaS Strike Team...\n");
-
-      const { getTeamRolesInOrder, generateTeamMemberSoul, getRandomTeamMemberName } =
-        await import("./team-roles.js");
-
-      const roles = getTeamRolesInOrder();
-      const usedNames = new Set<string>();
-      const createdAgents: string[] = [];
-
-      for (const role of roles) {
-        const randomName = getRandomTeamMemberName(usedNames);
-        usedNames.add(randomName);
-        const dna = generateRandomDNA();
-
-        // Create agent directory
-        const agentDir = join(termlingsDir, randomName.toLowerCase());
-        mkdirSync(agentDir, { recursive: true });
-
-        // Generate SOUL.md with team role context
-        const soulContent = generateTeamMemberSoul(randomName, dna, role);
-        writeFileSync(join(agentDir, "SOUL.md"), soulContent);
-
-        createdAgents.push(randomName);
-        console.log(`  ✓ ${randomName.padEnd(15)} (${role.title})`);
-      }
-
-      console.log(`\n✓ Created team: ${createdAgents.join(", ")}`);
-      console.log(`✓ Initialized project state in .termlings/_data/`);
-      console.log(`\n🚀 Ready to go! Run 'termlings' to start the sim.\n`);
-    } else {
-      // Single agent setup
-      console.log("🎨 Creating your first agent...\n");
-
-      const rl3 = createInterface({ input: process.stdin, output: process.stdout });
-
-      const agentName = await new Promise<string>((resolve) => {
-        rl3.question("Agent name (or Enter for random): ", (answer) => {
-          rl3.close();
-          resolve(answer.trim() || "");
-        });
-      });
-
-      const randomNames = [
-        "Pixel",
-        "Sprout",
-        "Ember",
-        "Nimbus",
-        "Glitch",
-        "Ziggy",
-        "Quill",
-        "Cosmo",
-        "Maple",
-        "Flint",
-        "Wren",
-        "Dusk",
-        "Byte",
-        "Fern",
-        "Spark",
-        "Nova",
-        "Haze",
-        "Basil",
-        "Reef",
-        "Orbit",
-        "Sage",
-        "Rusty",
-        "Coral",
-        "Luna",
-        "Cinder",
-        "Pip",
-        "Storm",
-        "Ivy",
-        "Blaze",
-        "Mochi",
-      ];
-
-      const finalName = agentName || randomNames[Math.floor(Math.random() * randomNames.length)]!;
-      const dna = agentName ? encodeDNA(traitsFromName(agentName)) : generateRandomDNA();
-
-      // Create agent directory (agents live at .termlings/agent-name/)
-      const agentDir = join(termlingsDir, finalName.toLowerCase());
-      mkdirSync(agentDir, { recursive: true });
-
-      // Write SOUL.md
-      const soulContent = `# ${finalName}
+    const soulContent = `# ${finalName}
 
 **DNA**: ${dna}
 **Purpose**: Autonomous agent
@@ -1933,13 +1858,11 @@ Options:
 
 This agent will join the termlings world and work together with other agents.
 `;
-      writeFileSync(join(agentDir, "SOUL.md"), soulContent);
+    writeFileSync(join(agentDir, "SOUL.md"), soulContent);
 
-      console.log(`✓ Created agent "${finalName}" in .termlings/${finalName.toLowerCase()}/`);
-      console.log(`✓ Initialized project state in .termlings/_data/`);
-      console.log(`\n🚀 Ready to go! Run 'termlings' to start the sim.\n`);
-    }
-
+    console.log(`✓ Created agent "${finalName}" in .termlings/${finalName.toLowerCase()}/`);
+    console.log(`✓ Initialized project state in .termlings/_data/`);
+    console.log(`\n🚀 Ready to go! Run 'termlings' to start the sim.\n`);
     process.exit(0);
   }
 
@@ -1957,6 +1880,13 @@ This agent will join the termlings world and work together with other agents.
   // Support "play ./path" and "--play" for backward compat
   const mapArg = positional[0] === "play" ? (positional[1] || null) : null;
   if (mapArg) process.env.TERMLINGS_MAP_PATH = mapArg;
+
+  // Web mode: start web server instead of terminal sim
+  if (flags.has("web")) {
+    const { startWebServer } = await import("./web/server.js");
+    await startWebServer();
+    await new Promise(() => {});
+  }
 
   await import("./sim.js");
   await new Promise(() => {});

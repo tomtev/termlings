@@ -22,7 +22,7 @@
   "bin": {
     "termlings": "bin/termlings.js"
   },
-  "description": "Terminal based SIM engine for AI code agents",
+  "description": "Framework for building and coordinating autonomous AI worker teams in the terminal",
   "files": [
     "src",
     "bin"

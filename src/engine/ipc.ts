@@ -1,19 +1,46 @@
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync, existsSync } from "fs"
 import { join } from "path"
-import { homedir } from "os"
 
-export function ipcDir(room = "default"): string {
-  return join(homedir(), ".termlings", "rooms", room)
+/**
+ * Get the .termlings directory for the current project.
+ * This is `.termlings/` relative to the current working directory.
+ */
+export function getTermlingsDir(): string {
+  return join(process.cwd(), ".termlings")
 }
 
-export let IPC_DIR = ipcDir("default")
+/**
+ * Get the IPC directory for the current project.
+ * This is `.termlings/` where agent command files are stored.
+ */
+export function getIpcDir(): string {
+  return getTermlingsDir()
+}
 
-export function setRoom(room: string): void {
-  IPC_DIR = ipcDir(room)
+/**
+ * Get the data directory for the current project.
+ * This is `.termlings/_data/` where game state and placements are stored.
+ */
+export function getDataDir(): string {
+  return join(getTermlingsDir(), "_data")
+}
+
+export let IPC_DIR = getIpcDir()
+
+/**
+ * Update directories if the working directory changes.
+ * Generally not needed in typical usage.
+ */
+export function updateDirs(): void {
+  IPC_DIR = getIpcDir()
 }
 
 export function ensureIpcDir(): void {
   mkdirSync(IPC_DIR, { recursive: true })
+}
+
+export function ensureDataDir(): void {
+  mkdirSync(getDataDir(), { recursive: true })
 }
 
 // --- Command IPC ---

@@ -261,7 +261,7 @@ async function returnToTitle() {
   saveAgentSessions()
 
   const { showTitleScreen } = await import("./title.js")
-  await showTitleScreen("default")
+  await showTitleScreen(roomSlug)
 
   stdin.setRawMode!(true)
   stdin.resume()
@@ -418,7 +418,7 @@ function writeSimState() {
 
   writeState({
     entities,
-    map: { width: cols, height: rows, name: `${"default"} (simple)`, mode: "simple" },
+    map: { width: cols, height: rows, name: `${roomSlug} (simple)`, mode: "simple" },
   })
 }
 
@@ -475,7 +475,7 @@ function frame() {
   clearBuffer(buffer, cols, rows)
 
   // Header
-  const header = `Simple Mode \u2014 Room: ${"default"} \u2014 ${agentSessions.size} agent${agentSessions.size !== 1 ? "s" : ""}`
+  const header = `Simple Mode \u2014 Room: ${roomSlug} \u2014 ${agentSessions.size} agent${agentSessions.size !== 1 ? "s" : ""}`
   const headerX = Math.floor((cols - header.length) / 2)
   stampText(buffer, cols, rows, headerX, 1, header, [140, 140, 160])
 

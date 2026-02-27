@@ -69,12 +69,10 @@ describe("Object rendering", () => {
     expect(output.length).toBeGreaterThan(0)
   })
 
-  it("renders with custom color", () => {
-    const customColor: RGB = [255, 0, 0]
-    const output = renderObjectToTerminal("chair", customColor)
-    expect(output).toBeTruthy()
-    // Should contain ANSI color codes
-    expect(output).toContain("\x1b[38;2;")
+  it("returns error for removed default objects", () => {
+    // All default objects have been removed - users create custom ones instead
+    const output = renderObjectToTerminal("chair", [255, 0, 0])
+    expect(output).toContain("Unknown object")
   })
 
   it("returns error for unknown object", () => {
@@ -90,17 +88,8 @@ describe("Object rendering", () => {
     }
   })
 
-  it("renders objects with various colors", () => {
-    const colors: RGB[] = [
-      [255, 100, 100], // Red
-      [100, 255, 100], // Green
-      [100, 100, 255], // Blue
-    ]
-
-    for (const color of colors) {
-      const output = renderObjectToTerminal("sofa", color)
-      expect(output).toBeTruthy()
-      expect(output).toContain("\x1b[38;2;")
-    }
+  it("all built-in objects are removed (empty by design)", () => {
+    const allObjects = Object.keys(OBJECT_DEFS)
+    expect(allObjects.length).toBe(0)
   })
 })

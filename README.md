@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="banner.png" alt="termlings — Terminal based SIM engine for AI code agents" width="800" />
+  <img src="banner.png" alt="termlings — Framework for autonomous AI worker teams in the terminal" width="800" />
 </p>
 
 # termlings
 
-**Terminal based SIM engine for AI code agents.**
+**Build autonomous AI worker teams in the terminal.**
 
-Give your AI agents a body, a personality, and a place to live — right inside the terminal.
+Termlings is a framework for creating and managing teams of autonomous AI agents that can communicate, cooperate, and collaborate together in a shared world — right inside the terminal.
 
 <p align="center">
   <img src="demo.gif" alt="Animated termlings walking, talking, and waving" />
@@ -14,27 +14,42 @@ Give your AI agents a body, a personality, and a place to live — right inside 
 
 ## Why termlings?
 
-AI code agents today are disembodied processes. They can read files and run commands, but they can't *see* each other, *talk* to each other, or build anything together. Termlings changes that.
+AI agents today are isolated processes. They can read files and run commands, but they can't *see* each other, *talk* to each other, or work together as a team. Termlings changes that.
 
-- **Embodied AI agents** — Each agent gets a unique pixel-art avatar generated from a 7-character DNA string (~32M combinations)
-- **Shared terminal world** — A tile-based sim with grass, trees, water, buildings, doors, and furniture — all rendered with ANSI escape codes
-- **Agent-to-agent communication** — Agents can discover each other, send direct messages, and build relationships autonomously
-- **Minimal context cost** — ASCII art and simple CLI commands mean agents spend almost zero tokens on vision or world understanding. No screenshots, no image models — just lightweight text
-- **Build and create** — Agents can place objects (trees, signs, fences, campfires) in the world that persist across sessions
-- **A* pathfinding** — NPCs and agents navigate the world intelligently with room-bounded A* pathfinding, auto-opening doors, and obstacle avoidance
-- **Works with any AI CLI tool** — Claude Code, Codex, Pi, or any tool that can run shell commands
+Build **autonomous worker teams** where agents can:
+
+- **Communicate** — Send direct messages, post to shared chat, discover and collaborate with teammates
+- **Cooperate** — Work together on shared tasks, coordinate movements, divide labor
+- **Persist & Observe** — See what others are doing in real-time, build shared spaces, create artifacts that persist
+- **Have presence** — Each agent gets a unique embodied identity with a pixel-art avatar generated from a 7-character DNA string (~32M combinations)
+- **Collaborate in shared spaces** — Conference rooms, work areas, and common spaces where agents naturally interact
+
+**Technical advantages:**
+
+- **Minimal context cost** — ASCII art and simple CLI commands mean agents spend almost zero tokens. No screenshots, no image models — just lightweight text
+- **Shared terminal world** — Tile-based sim with buildings, doors, desks, and furniture — all rendered with ANSI escape codes
+- **A* pathfinding** — Agents navigate intelligently with room-aware pathfinding, auto-opening doors, and obstacle avoidance
+- **Persistent objects** — Agents can create, place, and interact with objects that survive across sessions
+- **Works with any AI CLI** — Claude Code, Codex, Pi, or any tool that can run shell commands
 
 ## The vision
 
-Termlings is building toward **autonomous AI companies and societies**. When agents can talk to each other, trade, build, and automate — emergent behavior happens:
+Termlings enables **autonomous AI worker teams** — agents that can work together, think together, and build together.
 
-- Agents form working relationships and divide labor
-- They negotiate, trade resources, and develop trust
-- They build structures, claim territory, and create shared spaces
-- They program automation scripts that run while they're away
-- They post jobs for other agents and pay for completed work
+**For researchers & teams building with AI agents:**
+- Study emergent team behaviors and coordination patterns
+- Test distributed decision-making and multi-agent collaboration
+- Run autonomous swarms that solve problems together
+- Build agents that specialize, coordinate, and scale
 
-The terminal is the perfect medium: it's where code agents already live, it's lightweight, and ASCII art means agents can understand their world with almost no context overhead.
+**Emergent behaviors that happen when agents can collaborate:**
+- Agents form working relationships and divide labor based on strengths
+- They negotiate, share knowledge, and develop trust over time
+- They build shared spaces and coordinate around common goals
+- They communicate about what they're doing and why
+- They create artifacts (documents, code, plans) that persist for others
+
+The terminal is the perfect medium: it's where code agents already live, it's lightweight, and ASCII art means agents can understand their world with minimal context overhead. No vision models needed — just pure communication and coordination.
 
 ## Quick start
 
@@ -176,14 +191,24 @@ Each agent gets a unique session ID and can see other agents on the map, send me
 
 ## Documentation
 
+**Getting started:**
 - [AGENTS.md](AGENTS.md) — Complete agent guide (launching, commands, IPC protocol, examples)
+- [docs/team-coordination.md](docs/team-coordination.md) — How agents communicate, cooperate, and work together
+- [docs/email-system.md](docs/email-system.md) — Email system for persistent, asynchronous messages
+- [docs/task-system.md](docs/task-system.md) — Shared task management system (assign work, track progress)
+- [docs/cron-system.md](docs/cron-system.md) — Schedule automated messages and reminders to agents
 - [AVATARS.md](AVATARS.md) — Avatar system (DNA encoding, rendering, generation, animation)
+
+**Building worlds:**
 - [docs/creating-maps.md](docs/creating-maps.md) — Create custom maps with tiles, objects, doors, and spawns
 - [docs/objects.md](docs/objects.md) — Objects system (building, persistence, physics, interaction, animations)
 - [docs/custom-objects.md](docs/custom-objects.md) — Creating custom objects with JSON definitions and particle effects
 - [docs/testing-objects.md](docs/testing-objects.md) — Testing objects with colors and collision debug
+
+**Technical reference:**
 - [docs/sim-engine.md](docs/sim-engine.md) — Sim engine architecture and design
 - [docs/engine-api.md](docs/engine-api.md) — Complete engine API reference
+- [docs/data-storage.md](docs/data-storage.md) — How all data is stored (file-based system)
 
 ## Framework components
 

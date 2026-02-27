@@ -86,7 +86,7 @@ function generateTitleTiles(cols: number, rows: number, horizon: number): string
 // --- Check if room has agents ---
 
 export function roomHasAgents(room: string): boolean {
-  const dir = join(homedir(), ".termlings", "rooms", room)
+  const dir = join(process.cwd(), ".termlings")
 
   // Check for agent command queue files (agent is trying to connect)
   try {
@@ -141,6 +141,16 @@ function createTitleScene(room: string, onReady: () => void): Scene {
   let titleRoom: RoomRegion = { name: "title", x: 0, y: 0, w: 80, h: 24 }
   const pf = createPathfinderState()
 
+  // Typewriter animation state
+  const commands = [
+    "termlings claude --dangerously-skip-permissions",
+    "termlings codex --dangerously-skip-permissions",
+    "termlings pi --dangerously-skip-permissions",
+  ]
+  let currentCmdIndex = 0
+  let typewriterProgress = 0 // 0-1, where 1 means fully typed
+  const typewriterSpeed = 0.03 // characters per frame
+
   // Pre-compose title text
   const rawGrid = composeText("TERMLINGS", { font: "block" })
   const padded = applyPadding(rawGrid, 1)
@@ -149,7 +159,7 @@ function createTitleScene(room: string, onReady: () => void): Scene {
   const titleW = titleGrid[0]?.length ?? 0
 
   // Subtitle text (plain terminal text)
-  const subtitle = "Terminal based SIM engine for AI code agents"
+  const subtitle = "Framework for building autonomous AI worker teams"
 
   function initBigEntities(cols: number, rows: number) {
     // Walk grid uses tile coordinates (1 tile = 1 col for title screen)
@@ -285,16 +295,39 @@ function createTitleScene(room: string, onReady: () => void): Scene {
         return
       }
 
+      // Typewriter animation - cycle through commands every 120 frames (~2 seconds per command)
+      const cycleFrames = 120 // frames per command
+      const framePosInCycle = tick % (cycleFrames * commands.length)
+      const newCmdIndex = Math.floor(framePosInCycle / cycleFrames)
+      if (newCmdIndex !== currentCmdIndex) {
+        currentCmdIndex = newCmdIndex
+        typewriterProgress = 0
+      }
+
+      // Animate typewriter effect
+      typewriterProgress = Math.min(
+        typewriterProgress + typewriterSpeed,
+        1
+      )
+
       const waitText = "Waiting for agent..."
       const waitX = Math.floor((cols - waitText.length) / 2)
       if (hintY > 0 && hintY < rows) stampText(buffer, cols, rows, waitX, hintY, waitText, dimGray)
 
-      const cmdY = hintY + 1
-      const cmd = room === "default"
-        ? "termlings claude --dangerously-skip-permissions"
-        : `termlings claude --dangerously-skip-permissions --room ${room}`
-      const cmdX = Math.floor((cols - cmd.length) / 2)
-      if (cmdY > 0 && cmdY < rows) stampText(buffer, cols, rows, cmdX, cmdY, cmd, veryDimGray)
+      // Show "Run in [folder]:" instruction
+      const instructText = `Run in ./${process.cwd().split("/").pop()}:`
+      const instructY = hintY + 2
+      const instructX = Math.floor((cols - instructText.length) / 2)
+      if (instructY > 0 && instructY < rows) stampText(buffer, cols, rows, instructX, instructY, instructText, readyGreen)
+
+      // Animate command with typewriter effect
+      const currentCmd = commands[currentCmdIndex]!
+      const charCount = Math.floor(currentCmd.length * typewriterProgress)
+      const displayCmd = currentCmd.substring(0, charCount) + (charCount < currentCmd.length ? "▌" : "")
+
+      const cmdY = instructY + 1
+      const cmdX = Math.floor((cols - currentCmd.length) / 2)
+      if (cmdY > 0 && cmdY < rows) stampText(buffer, cols, rows, cmdX, cmdY, displayCmd, veryDimGray)
 
       // --- Border ---
       stampUI(buffer, cols, rows, [])
@@ -327,6 +360,8 @@ function createTitleScene(room: string, onReady: () => void): Scene {
 export async function showTitleScreen(room: string): Promise<void> {
   const stdout = process.stdout
   const rows = stdout.rows || 24
+  // Clear terminal and old messages before entering fullscreen
+  stdout.write("\x1b[2J\x1b[3J\x1b[H")
   stdout.write(enterScreen(rows))
 
   return new Promise<void>((resolve) => {

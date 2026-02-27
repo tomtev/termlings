@@ -13,7 +13,7 @@ export interface LocalAgent {
  */
 export function discoverLocalAgents(): LocalAgent[] {
   const agents: LocalAgent[] = [];
-  const termlingsDir = ".termlings";
+  const termlingsDir = join(process.cwd(), ".termlings");
 
   if (!existsSync(termlingsDir)) return agents;
 
@@ -22,34 +22,38 @@ export function discoverLocalAgents(): LocalAgent[] {
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
 
+      // Skip special directories
+      if (entry.name === "_data" || entry.name.startsWith(".")) continue;
+
       const agentPath = join(termlingsDir, entry.name);
       const soulPath = join(agentPath, "SOUL.md");
 
+      // Only consider it an agent if SOUL.md exists
+      if (!existsSync(soulPath)) continue;
+
       let soul: LocalAgent["soul"] | undefined;
-      if (existsSync(soulPath)) {
-        try {
-          const content = readFileSync(soulPath, "utf-8");
-          const nameMatch = content.match(/^# (.+)$/m);
-          const purposeMatch = content.match(/\*\*Purpose:\*\* (.+)$/m);
-          const dnaMatch = content.match(/\*\*DNA:\*\* (.+)$/m);
-          const commandMatch = content.match(/\*\*Command:\*\* (.+)$/m);
+      try {
+        const content = readFileSync(soulPath, "utf-8");
+        const nameMatch = content.match(/^# (.+)$/m);
+        const purposeMatch = content.match(/\*\*Purpose:\*\* (.+)$/m);
+        const dnaMatch = content.match(/\*\*DNA:\*\* (.+)$/m);
+        const commandMatch = content.match(/\*\*Command:\*\* (.+)$/m);
 
-          if (nameMatch && dnaMatch) {
-            soul = {
-              name: nameMatch[1],
-              purpose: purposeMatch ? purposeMatch[1] : "",
-              dna: dnaMatch[1],
-              command: commandMatch ? commandMatch[1] : undefined,
-            };
-          }
-        } catch {}
-      }
+        if (nameMatch && dnaMatch) {
+          soul = {
+            name: nameMatch[1],
+            purpose: purposeMatch ? purposeMatch[1] : "",
+            dna: dnaMatch[1],
+            command: commandMatch ? commandMatch[1] : undefined,
+          };
 
-      agents.push({
-        name: entry.name,
-        path: agentPath,
-        soul,
-      });
+          agents.push({
+            name: entry.name,
+            path: agentPath,
+            soul,
+          });
+        }
+      } catch {}
     }
   } catch {}
 
@@ -61,7 +65,7 @@ export function discoverLocalAgents(): LocalAgent[] {
  * Marks agents already active in the room as taken
  * Includes option to create random agent
  */
-export async function selectLocalAgentWithRoom(localAgents: LocalAgent[], room: string = "default"): Promise<LocalAgent | null | "create-random"> {
+export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promise<LocalAgent | null | "create-random"> {
   // Get active agents in this room
   const activeAgentDnas = new Set<string>();
   try {
@@ -76,54 +80,41 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[], room: 
     // No sim running, that's fine
   }
 
-  const options = localAgents.map((a, i) => ({
-    index: i,
-    agent: a,
-    taken: a.soul?.dna ? activeAgentDnas.has(a.soul.dna) : false,
-    type: "existing" as const
-  }));
+  const { selectMenu } = await import("../interactive-menu.js");
 
-  // Add "Create random agent" option
-  const createOption = {
-    index: options.length,
-    agent: null,
-    taken: false,
-    type: "create" as const
-  };
+  // Build menu items for existing agents
+  const menuItems = [
+    ...localAgents.map((a) => ({
+      value: JSON.stringify({ type: "existing", agent: a }),
+      label: a.soul?.name || a.name,
+      description: a.soul?.purpose ? `${a.soul.purpose}${a.soul.dna && activeAgentDnas.has(a.soul.dna) ? " (in room)" : ""}` : `Autonomous agent${a.soul?.dna && activeAgentDnas.has(a.soul.dna) ? " (in room)" : ""}`,
+    })),
+    {
+      value: JSON.stringify({ type: "create", agent: null }),
+      label: "Spawn random agent",
+      description: "Create a new agent with random DNA",
+    },
+  ];
 
-  console.log("\nSelect agent:\n");
-  for (const opt of options) {
-    const soulName = opt.agent!.soul?.name || opt.agent!.name;
-    const purpose = opt.agent!.soul?.purpose ? ` — ${opt.agent!.soul.purpose}` : "";
-    const status = opt.taken ? " (already in room)" : "";
-    console.log(`  (${opt.index + 1}) ${soulName}${purpose}${status}`);
+  const selected = await selectMenu(menuItems, "Select agent to launch:");
+  const { type, agent } = JSON.parse(selected);
+
+  if (type === "create") {
+    return "create-random";
   }
-  console.log(`  (${createOption.index + 1}) [Spawn random agent]`);
 
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question("\nChoose: ", (answer) => {
-      rl.close();
-      const idx = parseInt(answer, 10) - 1;
-      if (idx === createOption.index) {
-        resolve("create-random");
-      } else if (idx >= 0 && idx < options.length) {
-        if (options[idx].taken) {
-          console.log("\nWarning: This agent is already active in this room.");
-        }
-        resolve(options[idx].agent);
-      } else {
-        resolve(options[0]?.agent || null);
-      }
-    });
-  });
+  if (agent && agent.soul?.dna && activeAgentDnas.has(agent.soul.dna)) {
+    console.log("\n⚠️  Warning: This agent is already active in this room.");
+  }
+
+  return agent || null;
 }
 
 /**
  * Show interactive selector for all available agents (built-in + local)
  * Marks agents already active in the room as taken
  */
-export async function selectAgent(room: string = "default"): Promise<{ type: "builtin" | "local"; name: string; agent?: LocalAgent }> {
+export async function selectAgent(): Promise<{ type: "builtin" | "local"; name: string; agent?: LocalAgent }> {
   const builtins = ["claude", "codex"];
   const localAgents = discoverLocalAgents();
 
@@ -154,47 +145,47 @@ export async function selectAgent(room: string = "default"): Promise<{ type: "bu
   if (allOptions.length === 0) return { type: "builtin", name: "claude" };
   if (allOptions.length === 1) return allOptions[0];
 
-  console.log("\nSelect agent:\n");
-  for (let i = 0; i < allOptions.length; i++) {
-    const opt = allOptions[i];
-    const status = opt.taken ? " (already in room)" : "";
+  // Build menu items for interactive selector
+  const { selectMenu } = await import("../interactive-menu.js");
+  const menuItems = allOptions.map((opt) => {
     if (opt.type === "builtin") {
       const label = opt.name === "claude" ? "Claude Code" : "Codex CLI";
-      console.log(`  (${i + 1}) ${opt.name.padEnd(10)} - ${label}${status}`);
+      const status = opt.taken ? " (in room)" : "";
+      return {
+        value: JSON.stringify(opt),
+        label: `${label}${status}`,
+        description: `Built-in ${opt.name} agent`,
+      };
     } else {
       const soulName = opt.agent?.soul?.name || opt.name;
-      const purpose = opt.agent?.soul?.purpose ? ` — ${opt.agent.soul.purpose}` : "";
-      console.log(`  (${i + 1}) ${soulName}${purpose}${status}`);
+      const status = opt.taken ? " (in room)" : "";
+      const purpose = opt.agent?.soul?.purpose || "Autonomous agent";
+      return {
+        value: JSON.stringify(opt),
+        label: `${soulName}${status}`,
+        description: purpose,
+      };
     }
+  });
+
+  const selected = await selectMenu(menuItems, "Which agent would you like to launch?");
+  const option = JSON.parse(selected);
+
+  if (option.taken) {
+    console.log("\n⚠️  Warning: This agent is already active in this room.");
   }
 
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question("\nChoose: ", (answer) => {
-      rl.close();
-      const idx = parseInt(answer, 10) - 1;
-      if (idx >= 0 && idx < allOptions.length) {
-        // Still allow choosing taken agents (user can run multiple instances if they want)
-        // Just warn them
-        if (allOptions[idx].taken) {
-          console.log("\nWarning: This agent is already active in this room.");
-        }
-        resolve(allOptions[idx]);
-      } else {
-        resolve(allOptions[0]);
-      }
-    });
-  });
+  return option;
 }
 
 /**
  * Show interactive selector for local agents (deprecated, use selectAgent)
  */
-export async function selectLocalAgent(room: string = "default"): Promise<LocalAgent | null> {
+export async function selectLocalAgent(): Promise<LocalAgent | null> {
   const agents = discoverLocalAgents();
   if (agents.length === 0) return null;
   if (agents.length === 1) return agents[0];
 
-  const result = await selectAgent(room);
+  const result = await selectAgent();
   return result.type === "local" ? result.agent || null : null;
 }

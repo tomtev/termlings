@@ -56,24 +56,21 @@ import {
   stepNpc,
   type NpcAIState,
   ensureIpcDir,
+  ensureDataDir,
   IPC_DIR,
+  getDataDir,
   pollCommands,
   writeState,
   writeMessages,
   cleanupIpc,
   findPath,
   type AgentCommand,
-  setRoom,
   detectBuildings,
   type DetectedRoom,
 } from "./engine/index.js"
 import { resolve, join } from "path"
 import { readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, unlinkSync } from "fs"
-
-// --- Room selection (must happen before ensureIpcDir) ---
-
-const roomSlug = process.env.TERMLINGS_ROOM || "default"
-setRoom(roomSlug)
+import { assignDesk, releaseDesk, type DeskAssignment } from "./engine/desk-assignment.js"
 
 // --- CLI args ---
 
@@ -115,24 +112,36 @@ const detectedRoomsSerialized = detectedRooms.map(r => ({
 // --- Objects (merge map-defined objects with built-in defs) ---
 
 const { loadCustomObjects } = await import("./engine/custom-objects.js")
-const customObjectDefs = loadCustomObjects(roomSlug)
+const customObjectDefs = loadCustomObjects()
 const mergedDefs = { ...OBJECT_DEFS, ...world.objectDefs, ...customObjectDefs }
 let objectPlacements = [...world.placements]
 let objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
 
 // --- Persist agent-built objects ---
 
-const PLACEMENTS_FILE = join(IPC_DIR, "placements.json")
+ensureDataDir()
+const PLACEMENTS_FILE = join(getDataDir(), "placements.json")
 
 function loadPersistedPlacements() {
   if (!existsSync(PLACEMENTS_FILE)) return
   try {
     const data = readFileSync(PLACEMENTS_FILE, "utf8")
     const saved = JSON.parse(data) as ObjectPlacement[]
+    let missing = 0
     for (const p of saved) {
-      if (mergedDefs[p.def]) objectPlacements.push(p)
+      if (mergedDefs[p.def]) {
+        objectPlacements.push(p)
+      } else {
+        missing++
+        console.error(`Warning: Placed object "${p.def}" not found in definitions (at ${p.x},${p.y})`)
+      }
     }
-  } catch {}
+    if (missing > 0) {
+      console.error(`⚠️ ${missing} placed object(s) could not be loaded - object definitions may be missing`)
+    }
+  } catch (e) {
+    console.error(`Error loading placements: ${e}`)
+  }
 }
 
 function savePersistedPlacements() {
@@ -191,7 +200,7 @@ initializeParticleSystems()
 
 function rebuildObjects() {
   // Reload custom objects from disk (in case new ones were created)
-  const updatedCustomObjects = loadCustomObjects(roomSlug)
+  const updatedCustomObjects = loadCustomObjects()
   Object.assign(mergedDefs, updatedCustomObjects)
 
   objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
@@ -287,6 +296,8 @@ const stdout = process.stdout
 let cols = stdout.columns || 80
 let rows = stdout.rows || 24
 
+// Clear terminal and old messages before entering fullscreen
+stdout.write("\x1b[2J\x1b[3J\x1b[H")
 stdout.write("\x1b[?1049h\x1b[?25l")
 
 function cleanup() {
@@ -697,7 +708,7 @@ async function returnToTitle() {
 
   // Show title screen (blocks until new agent joins)
   const { showTitleScreen } = await import("./title.js")
-  await showTitleScreen(roomSlug)
+  await showTitleScreen("default")
 
   // Resume sim input
   stdin.setRawMode!(true)
@@ -786,47 +797,38 @@ function updateNpcAI() {
 
 // --- Agent IPC polling ---
 
-let nextSpawnIdx = 0
-
 function spawnAgentEntity(sessionId: string, cmd: AgentCommand): Entity {
-  // Pick a spawn point (cycle through NPC spawns)
-  const spawn = npcSpawns[nextSpawnIdx % npcSpawns.length]!
-  nextSpawnIdx++
-
   // Use DNA from command if provided, otherwise derive from session ID
   const dna = cmd.dna && /^[0-9a-f]{6,7}$/i.test(cmd.dna)
     ? cmd.dna.toLowerCase()
     : encodeDNA(traitsFromName(sessionId))
   const sprH = spriteHeight(dna)
   const h = entityHeight(decodeDNA(dna), zoomLevel)
-  // Spawn randomly within a radius, but only on walkable ground
-  const centerX = spawn.x
-  const centerY = spawn.y
-  let spawnX = centerX
-  let spawnY = centerY - h + 1
-  for (let radius = 10; radius <= 50; radius += 10) {
-    let found = false
-    for (let attempt = 0; attempt < 30; attempt++) {
-      const ox = Math.floor(Math.random() * radius * 2) - radius
-      const oy = Math.floor(Math.random() * radius * 2) - radius
-      const tx = Math.max(0, Math.min(mapWidth - 10, centerX + ox))
-      const ty = Math.max(0, Math.min(mapHeight - 1, centerY + oy))
-      // ty is foot Y; entity top is ty - h + 1
-      if (canMoveTo(tx, ty - h + 1, h)) {
-        spawnX = tx
-        spawnY = ty - h + 1
-        found = true
-        break
-      }
-    }
-    if (found) break
+
+  // Assign a desk to this agent
+  const agentName = cmd.name || sessionId.slice(0, 12)
+  const deskAssignment = assignDesk(sessionId, agentName)
+
+  let spawnX: number
+  let spawnY: number
+
+  if (deskAssignment) {
+    // Position agent at their assigned desk
+    spawnX = deskAssignment.x
+    spawnY = deskAssignment.y - h + 1 // Convert from foot position to top position
+  } else {
+    // Fallback: use first spawn point if no desks available
+    const spawn = npcSpawns[0] || { x: mapWidth / 2, y: mapHeight / 2 }
+    spawnX = spawn.x
+    spawnY = spawn.y - h + 1
   }
+
   const entity = makeEntity(dna, spawnX, spawnY, zoomLevel, { idle: true })
-  entity.name = cmd.name || sessionId.slice(0, 12)
+  entity.name = agentName
 
   const ai = createNpcAIState()
   ai.phase = "idle"
-  ai.idleRemaining = Infinity // Agents don't wander on their own
+  ai.idleRemaining = Infinity // Agents stay at their desk
 
   agentSessions.set(sessionId, { entity, ai, gestureExpiry: 0 })
   return entity
@@ -883,6 +885,8 @@ function processAgentCommands() {
         const name = session.entity.name || sessionId
         const dna = session.entity.dna
         agentSessions.delete(sessionId)
+        // Release desk assignment
+        releaseDesk(sessionId)
         // Remove from persistence
         try {
           const data = readFileSync(AGENTS_FILE, "utf8")
@@ -911,8 +915,19 @@ function processAgentCommands() {
       const targetFootY = cmd.y
       const targetX = cmd.x - 5 // Adjust for sprite offset (entity.x is left edge, feet center ~x+4)
 
-      // Use full map bounds for agents (they can cross rooms via doors)
-      const bounds = { x0: 0, y0: 0, x1: mapWidth, y1: mapHeight }
+      // Check if target is inside a room - if so, constrain pathfinding to that room
+      let bounds = { x0: 0, y0: 0, x1: mapWidth, y1: mapHeight }
+      const targetRoom = detectedRooms.find(r => {
+        const b = r.bounds
+        return targetX >= b.x && targetX < b.x + b.w && targetFootY >= b.y && targetFootY < b.y + b.h
+      })
+
+      if (targetRoom) {
+        // Target is inside a room - constrain pathfinding to that room to avoid leaving and re-entering
+        const b = targetRoom.bounds
+        bounds = { x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h }
+      }
+
       const path = findPath(walkGrid, entity.x, footY, targetX, targetFootY, bounds, pathfinderState, 5000)
 
       if (path && path.length > 0) {
@@ -979,7 +994,7 @@ function processAgentCommands() {
 
     if (cmd.action === "place" && cmd.objectType) {
       // Reload custom objects in case new ones were created since sim started
-      const updatedCustomObjects = loadCustomObjects(roomSlug)
+      const updatedCustomObjects = loadCustomObjects()
       Object.assign(mergedDefs, updatedCustomObjects)
 
       const objDef = mergedDefs[cmd.objectType]
@@ -1062,7 +1077,7 @@ function processAgentCommands() {
 
     if (cmd.action === "destroy") {
       // Reload custom objects in case new ones were created since sim started
-      const updatedCustomObjects = loadCustomObjects(roomSlug)
+      const updatedCustomObjects = loadCustomObjects()
       Object.assign(mergedDefs, updatedCustomObjects)
 
       const dx = cmd.x ?? (entity.x + 4)

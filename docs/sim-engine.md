@@ -1,6 +1,6 @@
 # Termlings Sim Engine
 
-Terminal based SIM engine for AI code agents.
+Framework for building and coordinating autonomous AI worker teams in the terminal.
 
 ## What is it?
 
