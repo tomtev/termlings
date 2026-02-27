@@ -59,11 +59,9 @@ export function discoverLocalAgents(): LocalAgent[] {
 /**
  * Show picker for local agents only (not built-in CLIs)
  * Marks agents already active in the room as taken
+ * Includes option to create random agent
  */
-export async function selectLocalAgentWithRoom(localAgents: LocalAgent[], room: string = "default"): Promise<LocalAgent | null> {
-  if (localAgents.length === 0) return null;
-  if (localAgents.length === 1) return localAgents[0];
-
+export async function selectLocalAgentWithRoom(localAgents: LocalAgent[], room: string = "default"): Promise<LocalAgent | null | "create-random"> {
   // Get active agents in this room
   const activeAgentDnas = new Set<string>();
   try {
@@ -81,23 +79,35 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[], room: 
   const options = localAgents.map((a, i) => ({
     index: i,
     agent: a,
-    taken: a.soul?.dna ? activeAgentDnas.has(a.soul.dna) : false
+    taken: a.soul?.dna ? activeAgentDnas.has(a.soul.dna) : false,
+    type: "existing" as const
   }));
+
+  // Add "Create random agent" option
+  const createOption = {
+    index: options.length,
+    agent: null,
+    taken: false,
+    type: "create" as const
+  };
 
   console.log("\nSelect agent:\n");
   for (const opt of options) {
-    const soulName = opt.agent.soul?.name || opt.agent.name;
-    const purpose = opt.agent.soul?.purpose ? ` — ${opt.agent.soul.purpose}` : "";
+    const soulName = opt.agent!.soul?.name || opt.agent!.name;
+    const purpose = opt.agent!.soul?.purpose ? ` — ${opt.agent!.soul.purpose}` : "";
     const status = opt.taken ? " (already in room)" : "";
     console.log(`  (${opt.index + 1}) ${soulName}${purpose}${status}`);
   }
+  console.log(`  (${createOption.index + 1}) [Create random agent]`);
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
     rl.question("\nChoose: ", (answer) => {
       rl.close();
       const idx = parseInt(answer, 10) - 1;
-      if (idx >= 0 && idx < options.length) {
+      if (idx === createOption.index) {
+        resolve("create-random");
+      } else if (idx >= 0 && idx < options.length) {
         if (options[idx].taken) {
           console.log("\nWarning: This agent is already active in this room.");
         }
