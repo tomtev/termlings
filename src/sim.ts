@@ -888,7 +888,8 @@ function processAgentCommands() {
             }
 
             // Check agents
-            for (const ent of entities) {
+            for (const session of agentSessions.values()) {
+              const ent = session.entity
               // Check if agent footprint overlaps (7 cells wide)
               const agentLeft = ent.x + 1
               const agentRight = ent.x + 7
