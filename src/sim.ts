@@ -114,7 +114,9 @@ const detectedRoomsSerialized = detectedRooms.map(r => ({
 
 // --- Objects (merge map-defined objects with built-in defs) ---
 
-const mergedDefs = { ...OBJECT_DEFS, ...world.objectDefs }
+const { loadCustomObjects } = await import("./engine/custom-objects.js")
+const customObjectDefs = loadCustomObjects(room)
+const mergedDefs = { ...OBJECT_DEFS, ...world.objectDefs, ...customObjectDefs }
 let objectPlacements = [...world.placements]
 let objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
 
@@ -167,6 +169,10 @@ function initializeParticleSystems() {
 initializeParticleSystems()
 
 function rebuildObjects() {
+  // Reload custom objects from disk (in case new ones were created)
+  const updatedCustomObjects = loadCustomObjects(room)
+  Object.assign(mergedDefs, updatedCustomObjects)
+
   objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
   cacheObjectSortYs()
   savePersistedPlacements()
