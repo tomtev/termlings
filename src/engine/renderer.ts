@@ -429,8 +429,8 @@ export function stampChatMessages(
   messages: ChatMessage[],
 ) {
   const now = Date.now()
-  const maxWidth = cols - 2
-  const recent = messages.filter((m) => now - m.time < 30000)
+  const maxWidth = Math.floor(cols * 0.33) // Max 33% of left side with wrapping
+  const recent = messages.filter((m) => now - m.time < 600000) // Keep chats for 10 minutes
 
   let currentRow = rows - 3 // gap of 1 row above bottom HUD
   for (let i = recent.length - 1; i >= 0 && currentRow > 0; i--) {
@@ -450,14 +450,17 @@ export function stampChatMessages(
         continue
       }
 
+      // Only color name on the first (last in the loop) line
+      const isFirstLine = li === wrappedLines.length - 1
+
       for (let ci = 0; ci < displayLine.length; ci++) {
         const sx = 1 + ci
-        if (sx >= cols - 1) break
+        if (sx >= 1 + maxWidth) break // Constrain to maxWidth
         const c = bufRow[sx]
         if (c) {
           c.ch = displayLine[ci]!
-          // Color name differently from text
-          c.fg = ci < nameEnd ? msg.fg : _chatDimFg
+          // Color name differently from text, but only on first line
+          c.fg = isFirstLine && ci < nameEnd ? msg.fg : _chatDimFg
           c.bg = null
         }
       }

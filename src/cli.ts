@@ -663,7 +663,7 @@ Commands:
       console.log(`Walk queued to (${walkX},${walkY}) near (${x},${y}), then place ${objectType}`);
     } else {
       // No coordinates: place at current location
-      writeCommand(sessionId, { action: "place", objectType, x, y, name: _agentName, dna: _agentDna, ts: Date.now() });
+      writeCommand(sessionId, { action: "place", objectType, name: _agentName, dna: _agentDna, ts: Date.now() });
       console.log(`Place command sent: ${objectType}`);
     }
     process.exit(0);

@@ -1,6 +1,6 @@
 import type { AgentAdapter } from "./types.js"
 import { randomBytes } from "crypto"
-import { readFileSync, existsSync } from "fs"
+import { readFileSync, existsSync, unlinkSync } from "fs"
 import { resolve as resolvePath, dirname as dirName, join as joinPath } from "path"
 import { fileURLToPath } from "url"
 import { homedir } from "os"
@@ -271,8 +271,32 @@ This room is running in SIMPLE MODE:
     }
   }, 2000)
 
-  // Forward signals to child
-  const forward = (sig: number) => proc.kill(sig)
+  // Handle cleanup on exit
+  const cleanup = () => {
+    clearInterval(pollTimer)
+    process.stdin.off("data", onStdinData)
+    process.stdout.off("resize", onResize)
+    process.stdin.setRawMode?.(false)
+
+    // Send leave command to announce departure
+    writeCommand(sessionId, { action: "leave" as any, name: agentName, ts: Date.now() })
+
+    // Clean up queue file to prevent stale agent sessions
+    try {
+      const queueFile = joinPath(ipcDir(room), `${sessionId}.queue.jsonl`)
+      if (existsSync(queueFile)) {
+        unlinkSync(queueFile)
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+
+  // Forward signals to child and cleanup
+  const forward = (sig: number) => {
+    cleanup()
+    proc.kill(sig)
+  }
   process.on("SIGINT", () => forward(2))
   process.on("SIGTERM", () => forward(15))
 
@@ -280,14 +304,8 @@ This room is running in SIMPLE MODE:
   const exitCode = await proc.exited
   const finalCode = exitCode ?? 0
 
-  // Cleanup
-  clearInterval(pollTimer)
-  process.stdin.off("data", onStdinData)
-  process.stdout.off("resize", onResize)
-  process.stdin.setRawMode?.(false)
-
-  // Announce departure
-  writeCommand(sessionId, { action: "leave" as any, name: agentName, ts: Date.now() })
+  // Cleanup on normal exit
+  cleanup()
 
   process.exit(finalCode)
 }
