@@ -1,4 +1,4 @@
-import { tileKey, type RGB, type Cell, type FurnitureOverlay, type Entity } from "./types.js"
+import { tileKey, type RGB, type Cell, type ObjectOverlay, type Entity } from "./types.js"
 
 export interface DoorDef {
   x: number
@@ -20,7 +20,7 @@ const PROXIMITY = 6
 const ANIMATE_INTERVAL = 3 // ticks between animation steps
 const CLOSE_DELAY = 90 // ticks (~1.5s at 60fps) before closing starts
 
-export function createDoors(defs: DoorDef[], furnitureOverlay: FurnitureOverlay): DoorState[] {
+export function createDoors(defs: DoorDef[], objectOverlay: ObjectOverlay): DoorState[] {
   const doors = defs.map(def => ({
     def,
     openAmount: 0,
@@ -35,8 +35,8 @@ export function createDoors(defs: DoorDef[], furnitureOverlay: FurnitureOverlay)
       const tx = orientation === "horizontal" ? x + i : x
       const ty = orientation === "vertical" ? y + i : y
       const key = tileKey(tx, ty)
-      furnitureOverlay.walkable.set(key, false)
-      furnitureOverlay.visual.set(key, { ch: "█", fg: color, bg: null })
+      objectOverlay.walkable.set(key, false)
+      objectOverlay.visual.set(key, { ch: "█", fg: color, bg: null })
     }
   }
 
@@ -81,7 +81,7 @@ function getBlockedIndices(length: number, openAmount: number): number[] {
 export function updateDoors(
   doors: DoorState[],
   entities: Entity[],
-  furnitureOverlay: FurnitureOverlay,
+  objectOverlay: ObjectOverlay,
   tick: number,
 ): void {
   for (const door of doors) {
@@ -108,8 +108,8 @@ export function updateDoors(
         const tx = orientation === "horizontal" ? x + i : x
         const ty = orientation === "vertical" ? y + i : y
         const key = tileKey(tx, ty)
-        furnitureOverlay.walkable.delete(key)
-        furnitureOverlay.visual.delete(key)
+        objectOverlay.walkable.delete(key)
+        objectOverlay.visual.delete(key)
       }
       // Recompute and cache new blocked indices
       door._blocked = getBlockedIndices(length, door.openAmount)
@@ -117,8 +117,8 @@ export function updateDoors(
         const tx = orientation === "horizontal" ? x + i : x
         const ty = orientation === "vertical" ? y + i : y
         const key = tileKey(tx, ty)
-        furnitureOverlay.walkable.set(key, false)
-        furnitureOverlay.visual.set(key, { ch: "█", fg: color, bg: null })
+        objectOverlay.walkable.set(key, false)
+        objectOverlay.visual.set(key, { ch: "█", fg: color, bg: null })
       }
     }
   }

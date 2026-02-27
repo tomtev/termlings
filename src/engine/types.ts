@@ -34,7 +34,7 @@ export interface ParsedMap {
   tileDefs: Record<string, TileDef>
 }
 
-export interface FurnitureOverlay {
+export interface ObjectOverlay {
   visual: Map<number, Cell>
   walkable: Map<number, boolean>
 }

@@ -1,4 +1,4 @@
-import { tileKey, type TileDef, type RoomRegion, type ParsedMap, type Cell, type RGB, type FurnitureOverlay } from "./types.js"
+import { tileKey, type TileDef, type RoomRegion, type ParsedMap, type Cell, type RGB, type ObjectOverlay } from "./types.js"
 
 export const DEFAULT_TILE_DEFS: Record<string, TileDef> = {
   " ": { ch: " ", fg: null,            bg: null,            walkable: false },
@@ -210,12 +210,12 @@ export function isWalkable(
   mapHeight: number,
   wx: number,
   wy: number,
-  furniture?: FurnitureOverlay,
+  objects?: ObjectOverlay,
 ): boolean {
   if (wx < 0 || wy < 0 || wy >= mapHeight || wx >= mapWidth) return false
-  // Furniture overlay takes precedence
-  if (furniture) {
-    const fw = furniture.walkable.get(tileKey(wx, wy))
+  // Objects overlay takes precedence
+  if (objects) {
+    const fw = objects.walkable.get(tileKey(wx, wy))
     if (fw !== undefined) return fw
   }
   const ch = tiles[wy]?.[wx]

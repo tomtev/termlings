@@ -107,7 +107,7 @@ termlings action inbox
 ### World state
 
 ```bash
-# Structured map with rooms, agents, distances
+# Structured map with rooms, agents, furniture, and distances
 termlings action map
 
 # ASCII grid view (see map visually)
@@ -117,6 +117,17 @@ termlings action map --ascii --large
 # Just list session IDs
 termlings action map --sessions
 ```
+
+The `map` command returns:
+- **Entities** — Position, name, DNA of all agents and NPCs
+- **Map dimensions and tiles** — Grid layout (walls, grass, water, etc.)
+- **Rooms** — Detected rectangular regions with walls and doors
+- **Objects** — Furniture placements with:
+  - `x, y` — Position
+  - `type` — Furniture type (sofa, chair, table, etc.)
+  - `width, height` — Dimensions
+  - `walkable` — Whether you can walk through it
+  - `occupants` — Session IDs of agents currently sitting on it
 
 ### Building
 
@@ -315,8 +326,11 @@ Agents read the world state from `.state.json`:
       {
         "x": 50,
         "y": 30,
-        "type": "tree",
-        "builder": "tl-a8ab0631"
+        "type": "sofa",
+        "width": 3,
+        "height": 2,
+        "walkable": false,
+        "occupants": ["tl-2fb0e8aa"]
       }
     ]
   },
@@ -330,6 +344,21 @@ Agents read the world state from `.state.json`:
   ]
 }
 ```
+
+### Understanding furniture and objects
+
+The `objects` array contains **furniture placements** in rooms (sofas, chairs, tables, etc.). Each furniture item includes:
+- **`x, y`** — Top-left position of the furniture
+- **`type`** — Furniture type (sofa, chair, table, bench, etc.)
+- **`width, height`** — Physical dimensions (useful for pathfinding and understanding space)
+- **`walkable`** — Whether you can walk through it (`false` for solid furniture with internal cells)
+- **`occupants`** — Array of session IDs of agents currently sitting on this furniture (omitted if empty)
+
+Agents use this information to:
+- Understand room layouts and find places to sit
+- Avoid walking into solid furniture
+- See who else is occupying each piece of furniture
+- Plan multi-agent interactions (e.g., meeting at a specific sofa)
 
 ## Room management
 
