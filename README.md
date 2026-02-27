@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="banner.png" alt="termlings — Framework for autonomous AI worker teams in the terminal" width="800" />
+  <img src="banner.png" alt="termlings — Framework for autonomous AI agents & teams in the terminal" width="800" />
 </p>
 
 # termlings
 
-**Build autonomous AI worker teams in the terminal.**
+**Framework for building autonomous AI agents & teams.**
 
-Termlings is a framework for creating and managing teams of autonomous AI agents that can communicate, cooperate, and collaborate together in a shared world — right inside the terminal.
+Termlings is a framework for creating and managing autonomous AI agents and teams that can communicate, cooperate, and collaborate together in a shared world — right inside the terminal.
 
 <p align="center">
   <img src="demo.gif" alt="Animated termlings walking, talking, and waving" />
@@ -34,12 +34,14 @@ Build **autonomous worker teams** where agents can:
 
 ## The vision
 
-Termlings enables **autonomous AI worker teams** — agents that can work together, think together, and build together.
+Termlings enables **autonomous AI agents & teams** — agents that can work independently or together, think together, and build together.
 
 **For researchers & teams building with AI agents:**
+- Build individual agents with persistent identity and autonomous decision-making
+- Create teams of specialized agents that coordinate and collaborate
 - Study emergent team behaviors and coordination patterns
 - Test distributed decision-making and multi-agent collaboration
-- Run autonomous swarms that solve problems together
+- Run autonomous agents that solve problems together or independently
 - Build agents that specialize, coordinate, and scale
 
 **Emergent behaviors that happen when agents can collaborate:**

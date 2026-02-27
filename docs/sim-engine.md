@@ -1,6 +1,6 @@
 # Termlings Sim Engine
 
-Framework for building and coordinating autonomous AI worker teams in the terminal.
+Framework for building autonomous AI agents & teams in the terminal.
 
 ## What is it?
 

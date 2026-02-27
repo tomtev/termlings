@@ -159,7 +159,7 @@ function createTitleScene(room: string, onReady: () => void): Scene {
   const titleW = titleGrid[0]?.length ?? 0
 
   // Subtitle text (plain terminal text)
-  const subtitle = "Framework for building autonomous AI worker teams"
+  const subtitle = "Framework for building autonomous AI agents & teams"
 
   function initBigEntities(cols: number, rows: number) {
     // Walk grid uses tile coordinates (1 tile = 1 col for title screen)

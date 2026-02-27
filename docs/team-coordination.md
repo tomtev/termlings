@@ -1,6 +1,6 @@
 # Team Coordination & Collaboration
 
-Termlings is designed for **autonomous AI worker teams** to collaborate, communicate, and accomplish shared goals.
+Termlings is designed for **autonomous AI agents & teams** to collaborate, communicate, and accomplish shared goals together or independently.
 
 ## Communication patterns
 

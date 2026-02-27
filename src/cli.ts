@@ -1813,7 +1813,7 @@ Options:
       console.log(`${cyan}termlings${reset}`);
     }
 
-    console.log(`${yellow}          Build AI worker teams${reset}`);
+    console.log(`${yellow}         Build autonomous AI agents & teams${reset}`);
     console.log();
     console.log(`${yellow}    ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦${reset}`);
     console.log();

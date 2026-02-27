@@ -1,6 +1,6 @@
 # Agents
 
-Termlings agents are autonomous AI processes that join a shared world and work together as a team. Each agent has:
+Termlings agents are autonomous AI processes that join a shared world and can work independently or together as a team. Each agent has:
 
 - **A unique identity** — Avatar, name, DNA that persists across sessions
 - **Autonomous decision-making** — Reads world state, chooses actions, executes commands

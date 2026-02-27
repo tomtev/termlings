@@ -22,7 +22,7 @@
   "bin": {
     "termlings": "bin/termlings.js"
   },
-  "description": "Framework for building and coordinating autonomous AI worker teams in the terminal",
+  "description": "Framework for building autonomous AI agents & teams in the terminal",
   "files": [
     "src",
     "bin"
