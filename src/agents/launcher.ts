@@ -111,9 +111,9 @@ export async function launchAgent(
   // Render agent startup message with avatar and name
   if (agentDna) {
     try {
-      const { renderTerminal, decodeDNA } = await import("../index.js")
+      const { renderTerminalSmall, decodeDNA } = await import("../index.js")
       const traits = decodeDNA(agentDna)
-      const avatar = renderTerminal(agentDna, 0)
+      const avatar = renderTerminalSmall(agentDna, 0)
       const avatarLines = avatar.split("\n")
 
       // Render agent info beside avatar
@@ -133,7 +133,7 @@ export async function launchAgent(
       for (let i = 0; i < maxLines; i++) {
         const avatarLine = avatarLines[i] || ""
         const infoLine = infoLines[i] || ""
-        const pad = " ".repeat(Math.max(0, 20 - avatarLine.replace(/\x1b\[[0-9;]*m/g, "").length))
+        const pad = " ".repeat(Math.max(0, 10 - avatarLine.replace(/\x1b\[[0-9;]*m/g, "").length))
         console.log(`${avatarLine}${pad}  ${infoLine}`)
       }
       console.log()
