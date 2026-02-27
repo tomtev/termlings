@@ -1,13 +1,7 @@
 import { join, resolve } from "path";
-import { mkdtemp, readdir, readFile, rm, unlink, writeFile } from "fs/promises";
-import { tmpdir } from "os";
-import { generateRandomDNA, renderTerminal, renderSVG, decodeDNA, hslToRgb } from "./index.js";
+import { writeFile } from "fs/promises";
+import { generateRandomDNA, renderSVG, decodeDNA, hslToRgb, renderTerminal } from "./index.js";
 import { createInterface } from "readline";
-
-const REPO = "tomtev/termlings";
-const BRANCH = "main";
-const TEMPLATE_DIR = "agent-template";
-const TARBALL_URL = `https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz`;
 
 function prompt(question: string): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -41,7 +35,7 @@ export async function runCreate(): Promise<void> {
     vars["AGENT_NAME"] = await prompt("Agent name: ") || "My Agent";
   }
   if (!vars["AGENT_PURPOSE"]) {
-    vars["AGENT_PURPOSE"] = await prompt("Purpose: ") || "A personal agent that helps with tasks using workflows and skills.";
+    vars["AGENT_PURPOSE"] = await prompt("Purpose: ") || "A helpful agent";
   }
 
   const slug = vars["AGENT_NAME"].toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent";
@@ -49,57 +43,6 @@ export async function runCreate(): Promise<void> {
   await Bun.spawn(["mkdir", "-p", dest]).exited;
 
   await createAgent(dest, vars);
-}
-
-async function downloadTemplate(): Promise<string> {
-  const tmpDir = await mkdtemp(join(tmpdir(), "tl-agent-"));
-
-  const res = await fetch(TARBALL_URL, {
-    headers: { "User-Agent": "termlings-cli" },
-  });
-  if (!res.ok) {
-    await rm(tmpDir, { recursive: true, force: true });
-    throw new Error(`Failed to download template (HTTP ${res.status}). Check your network connection.`);
-  }
-
-  const tarPath = join(tmpDir, "repo.tar.gz");
-  await Bun.write(tarPath, await res.arrayBuffer());
-
-  const archivePrefix = `termlings-${BRANCH}/${TEMPLATE_DIR}/`;
-  const extractDir = join(tmpDir, "out");
-  await Bun.spawn(["mkdir", "-p", extractDir]).exited;
-
-  const proc = Bun.spawn(["tar", "xzf", tarPath, "--strip-components=2", "-C", extractDir, archivePrefix], {
-    stderr: "pipe",
-  });
-  const exitCode = await proc.exited;
-
-  if (exitCode !== 0) {
-    const stderr = await new Response(proc.stderr).text();
-    await rm(tmpDir, { recursive: true, force: true });
-    throw new Error(`Failed to extract template: ${stderr.trim()}`);
-  }
-
-  const extracted = await readdir(extractDir);
-  if (extracted.length === 0) {
-    await rm(tmpDir, { recursive: true, force: true });
-    throw new Error("Template appears to be empty.");
-  }
-
-  await removeDsStore(extractDir);
-  return tmpDir;
-}
-
-async function removeDsStore(dir: string): Promise<void> {
-  const entries = await readdir(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const full = join(dir, entry.name);
-    if (entry.name === ".DS_Store") {
-      await unlink(full).catch(() => {});
-    } else if (entry.isDirectory()) {
-      await removeDsStore(full);
-    }
-  }
 }
 
 async function detectOwnerName(): Promise<string> {
@@ -116,7 +59,7 @@ async function createAgent(dest: string, vars: Record<string, string>): Promise<
   const agentName = vars["AGENT_NAME"] || "My Agent";
   const ownerName = vars["OWNER_NAME"] || await detectOwnerName();
 
-  // --- Avatar approval loop (wave while waiting) ---
+  // --- Avatar approval loop ---
   let dna = generateRandomDNA();
 
   while (true) {
@@ -125,7 +68,6 @@ async function createAgent(dest: string, vars: Record<string, string>): Promise<
     const dRgb = hslToRgb(traits.faceHue * 30, 0.5, 0.28);
     const hRgb = hslToRgb(traits.hatHue * 30, 0.5, 0.5);
 
-    // Show waving animation while waiting for input
     const BOLD = "\x1b[1m";
     const DIM = "\x1b[2m";
     const RESET = "\x1b[0m";
@@ -158,7 +100,7 @@ async function createAgent(dest: string, vars: Record<string, string>): Promise<
       return { output: merged.join("\n"), lineCount: avatarLines.length };
     }
 
-    // Draw first frame (end with \n so cursor is on line below)
+    // Draw first frame
     const first = renderMergedFrame(1);
     process.stdout.write(first.output + "\n");
     const frameLineCount = first.lineCount;
@@ -167,7 +109,6 @@ async function createAgent(dest: string, vars: Record<string, string>): Promise<
       tick++;
       waveFrame = (tick % 2) + 1;
       const frame = renderMergedFrame(waveFrame);
-      // Move up from blank line below avatar to first avatar line
       process.stdout.write(`\x1b[${frameLineCount}A`);
       process.stdout.write(frame.output + "\n");
     };
@@ -188,52 +129,26 @@ async function createAgent(dest: string, vars: Record<string, string>): Promise<
       dna = generateRandomDNA();
       continue;
     }
-    // Accept (enter, y, yes)
+    // Accept
     break;
   }
 
-  const resolved: Record<string, string> = {
-    AGENT_NAME: agentName,
-    AGENT_PURPOSE: vars["AGENT_PURPOSE"] || "A personal agent that helps with tasks using workflows and skills.",
-    OWNER_NAME: ownerName,
-    AGENT_DNA: dna,
-  };
+  // Create SOUL.md with agent identity
+  const soulContent = `# ${agentName}
 
-  console.log("\nSpawning agent...");
-  const tmpDir = await downloadTemplate();
-  const extractDir = join(tmpDir, "out");
+**Purpose:** ${vars["AGENT_PURPOSE"] || "A helpful agent"}
+
+**DNA:** ${dna}
+`;
 
   try {
-    // Replace {{VAR}} placeholders in AGENTS.md and SOUL.md
-    for (const filename of ["AGENTS.md", "SOUL.md"]) {
-      const filePath = join(extractDir, filename);
-      try {
-        let content = await readFile(filePath, "utf-8");
-        for (const [key, value] of Object.entries(resolved)) {
-          content = content.split(`{{${key}}}`).join(value);
-        }
-        await writeFile(filePath, content);
-      } catch {
-        // File missing or unreadable — skip replacements
-      }
-    }
-
-    // Copy to destination preserving symlinks
-    const rsync = Bun.spawn(["rsync", "-a", `${extractDir}/`, `${dest}/`], {
-      stderr: "pipe",
-    });
-    const rsyncExit = await rsync.exited;
-    if (rsyncExit !== 0) {
-      const rsyncErr = await new Response(rsync.stderr).text();
-      throw new Error(`Failed to copy template files: ${rsyncErr.trim()}`);
-    }
-
-    // Generate avatar SVG
+    await writeFile(join(dest, "SOUL.md"), soulContent);
     await writeFile(join(dest, "avatar.svg"), renderSVG(dna, 10, 0, null));
 
     console.log(`\nCreated in ${dest}`);
+    console.log(`  SOUL.md (name: ${agentName})`);
     console.log(`  avatar.svg (dna: ${dna})`);
-  } finally {
-    await rm(tmpDir, { recursive: true, force: true });
+  } catch (err) {
+    throw new Error(`Failed to create agent files: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
