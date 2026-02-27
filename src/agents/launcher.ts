@@ -3,7 +3,8 @@ import { randomBytes } from "crypto"
 import { readFileSync, existsSync } from "fs"
 import { resolve as resolvePath, dirname as dirName, join as joinPath } from "path"
 import { fileURLToPath } from "url"
-import { writeCommand, readMessages, setRoom } from "../engine/ipc.js"
+import { homedir } from "os"
+import { writeCommand, readMessages, setRoom, ipcDir } from "../engine/ipc.js"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirName(__filename)
@@ -120,6 +121,16 @@ export async function launchAgent(
   const room = process.env.TERMLINGS_ROOM || "default"
   setRoom(room)
 
+  // Install Claude Code hooks for typing animations and tool requests
+  if (adapter.id === "claude") {
+    try {
+      const { installTermlingsHooks } = await import("../hooks/installer.js")
+      await installTermlingsHooks()
+    } catch {
+      // Hook installation failed — not fatal, agent will still work
+    }
+  }
+
   // Render agent startup message with avatar and name
   if (agentDna) {
     try {
@@ -164,6 +175,7 @@ export async function launchAgent(
     TERMLINGS_AGENT_NAME: agentName,
     TERMLINGS_AGENT_DNA: agentDna,
     TERMLINGS_ROOM: room,
+    TERMLINGS_IPC_DIR: ipcDir(room),
   }
 
   if (context) {
