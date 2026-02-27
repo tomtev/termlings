@@ -1,6 +1,6 @@
 {
   "name": "termlings",
-  "version": "0.1.18",
+  "version": "0.1.20",
   "repository": {
     "type": "git",
     "url": "https://github.com/tomtev/termlings"
@@ -22,7 +22,7 @@
   "bin": {
     "termlings": "./bin/termlings.js"
   },
-  "description": "Open-source pixel creatures for web and the terminal.",
+  "description": "Terminal sim engine for AI models. Give the world's smartest creatures a body and a place to live inside the terminal.",
   "files": [
     "src",
     "bin"
