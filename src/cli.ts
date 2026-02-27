@@ -652,8 +652,17 @@ Commands:
       process.exit(0);
     }
 
-    writeCommand(sessionId, { action: "place", objectType, x, y, name: _agentName, dna: _agentDna, ts: Date.now() });
-    console.log(`Place command sent: ${objectType}${x !== undefined ? ` at (${x},${y})` : ""}`);
+    // If coordinates provided, walk there first, then place
+    if (x !== undefined && y !== undefined) {
+      writeCommand(sessionId, { action: "walk", x, y, name: _agentName, dna: _agentDna, ts: Date.now() });
+      // Queue the place command to follow after walking
+      writeCommand(sessionId, { action: "place", objectType, x, y, name: _agentName, dna: _agentDna, ts: Date.now() + 1 });
+      console.log(`Walk queued to (${x},${y}), then place ${objectType}`);
+    } else {
+      // No coordinates: place at current location
+      writeCommand(sessionId, { action: "place", objectType, x, y, name: _agentName, dna: _agentDna, ts: Date.now() });
+      console.log(`Place command sent: ${objectType}`);
+    }
     process.exit(0);
   }
 
