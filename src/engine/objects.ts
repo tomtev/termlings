@@ -47,6 +47,8 @@ function c(ch: string, fg: RGB | null, bg: RGB | null, walkable: boolean): Objec
 
 // Colors
 const AMBER: RGB = [190, 135, 10]   // sofa/chair frame
+const LIGHT: RGB = [247, 176, 13]   // lighter amber (1.3x brightness)
+const DARK: RGB = [133, 95, 7]      // darker amber (0.7x brightness)
 const SEAT: RGB = [140, 100, 8]      // sofa/chair seat (darker amber)
 const WOOD: RGB = [120, 80, 40]     // table surface
 const WOOD_D: RGB = [90, 60, 25]    // table legs (darker)
@@ -85,13 +87,13 @@ export const OBJECT_DEFS: Record<string, ObjectDef> = {
     width: 13,
     height: 4,
     cells: [
-      // back cushion (visual only — walk behind)
-      [V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER)],
-      // arms + seat opening (visual arms on sides, open in middle to show depth)
-      [V(AMBER), V(AMBER), _, S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), _, V(AMBER), V(AMBER), V(AMBER)],
-      // seat area (walkable, shows depth)
-      [V(AMBER), V(AMBER), _, S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), _, V(AMBER), V(AMBER), V(AMBER)],
-      // front (open)
+      // back cushion row (darker for depth)
+      [F(DARK), V(DARK), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(DARK), V(DARK), F(DARK)],
+      // arm rests + seat (solid arms on sides, open seat in middle)
+      [F(DARK), F(DARK), _, S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), _, F(DARK), F(DARK), _],
+      // seat cushion row (lighter to show cushion detail)
+      [_, F(DARK), _, S(AMBER), S(AMBER), S(AMBER), S(AMBER), S(AMBER), S(AMBER), _, F(DARK), _, _],
+      // front (open for approach)
       [_, _, _, _, _, _, _, _, _, _, _, _, _],
     ],
   },
@@ -100,13 +102,13 @@ export const OBJECT_DEFS: Record<string, ObjectDef> = {
     width: 21,
     height: 4,
     cells: [
-      // back cushion (visual only — walk behind)
-      [V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER), V(AMBER)],
-      // arms + seat opening (visual arms on sides, open in middle to show depth)
-      [V(AMBER), V(AMBER), _, S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), _, V(AMBER), V(AMBER)],
-      // seat area (walkable, shows depth)
-      [V(AMBER), V(AMBER), _, S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), _, V(AMBER), V(AMBER)],
-      // front (open)
+      // back cushion row (darker for depth, with lighter highlights)
+      [F(DARK), V(DARK), V(AMBER), V(AMBER), V(AMBER), V(LIGHT), V(AMBER), V(AMBER), V(AMBER), V(LIGHT), V(AMBER), V(AMBER), V(AMBER), V(LIGHT), V(AMBER), V(AMBER), V(AMBER), V(DARK), V(DARK), F(DARK), _],
+      // arm rests + seat (solid arms on sides, open seat in middle)
+      [F(DARK), F(DARK), _, S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), S(SEAT), _, F(DARK), _],
+      // seat cushion row (lighter to show cushion detail with accent)
+      [_, F(DARK), _, S(AMBER), S(AMBER), S(AMBER), S(LIGHT), S(AMBER), S(AMBER), S(LIGHT), S(AMBER), S(AMBER), S(LIGHT), S(AMBER), S(AMBER), S(AMBER), S(AMBER), _, F(DARK), _, _],
+      // front (open for approach)
       [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _],
     ],
   },
