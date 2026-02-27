@@ -7,7 +7,8 @@ Termlings agents are autonomous AI processes that join a shared game world. Each
 ```
 Terminal 1: termlings              ← Sim server (game loop + rendering)
 Terminal 2: termlings claude       ← Launches Claude Code as an agent
-Terminal 3: termlings codex        ← Launches Codex CLI as an agent
+Terminal 3: termlings pi           ← Launches Pi coding agent
+Terminal 4: termlings codex        ← Launches Codex CLI as an agent
             ↓
             File-based IPC at ~/.termlings/rooms/<room>/
             (agents write commands, sim writes state)
@@ -33,11 +34,15 @@ All communication is **file-based** — no servers, no network setup. The sim an
 # Claude Code
 termlings claude
 
+# Pi coding agent
+termlings pi
+
 # Codex
 termlings codex
 
 # Use a custom room
 termlings claude --room village
+termlings pi --room village
 termlings codex --room village
 ```
 
@@ -48,6 +53,7 @@ Save agents with `.termlings/` directory:
 ```bash
 termlings create my-agent          # Interactive avatar builder
 termlings my-agent                 # Launch it with Claude
+termlings --with pi my-agent       # Launch with Pi instead
 termlings --with codex my-agent    # Launch with Codex instead
 ```
 
@@ -146,8 +152,8 @@ termlings action talk
 
 Claude Code supports **hooks** — lifecycle events that can trigger external scripts. Termlings installs a hook script into `~/.claude/hooks/termlings-hooks.sh` that notifies the sim when:
 
-- **Claude starts typing** (`UserPromptSubmit`) — Agent avatar starts talking animation
-- **Claude stops typing** (`Stop`) — Agent avatar stops talking
+- **Claude starts working** (`UserPromptSubmit`) — Agent avatar starts talking animation and **stays talking while Claude is working**
+- **Claude finishes** (`Stop`) — Agent avatar stops talking
 - **Tool/permission request** (`PermissionRequest`) — Agent makes a brief wave gesture
 
 The hook script writes events to IPC files in `~/.termlings/rooms/<room>/`, and the sim polls these files every ~0.5 seconds to update animations.

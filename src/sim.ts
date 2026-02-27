@@ -935,13 +935,14 @@ function processHookEvents() {
           try {
             const event = JSON.parse(line);
             if (event.event === "typing_start") {
-              // Claude is typing/processing — show talking animation
+              // Claude is typing/processing — show talking animation until Stop event
               session.entity.talking = true;
-              session.gestureExpiry = tick + 600; // 10 seconds
+              session.gestureExpiry = Number.MAX_SAFE_INTEGER; // Keep talking until Stop
             } else if (event.event === "typing_stop") {
               // Claude stopped typing
               session.entity.talking = false;
               session.entity.talkFrame = 0;
+              session.gestureExpiry = 0;
             } else if (event.event === "permission_request") {
               // Tool request — brief wave gesture
               session.entity.waving = true;
