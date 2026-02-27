@@ -130,21 +130,24 @@ async function createAgent(dest: string, vars: Record<string, string>): Promise<
 
     const interval = setInterval(drawFrame, 400);
 
-    // Ask for approval
-    const answer = await prompt(`\n${RESET}Keep this avatar? ${DIM}(Y)es / (r)eroll / (q)uit${RESET} `);
+    // Clear interval and show cursor before prompting
     clearInterval(interval);
     process.stdout.write("\x1b[?25h"); // show cursor
+    console.log("");
 
-    const a = answer.toLowerCase();
-    if (a === "q" || a === "quit") {
+    // Ask for approval
+    const answer = await prompt(`Keep this avatar? (Y)es / (r)eroll / (q)uit: `);
+    const a = answer.toLowerCase().trim() || "y";
+
+    if (a === "q") {
       console.log("Cancelled.");
       process.exit(0);
     }
-    if (a === "r" || a === "reroll") {
+    if (a === "r") {
       dna = generateRandomDNA();
       continue;
     }
-    // Accept
+    // Accept (y or enter)
     break;
   }
 
