@@ -57,6 +57,59 @@ export function discoverLocalAgents(): LocalAgent[] {
 }
 
 /**
+ * Show picker for local agents only (not built-in CLIs)
+ * Marks agents already active in the room as taken
+ */
+export async function selectLocalAgentWithRoom(localAgents: LocalAgent[], room: string = "default"): Promise<LocalAgent | null> {
+  if (localAgents.length === 0) return null;
+  if (localAgents.length === 1) return localAgents[0];
+
+  // Get active agents in this room
+  const activeAgentDnas = new Set<string>();
+  try {
+    const { readState } = await import("../engine/ipc.js");
+    const state = readState();
+    if (state?.entities) {
+      for (const entity of state.entities) {
+        if (entity.dna) activeAgentDnas.add(entity.dna);
+      }
+    }
+  } catch {
+    // No sim running, that's fine
+  }
+
+  const options = localAgents.map((a, i) => ({
+    index: i,
+    agent: a,
+    taken: a.soul?.dna ? activeAgentDnas.has(a.soul.dna) : false
+  }));
+
+  console.log("\nSelect agent:\n");
+  for (const opt of options) {
+    const soulName = opt.agent.soul?.name || opt.agent.name;
+    const purpose = opt.agent.soul?.purpose ? ` — ${opt.agent.soul.purpose}` : "";
+    const status = opt.taken ? " (already in room)" : "";
+    console.log(`  (${opt.index + 1}) ${soulName}${purpose}${status}`);
+  }
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question("\nChoose: ", (answer) => {
+      rl.close();
+      const idx = parseInt(answer, 10) - 1;
+      if (idx >= 0 && idx < options.length) {
+        if (options[idx].taken) {
+          console.log("\nWarning: This agent is already active in this room.");
+        }
+        resolve(options[idx].agent);
+      } else {
+        resolve(options[0]?.agent || null);
+      }
+    });
+  });
+}
+
+/**
  * Show interactive selector for all available agents (built-in + local)
  * Marks agents already active in the room as taken
  */
