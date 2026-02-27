@@ -12,11 +12,11 @@ import {
   type ChatMessage,
   type Entity,
   type RoomRegion,
-  type FurnitureOverlay,
-  type FurniturePlacement,
+  type ObjectOverlay,
+  type ObjectPlacement,
   type LoadedMap,
   DEFAULT_CONFIG,
-  FURNITURE_DEFS,
+  OBJECT_DEFS,
   tileKey,
   allocBuffer,
   clearBuffer,
@@ -40,9 +40,9 @@ import {
   stampNames,
   stampBubbles,
   type BubbleInfo,
-  buildFurnitureOverlay,
-  stampFurniturePiece,
-  furnitureSortY,
+  buildObjectOverlay,
+  stampObjectPiece,
+  objectSortY,
   npcStepSound,
   toggleSound,
   isSoundEnabled,
@@ -111,11 +111,11 @@ const detectedRoomsSerialized = detectedRooms.map(r => ({
   doors: r.doors,
 }))
 
-// --- Furniture (merge map-defined objects with built-in defs) ---
+// --- Objects (merge map-defined objects with built-in defs) ---
 
 const mergedDefs = { ...FURNITURE_DEFS, ...world.objectDefs }
-let furniturePlacements = [...world.placements]
-let furnitureOverlay = buildFurnitureOverlay(furniturePlacements, mergedDefs)
+let objectPlacements = [...world.placements]
+let objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
 
 // --- Persist agent-built objects ---
 
@@ -125,35 +125,35 @@ function loadPersistedPlacements() {
   if (!existsSync(PLACEMENTS_FILE)) return
   try {
     const data = readFileSync(PLACEMENTS_FILE, "utf8")
-    const saved = JSON.parse(data) as FurniturePlacement[]
+    const saved = JSON.parse(data) as ObjectPlacement[]
     for (const p of saved) {
-      if (mergedDefs[p.def]) furniturePlacements.push(p)
+      if (mergedDefs[p.def]) objectPlacements.push(p)
     }
   } catch {}
 }
 
 function savePersistedPlacements() {
   // Only persist agent-built objects (those beyond the original map placements)
-  const agentBuilt = furniturePlacements.slice(world.placements.length)
+  const agentBuilt = objectPlacements.slice(world.placements.length)
   try { writeFileSync(PLACEMENTS_FILE, JSON.stringify(agentBuilt) + "\n") } catch {}
 }
 
 loadPersistedPlacements()
-furnitureOverlay = buildFurnitureOverlay(furniturePlacements, mergedDefs)
+objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
 
-function rebuildFurniture() {
-  furnitureOverlay = buildFurnitureOverlay(furniturePlacements, mergedDefs)
-  cacheFurnitureSortYs()
+function rebuildObjects() {
+  objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
+  cacheObjectSortYs()
   savePersistedPlacements()
 }
 
 // --- Doors ---
 
-const doors = createDoors(world.doors, furnitureOverlay)
+const doors = createDoors(world.doors, objectOverlay)
 
 // --- NPC AI pathfinding ---
 
-const walkGrid = buildWalkGrid(tiles, tileDefs, mapWidth, mapHeight, furnitureOverlay, world.doors)
+const walkGrid = buildWalkGrid(tiles, tileDefs, mapWidth, mapHeight, objectOverlay, world.doors)
 
 // Pre-compute door tile positions so canMoveTo treats them as walkable (matching the walk grid)
 const doorTileSet = new Set<number>()
@@ -620,7 +620,7 @@ function canMoveTo(x: number, y: number, height: number): boolean {
     const wx = x + dx
     // Door tiles are always passable (door auto-opens on proximity)
     if (doorTileSet.has(tileKey(wx, footY))) continue
-    if (!isWalkable(tiles, tileDefs, mapWidth, mapHeight, wx, footY, furnitureOverlay)) return false
+    if (!isWalkable(tiles, tileDefs, mapWidth, mapHeight, wx, footY, objectOverlay)) return false
   }
   return true
 }
@@ -855,7 +855,7 @@ function processAgentCommands() {
             const cell = cellRow[col]
             if (!cell || cell.walkable) continue
             const key = tileKey(bx + col, by + row)
-            if (furnitureOverlay.walkable.has(key) && !furnitureOverlay.walkable.get(key)) {
+            if (objectOverlay.walkable.has(key) && !objectOverlay.walkable.get(key)) {
               blocked = true
               break
             }
@@ -866,8 +866,8 @@ function processAgentCommands() {
           chat("system", `Can't build ${cmd.objectType} at (${bx},${by}) — blocked`, [180, 80, 80])
         } else {
           const fromName = entity.name || sessionId
-          furniturePlacements.push({ def: cmd.objectType, x: bx, y: by })
-          rebuildFurniture()
+          objectPlacements.push({ def: cmd.objectType, x: bx, y: by })
+          rebuildObjects()
           chat("system", `${fromName} built a ${cmd.objectType} at (${bx},${by})`, [80, 180, 80])
         }
       }
@@ -880,8 +880,8 @@ function processAgentCommands() {
       // Find a placement at or near the target position
       let foundIdx = -1
       let bestDist = Infinity
-      for (let i = world.placements.length; i < furniturePlacements.length; i++) {
-        const p = furniturePlacements[i]!
+      for (let i = world.placements.length; i < objectPlacements.length; i++) {
+        const p = objectPlacements[i]!
         const def = mergedDefs[p.def]
         if (!def) continue
         // Check if target point is inside the placement bounds
@@ -894,10 +894,10 @@ function processAgentCommands() {
       if (foundIdx === -1) {
         chat("system", `Nothing to destroy at (${dx},${dy})`, [180, 80, 80])
       } else {
-        const removed = furniturePlacements[foundIdx]!
+        const removed = objectPlacements[foundIdx]!
         const fromName = entity.name || sessionId
-        furniturePlacements.splice(foundIdx, 1)
-        rebuildFurniture()
+        objectPlacements.splice(foundIdx, 1)
+        rebuildObjects()
         chat("system", `${fromName} destroyed a ${removed.def} at (${removed.x},${removed.y})`, [180, 120, 80])
       }
     }
@@ -1007,9 +1007,34 @@ function writeSimState() {
     })
   }
 
+  // Determine which agents are occupying furniture
+  const objectsWithOccupants = objectPlacements.map((p, idx) => {
+    const def = mergedDefs[p.def]
+    const occupants: string[] = []
+
+    // Check if any agents are positioned on this furniture
+    entities.forEach(e => {
+      if (e.x >= p.x && e.x < p.x + (def?.width || 1) &&
+          e.y >= p.y && e.y < p.y + (def?.height || 1)) {
+        occupants.push(e.sessionId)
+      }
+    })
+
+    return {
+      x: p.x,
+      y: p.y,
+      type: p.def,
+      width: def?.width || 1,
+      height: def?.height || 1,
+      walkable: def?.cells ? false : true,
+      occupants: occupants.length > 0 ? occupants : undefined,
+    }
+  })
+
   writeState({
     entities,
     map: { width: mapWidth, height: mapHeight, name: world.name, tiles, rooms: detectedRoomsSerialized },
+    objects: objectsWithOccupants,
   })
 }
 
@@ -1083,13 +1108,13 @@ const _allEntities: Entity[] = []
 const _doorEntities: Entity[] = []
 const _sortKeys: number[] = []   // parallel sort key array
 const _sortIdx: number[] = []    // parallel index array for sort
-let _furnitureSortYs: number[] = [] // cached furniture sortY values
+let _objectSortYs: number[] = [] // cached object sortY values
 
 // Pre-compute furniture sort keys (only changes when furniture changes, which is never at runtime)
-function cacheFurnitureSortYs() {
-  _furnitureSortYs = furniturePlacements.map(fp => furnitureSortY(fp, mergedDefs))
+function cacheObjectSortYs() {
+  _objectSortYs = objectPlacements.map(fp => objectSortY(fp, mergedDefs))
 }
-cacheFurnitureSortYs()
+cacheObjectSortYs()
 
 function rebuildEntityArrays() {
   _allEntities.length = 0
@@ -1128,7 +1153,7 @@ function frame() {
 
   rebuildEntityArrays()
 
-  updateDoors(doors, _doorEntities, furnitureOverlay, tick)
+  updateDoors(doors, _doorEntities, objectOverlay, tick)
   updateAnimations(_allEntities, tick, config)
   updateCamera()
   clearBuffer(buffer, cols, rows)
@@ -1140,7 +1165,7 @@ function frame() {
   stampDoors(buffer, cols, rows, doors, cameraX, cameraY, scale)
 
   // Unified z-sort using parallel index array (avoids object allocation per item)
-  const totalItems = _allEntities.length + furniturePlacements.length
+  const totalItems = _allEntities.length + objectPlacements.length
   _sortKeys.length = totalItems
   _sortIdx.length = totalItems
   // Entities: positive index, Furniture: negative index (offset by -1 to distinguish from 0)
@@ -1150,8 +1175,8 @@ function frame() {
     _sortIdx[i] = i
   }
   const eLen = _allEntities.length
-  for (let i = 0; i < furniturePlacements.length; i++) {
-    _sortKeys[eLen + i] = _furnitureSortYs[i]! * 4
+  for (let i = 0; i < objectPlacements.length; i++) {
+    _sortKeys[eLen + i] = _objectSortYs[i]! * 4
     _sortIdx[eLen + i] = eLen + i
   }
   // Sort indices by key
@@ -1168,7 +1193,7 @@ function frame() {
       else stampEntity(buffer, cols, rows, e, cameraX, cameraY, scale)
     } else {
       // Furniture
-      stampFurniturePiece(buffer, cols, rows, furniturePlacements[idx - eLen]!, cameraX, cameraY, scale, mergedDefs)
+      stampObjectPiece(buffer, cols, rows, objectPlacements[idx - eLen]!, cameraX, cameraY, scale, mergedDefs)
     }
   }
 
@@ -1216,9 +1241,9 @@ function frame() {
       for (let sx = 0; sx < cols; sx++) {
         const tx = Math.floor(sx / scale) + cameraX
         if (tx < 0 || tx >= mapWidth) continue
-        if (!isWalkable(tiles, tileDefs, mapWidth, mapHeight, tx, ty, furnitureOverlay)) {
+        if (!isWalkable(tiles, tileDefs, mapWidth, mapHeight, tx, ty, objectOverlay)) {
           const c = bufRow[sx]
-          if (c) { if (c.ch === " ") c.ch = "░"; const isFurniture = furnitureOverlay.walkable.has(tileKey(tx, ty)); if (isFurniture) { c.fg = _debugFurFg; c.bg = _debugFurBg } else { c.fg = c.fg ?? _debugWallFg; c.bg = _debugWallBg } }
+          if (c) { if (c.ch === " ") c.ch = "░"; const isObject = objectOverlay.walkable.has(tileKey(tx, ty)); if (isObject) { c.fg = _debugFurFg; c.bg = _debugFurBg } else { c.fg = c.fg ?? _debugWallFg; c.bg = _debugWallBg } }
         }
       }
     }

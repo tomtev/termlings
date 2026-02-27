@@ -394,6 +394,33 @@ export interface ChatMessage {
 
 const _chatDimFg: RGB = [160, 160, 160]
 
+/** Wrap text to fit within max width, preserving word boundaries */
+function wrapText(text: string, maxWidth: number): string[] {
+  if (text.length <= maxWidth) return [text]
+
+  const lines: string[] = []
+  let remaining = text
+
+  while (remaining.length > 0) {
+    if (remaining.length <= maxWidth) {
+      lines.push(remaining)
+      break
+    }
+
+    // Find last space within maxWidth
+    let splitPoint = maxWidth
+    const lastSpace = remaining.lastIndexOf(" ", maxWidth)
+    if (lastSpace > 0) {
+      splitPoint = lastSpace
+    }
+
+    lines.push(remaining.slice(0, splitPoint).trimEnd())
+    remaining = remaining.slice(splitPoint).trimStart()
+  }
+
+  return lines
+}
+
 /** Render recent chat messages right-aligned inside the border */
 export function stampChatMessages(
   buffer: Cell[][],
@@ -402,23 +429,40 @@ export function stampChatMessages(
   messages: ChatMessage[],
 ) {
   const now = Date.now()
-  const maxVisible = rows - 3
-  const recent = messages.filter((m) => now - m.time < 30000).slice(-maxVisible)
+  const maxWidth = cols - 2
+  const recent = messages.filter((m) => now - m.time < 30000)
 
-  for (let i = 0; i < recent.length; i++) {
-    const msg = recent[recent.length - 1 - i]!
-    const row = rows - 3 - i // gap of 1 row above bottom HUD
-    if (row < 1 || row >= rows - 1 || !buffer[row]) continue
-    const bufRow = buffer[row]!
-
+  let currentRow = rows - 3 // gap of 1 row above bottom HUD
+  for (let i = recent.length - 1; i >= 0 && currentRow > 0; i--) {
+    const msg = recent[i]!
     const line = `<${msg.name}> ${msg.text}`
     const nameEnd = msg.name.length + 2
-    const maxLen = cols - 2
-    const display = line.length > maxLen ? line.slice(0, maxLen) : line
-    for (let ci = 0; ci < display.length; ci++) {
-      const sx = 1 + ci
-      if (sx >= cols - 1) break
-      const c = bufRow[sx]; if (c) { c.ch = display[ci]!; c.fg = ci < nameEnd ? msg.fg : _chatDimFg; c.bg = null }
+
+    // Wrap the message if too long
+    const wrappedLines = wrapText(line, maxWidth)
+
+    // Render wrapped lines from bottom up
+    for (let li = wrappedLines.length - 1; li >= 0 && currentRow > 0; li--) {
+      const displayLine = wrappedLines[li]!
+      const bufRow = buffer[currentRow]
+      if (!bufRow) {
+        currentRow--
+        continue
+      }
+
+      for (let ci = 0; ci < displayLine.length; ci++) {
+        const sx = 1 + ci
+        if (sx >= cols - 1) break
+        const c = bufRow[sx]
+        if (c) {
+          c.ch = displayLine[ci]!
+          // Color name differently from text
+          c.fg = ci < nameEnd ? msg.fg : _chatDimFg
+          c.bg = null
+        }
+      }
+
+      currentRow--
     }
   }
 }

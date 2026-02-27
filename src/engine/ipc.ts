@@ -79,6 +79,7 @@ export interface AgentState {
       doors: { x: number; y: number; toRoom: number | null }[]
     }[]
   }
+  objects?: { x: number; y: number; type: string; width: number; height: number; walkable: boolean; occupants?: string[] }[]
 }
 
 export function writeState(state: AgentState): void {

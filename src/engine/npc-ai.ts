@@ -1,4 +1,4 @@
-import { tileKey, type TileDef, type FurnitureOverlay, type RoomRegion, type Entity } from "./types.js"
+import { tileKey, type TileDef, type ObjectOverlay, type RoomRegion, type Entity } from "./types.js"
 import { isWalkable } from "./tilemap-core.js"
 import type { DoorDef } from "./doors.js"
 
@@ -17,7 +17,7 @@ export function buildWalkGrid(
   tileDefs: Record<string, TileDef>,
   mapWidth: number,
   mapHeight: number,
-  furniture: FurnitureOverlay,
+  objects: ObjectOverlay,
   doors: DoorDef[],
 ): WalkGrid {
   const data = new Uint8Array(mapWidth * mapHeight)
@@ -41,7 +41,7 @@ export function buildWalkGrid(
         if (wx >= mapWidth) { ok = false; break }
         // Door tiles are always walkable in the grid (NPCs plan through them)
         if (doorTiles.has(tileKey(wx, y))) continue
-        if (!isWalkable(tiles, tileDefs, mapWidth, mapHeight, wx, y, furniture)) {
+        if (!isWalkable(tiles, tileDefs, mapWidth, mapHeight, wx, y, objects)) {
           ok = false
           break
         }

@@ -1,8 +1,8 @@
 import { readFileSync } from "fs"
 import type { TileDef, ParsedMap, RGB } from "./types.js"
 import { loadMapFromString } from "./tilemap-core.js"
-import type { FurnitureDef, FurnitureCell, FurniturePlacement } from "./furniture.js"
-import { FURNITURE_DEFS } from "./furniture.js"
+import type { ObjectDef, ObjectCell, ObjectPlacement } from "./objects.js"
+import { OBJECT_DEFS } from "./objects.js"
 import type { DoorDef } from "./doors.js"
 
 // --- JSON schema types ---
@@ -26,8 +26,8 @@ export interface ObjectJson {
 }
 
 export interface LoadedMap extends ParsedMap {
-  objectDefs: Record<string, FurnitureDef>
-  placements: FurniturePlacement[]
+  objectDefs: Record<string, ObjectDef>
+  placements: ObjectPlacement[]
   doors: DoorDef[]
 }
 
@@ -40,11 +40,11 @@ function toRgb(arr: number[] | null | undefined): RGB | null {
 
 // --- Parsing ---
 
-export function parseObjectDef(name: string, obj: ObjectJson): FurnitureDef {
-  const cells: (FurnitureCell | null)[][] = []
+export function parseObjectDef(name: string, obj: ObjectJson): ObjectDef {
+  const cells: (ObjectCell | null)[][] = []
   for (let row = 0; row < obj.grid.length; row++) {
     const line = obj.grid[row]!
-    const cellRow: (FurnitureCell | null)[] = []
+    const cellRow: (ObjectCell | null)[] = []
     for (let col = 0; col < obj.width; col++) {
       const ch = line[col] ?? " "
       if (ch === " ") {

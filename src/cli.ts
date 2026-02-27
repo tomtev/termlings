@@ -242,7 +242,7 @@ Commands:
 
   if (verb === "map") {
     const { readState, IPC_DIR } = await import("./engine/ipc.js");
-    const { FURNITURE_DEFS } = await import("./engine/furniture.js");
+    const { OBJECT_DEFS } = await import("./engine/objects.js");
     const { describeRelative } = await import("./engine/room-detect.js");
     const { readFileSync, existsSync } = await import("fs");
     const { join } = await import("path");
@@ -353,7 +353,7 @@ Commands:
       const objectLegend: { num: number; name: string; x: number; y: number }[] = [];
       let objNum = 1;
       for (const p of placements) {
-        const def = FURNITURE_DEFS[p.def];
+        const def = OBJECT_DEFS[p.def];
         if (!def) continue;
         const objW = def.width;
         const objH = def.height;
