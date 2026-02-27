@@ -35,9 +35,9 @@ export function discoverLocalAgents(): LocalAgent[] {
       try {
         const content = readFileSync(soulPath, "utf-8");
         const nameMatch = content.match(/^# (.+)$/m);
-        const purposeMatch = content.match(/\*\*Purpose:\*\* (.+)$/m);
-        const dnaMatch = content.match(/\*\*DNA:\*\* (.+)$/m);
-        const commandMatch = content.match(/\*\*Command:\*\* (.+)$/m);
+        const purposeMatch = content.match(/\*\*Purpose\*\*:\s*(.+)$/m);
+        const dnaMatch = content.match(/\*\*DNA\*\*:\s*(.+)$/m);
+        const commandMatch = content.match(/\*\*Command\*\*:\s*(.+)$/m);
 
         if (nameMatch && dnaMatch) {
           soul = {
