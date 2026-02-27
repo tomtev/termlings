@@ -7,8 +7,8 @@ const pi: AgentAdapter = {
   defaultName: "Pi",
 
   contextArgs(context) {
-    // Pi auto-discovers .pi/APPEND_SYSTEM.md and appends it to the system prompt.
-    // Write the termlings context to a file that pi will read.
+    // Pi accepts @file syntax to inject content from files.
+    // Write the termlings context to a file and pass it as an argument.
     if (!context) return []
 
     try {
@@ -16,12 +16,12 @@ const pi: AgentAdapter = {
       const piDir = resolvePath(".pi")
       mkdirSync(piDir, { recursive: true })
 
-      // Write to .pi/APPEND_SYSTEM.md - Pi will auto-discover and use this file
+      // Write to .pi/APPEND_SYSTEM.md
       const appendPath = resolvePath(".pi", "APPEND_SYSTEM.md")
       writeFileSync(appendPath, context, "utf8")
 
-      // No args needed - pi will auto-discover the file
-      return []
+      // Pass as explicit @file argument so Pi definitely reads it
+      return [`@${appendPath}`]
     } catch (e) {
       // If we can't write the file, still try to run pi
       console.error("Warning: Could not write termlings context:", e)
