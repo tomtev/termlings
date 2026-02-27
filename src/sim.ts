@@ -6,7 +6,7 @@ import {
   HATS,
   type DecodedDNA,
 } from "./index.js"
-import { createParticleSystem, updateParticles, getParticleOpacity, type ObjectWithParticles } from "./particles.js"
+import { createParticleSystem, updateParticles, getParticleOpacity, type ObjectWithParticles } from "./engine/particles.js"
 import {
   type RGB,
   type Cell,
