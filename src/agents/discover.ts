@@ -114,10 +114,15 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
         faceColor = " ";
       }
 
+      // Fade out description text (but keep color square bright)
+      const dimGray = "\x1b[90m";
+      const reset = "\x1b[0m";
+      const fadedText = `${dimGray}${purpose}${status}${reset}`;
+
       return {
         value: JSON.stringify({ type: "existing", agent: a }),
         label: `${hatColor} ${name}${title}`,
-        description: `${faceColor} ${purpose}${status}`,
+        description: `${faceColor} ${fadedText}`,
       };
     }),
     {
