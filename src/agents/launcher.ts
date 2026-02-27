@@ -122,7 +122,7 @@ export async function launchAgent(
   setRoom(room)
 
   // Install Claude Code hooks for typing animations and tool requests
-  if (adapter.id === "claude") {
+  if (adapter.bin === "claude") {
     try {
       const { installTermlingsHooks } = await import("../hooks/installer.js")
       await installTermlingsHooks()

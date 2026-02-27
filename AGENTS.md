@@ -138,6 +138,42 @@ termlings action gesture --wave
 termlings action talk
 ```
 
+## Typing animations and tool requests
+
+**Claude Code only** — When you launch an agent with Claude (`termlings claude`), the sim automatically detects when Claude is typing and shows animated mouth movements on the agent's avatar.
+
+### How it works
+
+Claude Code supports **hooks** — lifecycle events that can trigger external scripts. Termlings installs a hook script into `~/.claude/hooks/termlings-hooks.sh` that notifies the sim when:
+
+- **Claude starts typing** (`UserPromptSubmit`) — Agent avatar starts talking animation
+- **Claude stops typing** (`Stop`) — Agent avatar stops talking
+- **Tool/permission request** (`PermissionRequest`) — Agent makes a brief wave gesture
+
+The hook script writes events to IPC files in `~/.termlings/rooms/<room>/`, and the sim polls these files every ~0.5 seconds to update animations.
+
+### For other CLIs
+
+**Pi and Codex** don't have hook support yet, so they won't show typing animations. The agents will still work normally — they just won't have the visual feedback of thinking/processing.
+
+### Installation
+
+Hooks are installed automatically when you first run:
+
+```bash
+termlings claude
+```
+
+If you need to reinstall them:
+
+```bash
+# Delete the old hook script
+rm ~/.claude/hooks/termlings-hooks.sh
+
+# Reinstall by launching Claude again
+termlings claude
+```
+
 ## Agent avatars
 
 Each agent gets a unique avatar generated from their **DNA string** — a 7-character hex code that encodes eyes, mouth, hat, body, legs, and two color hues.
@@ -350,6 +386,7 @@ tail -f ~/.termlings/rooms/default/*.cmd.json
 ## Documentation
 
 - **[AVATARS.md](AVATARS.md)** — Avatar system (DNA, rendering, generation, animation)
+- **[HOOKS.md](HOOKS.md)** — Typing animations and tool request detection (Claude only)
 - **[docs/sim-engine.md](docs/sim-engine.md)** — How the sim engine works, rendering, physics, pathfinding
 - **[docs/engine-api.md](docs/engine-api.md)** — Complete engine API reference for custom implementations
 
