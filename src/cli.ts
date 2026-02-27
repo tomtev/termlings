@@ -82,13 +82,52 @@ if (args[0] && _agentRegistry[args[0]]) {
 // --- Routing ---
 
 // 1. Agent launcher: termlings <agent> [--room <slug>] [flags...]
-const agentAdapter = _agentRegistry[positional[0] ?? ""];
+let agentAdapter = _agentRegistry[positional[0] ?? ""];
 
 if (agentAdapter) {
   const room = opts.room || "default";
   process.env.TERMLINGS_ROOM = room;
   const { launchAgent } = await import("./agents/launcher.js");
   await launchAgent(agentAdapter, agentPassthrough, opts);
+}
+
+// 1b. Local agent launcher: termlings [soul-name]
+if (!agentAdapter && positional.length === 0) {
+  // No args, check for local agents
+  const { discoverLocalAgents, selectLocalAgent } = await import("./agents/discover.js");
+  const localAgents = discoverLocalAgents();
+
+  if (localAgents.length > 0) {
+    const selected = await selectLocalAgent();
+    if (selected && selected.soul) {
+      process.env.TERMLINGS_AGENT_NAME = selected.soul.name;
+      process.env.TERMLINGS_AGENT_DNA = selected.soul.dna;
+
+      const room = opts.room || "default";
+      process.env.TERMLINGS_ROOM = room;
+
+      const { launchLocalAgent } = await import("./agents/launcher.js");
+      await launchLocalAgent(selected, agentPassthrough, opts);
+      process.exit(0);
+    }
+  }
+} else if (!agentAdapter && positional.length > 0) {
+  // Check if first arg is a local agent name
+  const { discoverLocalAgents } = await import("./agents/discover.js");
+  const localAgents = discoverLocalAgents();
+  const localAgent = localAgents.find(a => a.name === positional[0]);
+
+  if (localAgent && localAgent.soul) {
+    process.env.TERMLINGS_AGENT_NAME = localAgent.soul.name;
+    process.env.TERMLINGS_AGENT_DNA = localAgent.soul.dna;
+
+    const room = opts.room || "default";
+    process.env.TERMLINGS_ROOM = room;
+
+    const { launchLocalAgent } = await import("./agents/launcher.js");
+    await launchLocalAgent(localAgent, agentPassthrough, opts);
+    process.exit(0);
+  }
 }
 
 // 2. Agent IPC subcommands: termlings action <verb>

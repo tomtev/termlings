@@ -62,6 +62,31 @@ function encodeBracketedPaste(text: string): Buffer {
 }
 
 /**
+ * Launch a local agent soul with claude adapter
+ */
+export async function launchLocalAgent(
+  localAgent: any,
+  passthroughArgs: string[],
+  termlingOpts: Record<string, string>,
+): Promise<never> {
+  // Use claude adapter for local agents
+  const { agents } = await import("./index.js")
+  const adapter = agents.claude
+  if (!adapter) throw new Error("Claude adapter not found")
+
+  // Override name and dna from local soul
+  termlingOpts = { ...termlingOpts }
+  if (!termlingOpts.name && localAgent.soul?.name) {
+    termlingOpts.name = localAgent.soul.name
+  }
+  if (!termlingOpts.dna && localAgent.soul?.dna) {
+    termlingOpts.dna = localAgent.soul.dna
+  }
+
+  return launchAgent(adapter, passthroughArgs, termlingOpts)
+}
+
+/**
  * Launch a coding agent with termling context and message polling.
  * Uses Bun's native PTY to enable injecting messages into the agent's input.
  */
