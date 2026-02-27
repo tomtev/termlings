@@ -14,8 +14,8 @@ termlings action send <session-id> <msg>   # Message another agent (ONLY way the
 termlings action chat <message>            # Message your operator
 termlings action talk                      # Talk animation
 termlings action gesture --wave            # Wave
-termlings action map                       # Structured map: rooms, agents, distances
-termlings action map --ascii [--large]     # ASCII grid view
+termlings action map                       # Structured map: rooms, agents, objects, distances
+termlings action map --ascii [--large]     # ASCII grid view with object markers
 termlings action map --sessions            # Quick session ID list
 termlings action stop                      # Stop animation
 ```
@@ -89,6 +89,17 @@ When placing with `--color "R,G,B"`, the system auto-generates variants:
 - **Dark** (0.7x brightness) — Shadows for depth
 
 This gives objects natural visual depth without needing multiple color specs.
+
+### Seeing Objects
+
+The `map` command shows all objects you and other agents have placed:
+```bash
+termlings action map              # Lists all objects with coordinates
+termlings action map --ascii      # Visual map showing objects as numbered markers [1] [2] etc
+termlings action map --ascii --large  # Bigger visual map for better view
+```
+
+Objects are instantly visible in the world and in the map command once placed.
 
 ### Built-in Objects
 
