@@ -43,11 +43,12 @@ export async function selectMenu(
         const prefix = isSelected ? "▶ " : "  ";
         const color = isSelected ? "\x1b[1;36m" : "\x1b[90m"; // Cyan if selected, dim gray otherwise
         const reset = "\x1b[0m";
+        const dimGray = "\x1b[90m"; // Dim gray for descriptions
 
         output.write(`${color}${prefix}${item.label}${reset}\n`);
 
-        if (isSelected && item.description) {
-          output.write(`\x1b[90m   ${item.description}\x1b[0m\n`);
+        if (item.description) {
+          output.write(`${dimGray}   ${item.description}${reset}\n`);
         }
       }
 
