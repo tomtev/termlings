@@ -856,24 +856,53 @@ function processAgentCommands() {
         const bx = cmd.x ?? (entity.x + 4)
         const by = cmd.y ?? (entity.y + entity.height - 1)
 
-        // Check overlap with existing blocking object cells
-        let blocked = false
-        for (let row = 0; row < objDef.height && !blocked; row++) {
+        // Validate placement: check walls, existing objects, and agents
+        let blockReason = ""
+
+        for (let row = 0; row < objDef.height && !blockReason; row++) {
           const cellRow = objDef.cells[row]
           if (!cellRow) continue
           for (let col = 0; col < objDef.width; col++) {
             const cell = cellRow[col]
             if (!cell || cell.walkable) continue
-            const key = tileKey(bx + col, by + row)
-            if (objectOverlay.walkable.has(key) && !objectOverlay.walkable.get(key)) {
-              blocked = true
+
+            const px = bx + col
+            const py = by + row
+
+            // Check walls (tile-based collision)
+            if (px < 0 || px >= mapWidth || py < 0 || py >= mapHeight) {
+              blockReason = "outside map bounds"
               break
             }
+            const tile = tiles[py]?.[px]
+            if (!tile || !tileDefs[tile]?.walkable) {
+              blockReason = "overlaps with wall or terrain"
+              break
+            }
+
+            // Check existing objects
+            const key = tileKey(px, py)
+            if (objectOverlay.walkable.has(key) && !objectOverlay.walkable.get(key)) {
+              blockReason = "overlaps with existing object"
+              break
+            }
+
+            // Check agents
+            for (const ent of entities) {
+              // Check if agent footprint overlaps (7 cells wide)
+              const agentLeft = ent.x + 1
+              const agentRight = ent.x + 7
+              if (px >= agentLeft && px < agentRight && py === ent.footY) {
+                blockReason = "agent in the way"
+                break
+              }
+            }
+            if (blockReason) break
           }
         }
 
-        if (blocked) {
-          chat("system", `Can't place ${cmd.objectType} at (${bx},${by}) — blocked`, [180, 80, 80])
+        if (blockReason) {
+          chat("system", `Can't place ${cmd.objectType} at (${bx},${by}) — ${blockReason}`, [180, 80, 80])
         } else {
           const fromName = entity.name || sessionId
           // Find which room this object is being placed in

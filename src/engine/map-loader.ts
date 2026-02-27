@@ -115,17 +115,43 @@ export function parseMapJson(json: MapJson): LoadedMap {
     }
   }
 
-  // Parse doors
+  // Parse doors with validation
   const doors: DoorDef[] = []
   if (json.doors) {
     for (const d of json.doors) {
-      doors.push({
+      const door: DoorDef = {
         x: d.x,
         y: d.y,
         orientation: d.orientation as "vertical" | "horizontal",
         length: d.length,
         color: toRgb(d.color) ?? [128, 128, 128],
-      })
+      }
+
+      // Validate door placement
+      const warnings: string[] = []
+      for (let i = 0; i < door.length; i++) {
+        const dx = door.orientation === "horizontal" ? door.x + i : door.x
+        const dy = door.orientation === "vertical" ? door.y + i : door.y
+
+        // Check bounds
+        if (dx < 0 || dx >= parsed.width || dy < 0 || dy >= parsed.height) {
+          warnings.push(`Door at (${door.x},${door.y}) extends outside map bounds`)
+          break
+        }
+
+        // Check if placed on walkable tile
+        const tile = parsed.tiles[dy]?.[dx]
+        if (!tile || !tileDefs[tile]?.walkable) {
+          warnings.push(`Door at (${door.x},${door.y}) placed on wall or non-walkable tile (${tile})`)
+          break
+        }
+      }
+
+      if (warnings.length > 0) {
+        console.warn(`⚠ Map validation warning: ${warnings.join("; ")}`)
+      }
+
+      doors.push(door)
     }
   }
 
