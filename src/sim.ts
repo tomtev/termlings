@@ -113,7 +113,7 @@ const detectedRoomsSerialized = detectedRooms.map(r => ({
 
 // --- Objects (merge map-defined objects with built-in defs) ---
 
-const mergedDefs = { ...FURNITURE_DEFS, ...world.objectDefs }
+const mergedDefs = { ...OBJECT_DEFS, ...world.objectDefs }
 let objectPlacements = [...world.placements]
 let objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
 
