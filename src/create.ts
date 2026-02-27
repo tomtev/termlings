@@ -15,7 +15,7 @@ function prompt(question: string): Promise<string> {
 
 export async function runCreate(): Promise<void> {
   const args = process.argv.slice(3);
-  let targetDir: string | null = null;
+  let slug: string | null = null;
   const vars: Record<string, string> = {};
 
   for (let i = 0; i < args.length; i++) {
@@ -25,25 +25,14 @@ export async function runCreate(): Promise<void> {
       vars["OWNER_NAME"] = args[++i];
     } else if (args[i] === "--purpose" && i + 1 < args.length) {
       vars["AGENT_PURPOSE"] = args[++i];
-    } else if (!args[i].startsWith("--") && !targetDir) {
-      targetDir = args[i];
+    } else if (!args[i].startsWith("--") && !slug) {
+      // First non-flag arg is the agent slug
+      slug = args[i].toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     }
   }
 
-  // Determine slug from target dir or prompt for it
-  let slug: string;
-  if (targetDir) {
-    // Use explicit target path
-    slug = targetDir.split("/").pop() || "agent";
-  } else if (positional.length > 0) {
-    // Use first positional arg as slug
-    slug = positional[0]!.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "agent";
-  } else {
-    // No target specified
-    slug = "agent";
-  }
-
   // Default agent name from slug (capitalize first letter)
+  slug = slug || "agent";
   const defaultName = slug.charAt(0).toUpperCase() + slug.slice(1);
   if (!vars["AGENT_NAME"]) {
     const answer = await prompt(`Agent name (default: ${defaultName}): `);
@@ -54,7 +43,7 @@ export async function runCreate(): Promise<void> {
     vars["AGENT_PURPOSE"] = await prompt("Purpose: ") || "A helpful agent";
   }
 
-  const dest = targetDir ? resolve(targetDir) : resolve(".termlings", slug);
+  const dest = resolve(".termlings", slug);
   await Bun.spawn(["mkdir", "-p", dest]).exited;
 
   await createAgent(dest, vars);
