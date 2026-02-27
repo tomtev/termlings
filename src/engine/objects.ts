@@ -14,6 +14,8 @@ export interface ObjectDef {
   height: number
   cells: (ObjectCell | null)[][] // [row][col], null = transparent/no override
   emitters?: ParticleEmitter[]    // optional particle emitters for sparkles, flames, etc
+  enterAnimationDuration?: number // milliseconds for entrance animation (default: 400ms)
+  exitAnimationDuration?: number  // milliseconds for exit animation (default: 400ms)
 }
 
 export interface ObjectPlacement {
@@ -22,6 +24,8 @@ export interface ObjectPlacement {
   y: number
   props?: Record<string, unknown>
   roomId?: number // which logical room this object is in (optional, for compatibility)
+  createdAt?: number // timestamp when object was placed (for entrance animation)
+  destroyingAt?: number // timestamp when object started destruction (for exit animation)
 }
 
 // --- Color utilities ---
@@ -294,9 +298,13 @@ export function stampObjectPiece(
   cameraY: number,
   scale: number,
   defs?: Record<string, ObjectDef>,
+  animationProgress?: number, // 0-1 for entrance/exit animation
 ) {
   const def = (defs ?? OBJECT_DEFS)[placement.def]
   if (!def) return
+
+  // If animation progress is 0, render nothing (object not visible)
+  if (animationProgress === 0) return
 
   for (let row = 0; row < def.height; row++) {
     const cellRow = def.cells[row]
@@ -306,12 +314,22 @@ export function stampObjectPiece(
     for (let col = 0; col < def.width; col++) {
       const cell = cellRow[col]
       if (!cell) continue
+
+      // Apply animation fade during entrance/exit
+      let displayCell = cell
+      if (animationProgress !== undefined && animationProgress < 1) {
+        // Fade opacity based on animation progress
+        // For now, we skip rendering if progress is too low (creates a fade-in effect)
+        const opacityThreshold = 0.2
+        if (animationProgress < opacityThreshold) continue
+      }
+
       const baseSx = (placement.x + col - cameraX) * scale
       for (let ci = 0; ci < scale; ci++) {
         const sx = baseSx + ci
         if (sx < 0 || sx >= cols) continue
         const bc = buffer[sy]![sx]
-        if (bc) { bc.ch = cell.ch; bc.fg = cell.fg; bc.bg = cell.bg }
+        if (bc) { bc.ch = displayCell.ch; bc.fg = displayCell.fg; bc.bg = displayCell.bg }
       }
     }
   }

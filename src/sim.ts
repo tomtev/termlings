@@ -156,6 +156,8 @@ objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
 
 // Initialize particle systems for objects with emitters
 const particleSystems: Map<number, ObjectWithParticles> = new Map()
+const entranceSparkles: Map<number, ObjectWithParticles> = new Map() // temporary sparkles for entrance animation
+
 function initializeParticleSystems() {
   particleSystems.clear()
   for (let i = 0; i < objectPlacements.length; i++) {
@@ -166,6 +168,25 @@ function initializeParticleSystems() {
     }
   }
 }
+
+function createEntranceSparkles(placementIdx: number, placement: ObjectPlacement, def: ObjectDef) {
+  // Create temporary sparkles for entrance animation (if not already created)
+  if (!entranceSparkles.has(placementIdx)) {
+    const emitter: ParticleEmitter = {
+      name: "entrance-spark",
+      char: ["✦", "✧", "·", "*"],
+      fg: [[220, 200, 100], [255, 220, 100], [200, 180, 80]],
+      rate: 40, // 40 particles per second during entrance
+      lifetime: 800, // particles live 800ms
+      offsetX: [0, def.width - 1],
+      offsetY: [0, def.height - 1],
+      width: def.width,
+      height: def.height,
+    }
+    entranceSparkles.set(placementIdx, createParticleSystem([emitter]))
+  }
+}
+
 initializeParticleSystems()
 
 function rebuildObjects() {
@@ -332,10 +353,22 @@ let buffer = allocBuffer(cols, rows)
 let cameraX = 0
 let cameraY = 0
 let cameraInitialized = false
+let lastCameraMovementTime = Date.now() // Track when user last moved camera
+let autoCenterTimer: NodeJS.Timeout | null = null
 
 // Dead-zone camera: player moves freely in center, camera scrolls at edges
 const CAMERA_PAD_X = 0.3 // fraction of viewport width as padding on each side
 const CAMERA_PAD_Y = 0.3 // fraction of viewport height as padding on each side
+const AUTO_CENTER_DELAY = 3000 // 3 seconds of inactivity before auto-centering
+const AUTO_CENTER_SPEED = 0.15 // smooth pan speed (0-1, fraction of distance per frame)
+
+function resetAutoCenterTimer() {
+  lastCameraMovementTime = Date.now()
+  if (autoCenterTimer) {
+    clearTimeout(autoCenterTimer)
+    autoCenterTimer = null
+  }
+}
 
 function updateCamera() {
   const scale = tileScaleX(zoomLevel)
@@ -356,6 +389,7 @@ function updateCamera() {
       cameraX = playerSpawn.x - Math.floor(viewW / 2)
       cameraY = playerSpawn.y - Math.floor(viewH / 2)
     }
+    resetAutoCenterTimer()
     return
   }
 
@@ -368,11 +402,44 @@ function updateCamera() {
   const padX = Math.floor(viewW * CAMERA_PAD_X)
   const padY = Math.floor(viewH * CAMERA_PAD_Y)
 
+  // Check if we should auto-center (3 seconds of no user input)
+  const timeSinceMovement = Date.now() - lastCameraMovementTime
+  if (timeSinceMovement > AUTO_CENTER_DELAY && !autoCenterTimer) {
+    // Start smooth pan back to center on player
+    autoCenterTimer = setInterval(() => {
+      const targetCam = computeCamera(target, cols, rows, zoomLevel)
+      cameraX += (targetCam.cameraX - cameraX) * AUTO_CENTER_SPEED
+      cameraY += (targetCam.cameraY - cameraY) * AUTO_CENTER_SPEED
+
+      // Stop when close enough to target
+      if (Math.abs(targetCam.cameraX - cameraX) < 0.5 && Math.abs(targetCam.cameraY - cameraY) < 0.5) {
+        cameraX = targetCam.cameraX
+        cameraY = targetCam.cameraY
+        if (autoCenterTimer) {
+          clearTimeout(autoCenterTimer)
+          autoCenterTimer = null
+        }
+      }
+    }, 50) // Update every 50ms for smooth animation
+  }
+
   // Scroll when target approaches edges of the viewport
-  if (pcx < cameraX + padX) cameraX = pcx - padX
-  if (pcx > cameraX + viewW - padX) cameraX = pcx - viewW + padX
-  if (pcy < cameraY + padY) cameraY = pcy - padY
-  if (pcy > cameraY + viewH - padY) cameraY = pcy - viewH + padY
+  if (pcx < cameraX + padX) {
+    cameraX = pcx - padX
+    resetAutoCenterTimer()
+  }
+  if (pcx > cameraX + viewW - padX) {
+    cameraX = pcx - viewW + padX
+    resetAutoCenterTimer()
+  }
+  if (pcy < cameraY + padY) {
+    cameraY = pcy - padY
+    resetAutoCenterTimer()
+  }
+  if (pcy > cameraY + viewH - padY) {
+    cameraY = pcy - viewH + padY
+    resetAutoCenterTimer()
+  }
 }
 
 // Handle terminal resize
@@ -545,6 +612,7 @@ function cycleSelection(delta: number) {
   if (list.length === 0) return
   selectedIdx = ((selectedIdx + delta) % list.length + list.length) % list.length
   cameraInitialized = false
+  resetAutoCenterTimer() // Reset auto-center when user selects different entity
   updateCamera()
 }
 
@@ -910,12 +978,16 @@ function processAgentCommands() {
     }
 
     if (cmd.action === "place" && cmd.objectType) {
+      // Reload custom objects in case new ones were created since sim started
+      const updatedCustomObjects = loadCustomObjects(roomSlug)
+      Object.assign(mergedDefs, updatedCustomObjects)
+
       const objDef = mergedDefs[cmd.objectType]
       if (!objDef) {
         chat("system", `Unknown object: ${cmd.objectType}`, [180, 80, 80])
       } else {
-        const bx = cmd.x ?? (entity.x + 4)
-        const by = cmd.y ?? (entity.y + entity.height - 1)
+        const bx = cmd.x !== undefined ? cmd.x : (entity.x + 4)
+        const by = cmd.y !== undefined ? cmd.y : (entity.y + entity.height - 1)
 
         // Validate placement: check walls, existing objects, and agents
         let blockReason = ""
@@ -972,14 +1044,27 @@ function processAgentCommands() {
             const b = r.bounds
             return bx >= b.x && bx < b.x + b.w && by >= b.y && by < b.y + b.h
           })
-          objectPlacements.push({ def: cmd.objectType, x: bx, y: by, roomId: agentRoom?.id })
+          const placementIdx = objectPlacements.length
+          const placement = { def: cmd.objectType, x: bx, y: by, roomId: agentRoom?.id, createdAt: Date.now() }
+          objectPlacements.push(placement)
           rebuildObjects()
+
+          // Create entrance sparkles for the new object
+          const placedDef = mergedDefs[cmd.objectType]
+          if (placedDef) {
+            createEntranceSparkles(placementIdx, placement, placedDef)
+          }
+
           chat("system", `${fromName} placed a ${cmd.objectType} at (${bx},${by})`, [80, 180, 80])
         }
       }
     }
 
     if (cmd.action === "destroy") {
+      // Reload custom objects in case new ones were created since sim started
+      const updatedCustomObjects = loadCustomObjects(roomSlug)
+      Object.assign(mergedDefs, updatedCustomObjects)
+
       const dx = cmd.x ?? (entity.x + 4)
       const dy = cmd.y ?? (entity.y + entity.height - 1)
 
@@ -1268,6 +1353,26 @@ function frame() {
     updateParticles(system, dt)
   }
 
+  // Update entrance sparkles and clean up finished ones
+  for (const [placementIdx, system] of Array.from(entranceSparkles.entries())) {
+    const placement = objectPlacements[placementIdx]
+    if (!placement || placement.createdAt === undefined) {
+      // Placement was removed, cleanup sparkles
+      entranceSparkles.delete(placementIdx)
+      continue
+    }
+
+    updateParticles(system, dt)
+
+    // Check if entrance animation is complete
+    const def = mergedDefs[placement.def]
+    const enterDuration = def?.enterAnimationDuration ?? 400
+    if (Date.now() - placement.createdAt >= enterDuration) {
+      // Animation complete, remove sparkles
+      entranceSparkles.delete(placementIdx)
+    }
+  }
+
   updateCamera()
   clearBuffer(buffer, cols, rows)
 
@@ -1306,12 +1411,54 @@ function frame() {
       else stampEntity(buffer, cols, rows, e, cameraX, cameraY, scale)
     } else {
       // Furniture
-      stampObjectPiece(buffer, cols, rows, objectPlacements[idx - eLen]!, cameraX, cameraY, scale, mergedDefs)
+      const placement = objectPlacements[idx - eLen]!
+      const def = mergedDefs[placement.def]
+
+      // Calculate animation progress for entrance animation
+      let animationProgress: number | undefined
+      if (def && placement.createdAt !== undefined) {
+        const enterDuration = def.enterAnimationDuration ?? 400
+        const elapsed = Date.now() - placement.createdAt
+        const progress = Math.min(1, elapsed / enterDuration)
+        if (progress < 1) {
+          animationProgress = progress
+        }
+      }
+
+      stampObjectPiece(buffer, cols, rows, placement, cameraX, cameraY, scale, mergedDefs, animationProgress)
     }
   }
 
   // Render particles on top of objects
   stampParticles(buffer, cols, rows, objectPlacements, cameraX, cameraY, scale)
+
+  // Render entrance sparkles
+  for (const [placementIdx, system] of Array.from(entranceSparkles.entries())) {
+    const placement = objectPlacements[placementIdx]
+    if (!placement || system.particles.length === 0) continue
+
+    for (const particle of system.particles) {
+      const worldX = placement.x + particle.x
+      const worldY = placement.y + particle.y
+      const screenX = Math.round((worldX - cameraX) * scale)
+      const screenY = worldY - cameraY
+
+      if (screenY < 0 || screenY >= rows) continue
+      if (screenX < 0 || screenX >= cols) continue
+
+      const opacity = getParticleOpacity(particle)
+      const dimFactor = opacity
+      const fg: RGB = [
+        Math.round(particle.fg[0] * dimFactor),
+        Math.round(particle.fg[1] * dimFactor),
+        Math.round(particle.fg[2] * dimFactor),
+      ]
+
+      if (buffer[screenY] && buffer[screenY]![screenX]) {
+        buffer[screenY]![screenX] = { ch: particle.char, fg, bg: null }
+      }
+    }
+  }
 
   // Build selection index labels: entity → " (1)", " (2)", etc.
   const selLabels = new Map<Entity, string>()
