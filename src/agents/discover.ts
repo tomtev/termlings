@@ -5,7 +5,7 @@ import { createInterface } from "readline";
 export interface LocalAgent {
   name: string;
   path: string;
-  soul?: { name: string; purpose: string; dna: string; command?: string };
+  soul?: { name: string; title?: string; purpose: string; dna: string; command?: string };
 }
 
 /**
@@ -35,13 +35,18 @@ export function discoverLocalAgents(): LocalAgent[] {
       try {
         const content = readFileSync(soulPath, "utf-8");
         const nameMatch = content.match(/^# (.+)$/m);
-        const purposeMatch = content.match(/\*\*Purpose\*\*:\s*(.+)$/m);
+        const titleMatch = content.match(/\*\*Title\*\*:\s*(.+)$/m);
+        // Purpose can be inline (**Purpose**: text) or as heading (## Purpose \n text)
+        const purposeInlineMatch = content.match(/\*\*Purpose\*\*:\s*(.+)$/m);
+        const purposeHeadingMatch = content.match(/^## Purpose\s*\n+(.+?)(?:\n\n|\n##)/m);
+        const purposeMatch = purposeInlineMatch || purposeHeadingMatch;
         const dnaMatch = content.match(/\*\*DNA\*\*:\s*(.+)$/m);
         const commandMatch = content.match(/\*\*Command\*\*:\s*(.+)$/m);
 
         if (nameMatch && dnaMatch) {
           soul = {
             name: nameMatch[1],
+            title: titleMatch ? titleMatch[1] : undefined,
             purpose: purposeMatch ? purposeMatch[1] : "",
             dna: dnaMatch[1],
             command: commandMatch ? commandMatch[1] : undefined,
@@ -84,11 +89,17 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
 
   // Build menu items for existing agents
   const menuItems = [
-    ...localAgents.map((a) => ({
-      value: JSON.stringify({ type: "existing", agent: a }),
-      label: a.soul?.name || a.name,
-      description: a.soul?.purpose ? `${a.soul.purpose}${a.soul.dna && activeAgentDnas.has(a.soul.dna) ? " (in room)" : ""}` : `Autonomous agent${a.soul?.dna && activeAgentDnas.has(a.soul.dna) ? " (in room)" : ""}`,
-    })),
+    ...localAgents.map((a) => {
+      const name = a.soul?.name || a.name;
+      const title = a.soul?.title ? ` — ${a.soul.title}` : "";
+      const purpose = a.soul?.purpose || "Autonomous agent";
+      const status = a.soul?.dna && activeAgentDnas.has(a.soul.dna) ? " (in room)" : "";
+      return {
+        value: JSON.stringify({ type: "existing", agent: a }),
+        label: `${name}${title}`,
+        description: `${purpose}${status}`,
+      };
+    }),
     {
       value: JSON.stringify({ type: "create", agent: null }),
       label: "Spawn random agent",
