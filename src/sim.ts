@@ -920,7 +920,6 @@ function processHookEvents() {
 
   // Poll hook files for Claude typing animations and tool requests
   try {
-    const { readdirSync, unlinkSync } = await import("fs");
     const hookFiles = readdirSync(IPC_DIR).filter((f) => f.endsWith(".hook.json"));
     for (const hookFile of hookFiles) {
       const sessionId = hookFile.replace(".hook.json", "");

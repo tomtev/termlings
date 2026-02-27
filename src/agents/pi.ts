@@ -1,14 +1,23 @@
 import type { AgentAdapter } from "./types.js"
+import { resolve as resolvePath } from "path"
 
 const pi: AgentAdapter = {
   bin: "pi",
   defaultName: "Pi",
 
   contextArgs(context) {
-    // Pi auto-discovers AGENTS.md/CLAUDE.md from the project directory
-    // and reads TERMLINGS_* env vars set by the launcher.
-    // No additional args needed.
-    return []
+    // Pi accepts @file syntax to inject content from files.
+    // Pass the termling context directly to pi.
+    if (!context) return []
+
+    // For pi, we pass the context inline using the @ file syntax
+    // The context is passed as a temporary file argument
+    try {
+      const contextPath = resolvePath("src/termling-context.md")
+      return [`@${contextPath}`]
+    } catch {
+      return []
+    }
   },
 }
 
