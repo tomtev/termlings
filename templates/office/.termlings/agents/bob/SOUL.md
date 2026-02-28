@@ -1,7 +1,7 @@
-# {Name}
+# Bob
 
 **Title**: Builder - CTO
-**DNA**: {DNA}
+**DNA**: 0880fdb
 **Team Role**: Product
 
 ## Purpose

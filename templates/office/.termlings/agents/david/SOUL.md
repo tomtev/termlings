@@ -1,7 +1,7 @@
-# {Name}
+# David
 
 **Title**: Monetizer - CRO
-**DNA**: {DNA}
+**DNA**: 0c2e4a1
 **Team Role**: Revenue
 
 ## Purpose

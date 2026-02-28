@@ -1,7 +1,7 @@
-# {Name}
+# Alice
 
 **Title**: Founder - CEO
-**DNA**: {DNA}
+**DNA**: 0a3f201
 **Team Role**: Direction
 
 ## Purpose

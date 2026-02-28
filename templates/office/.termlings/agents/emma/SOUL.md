@@ -1,7 +1,7 @@
-# {Name}
+# Emma
 
 **Title**: Operator - COO
-**DNA**: {DNA}
+**DNA**: 0d9c47a
 **Team Role**: Scale
 
 ## Purpose
