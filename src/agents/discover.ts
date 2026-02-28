@@ -23,7 +23,7 @@ export function discoverLocalAgents(): LocalAgent[] {
       if (!entry.isDirectory()) continue;
 
       // Skip special directories
-      if (entry.name === "_data" || entry.name.startsWith(".")) continue;
+      if (["map", "agents", "store", "objects"].includes(entry.name) || entry.name.startsWith(".")) continue;
 
       const agentPath = join(termlingsDir, entry.name);
       const soulPath = join(agentPath, "SOUL.md");

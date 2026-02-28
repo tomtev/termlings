@@ -19,10 +19,10 @@ export function getIpcDir(): string {
 
 /**
  * Get the data directory for the current project.
- * This is `.termlings/_data/` where game state and placements are stored.
+ * This is `.termlings/` where game state, placements, emails, crons, and tasks are stored.
  */
 export function getDataDir(): string {
-  return join(getTermlingsDir(), "_data")
+  return getTermlingsDir()
 }
 
 export let IPC_DIR = getIpcDir()

@@ -17,7 +17,7 @@ export interface CronJob {
 }
 
 function cronsDir(): string {
-  return join(process.cwd(), ".termlings", "_data", "crons")
+  return join(process.cwd(), ".termlings", "store", "crons")
 }
 
 function cronsFile(): string {

@@ -28,7 +28,7 @@ export interface TaskNote {
 }
 
 function tasksDir(): string {
-  return join(process.cwd(), ".termlings", "_data", "tasks")
+  return join(process.cwd(), ".termlings", "store", "tasks")
 }
 
 function tasksFile(): string {

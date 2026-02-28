@@ -69,7 +69,7 @@ import {
   type DetectedRoom,
 } from "./engine/index.js"
 import { resolve, join } from "path"
-import { readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, unlinkSync } from "fs"
+import { readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, unlinkSync, mkdirSync } from "fs"
 import {
   CHUNK_SIZE,
   ensureChunkLoaded,
@@ -126,7 +126,13 @@ let objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
 
 // --- Persist agent-built objects (chunk-based) ---
 
-ensureDataDir()
+function ensureAgentsDir() {
+  const dir = join(process.cwd(), ".termlings", "agents")
+  mkdirSync(dir, { recursive: true })
+}
+
+ensureIpcDir()
+ensureAgentsDir()
 
 function loadPersistedPlacements() {
   // Load all persisted chunks and merge placements
@@ -259,7 +265,7 @@ const agentSessions = new Map<string, { entity: Entity; ai: NpcAIState; gestureE
 
 // --- Agent persistence ---
 
-const AGENTS_FILE = join(IPC_DIR, "agents.json")
+const AGENTS_FILE = join(process.cwd(), ".termlings", "agents", "agents.json")
 
 interface PersistedAgentState {
   name: string

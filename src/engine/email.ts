@@ -14,7 +14,7 @@ export interface Email {
 }
 
 function emailDir(): string {
-  return join(process.cwd(), ".termlings", "_data", "emails")
+  return join(process.cwd(), ".termlings", "store", "email")
 }
 
 function inboxFile(sessionId: string): string {

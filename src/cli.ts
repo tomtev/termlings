@@ -85,12 +85,16 @@ if (flags.has("clear")) {
 
   try {
     // Only clear IPC state files (agent sessions, queue files, messages, state)
-    // Keep .termlings/agent-name/ directories and .termlings/_data/
+    // Keep .termlings/agent-name/, .termlings/agents/, .termlings/map/, .termlings/store/, etc.
     const entries = readdirSync(ipcDir);
     for (const entry of entries) {
-      // Clear IPC files: agents.json, *.queue.jsonl, *.msg.json, state.json, hook files
-      if (entry === "agents.json" ||
-          entry.endsWith(".queue.jsonl") ||
+      // Clear IPC files: *.queue.jsonl, *.msg.json, state.json, hook files
+      // Don't clear persistent data directories
+      if (entry.startsWith(".") ||
+          ["agents", "map", "store", "objects"].includes(entry)) {
+        continue;
+      }
+      if (entry.endsWith(".queue.jsonl") ||
           entry.endsWith(".msg.json") ||
           entry === "state.json" ||
           entry.endsWith(".hook.json")) {
@@ -98,7 +102,7 @@ if (flags.has("clear")) {
       }
     }
     console.log(`✓ Cleared agent sessions and IPC state`);
-    console.log(`✓ Kept: saved agents in .termlings/, project data in .termlings/_data/`);
+    console.log(`✓ Kept: saved agents and persistent data in .termlings/`);
   } catch (e) {
     console.error(`Failed to clear game state: ${e}`);
     process.exit(1);
@@ -164,11 +168,6 @@ Commands:
   map --sessions             Quick session ID list
   chat <message>             Post to sim chat log (visible to owner)
   send <session-id> <msg>    Direct message to a specific agent
-  inbox                      Read messages from other agents (quick mode)
-  email list                 List all emails in inbox
-  email read <id>            Read a specific email
-  email send <to|owner> <subj> <body>  Send an email to agent or owner
-  email delete <id>          Delete an email
   cron list                  See your scheduled cron jobs
   cron show <id>             See cron job details
   task list                  See all project tasks
@@ -176,7 +175,7 @@ Commands:
   task claim <id>            Claim a task to work on
   task status <id> <status>  Update task (in-progress|completed|blocked)
   task note <id> <note>      Add a note to a task
-  build <type> <x>,<y>       Build a custom object
+  place <type> <x>,<y>       Place object at coordinates
   destroy <x>,<y>            Destroy an object`;
 
   if (!verb || verb === "--help" || verb === "-h") {
@@ -586,103 +585,6 @@ Commands:
     process.exit(0);
   }
 
-  if (verb === "inbox") {
-    const { readMessages } = await import("./engine/ipc.js");
-    const sessionId = process.env.TERMLINGS_SESSION_ID;
-    if (!sessionId) {
-      console.error("Error: TERMLINGS_SESSION_ID env var not set");
-      process.exit(1);
-    }
-    const messages = readMessages(sessionId);
-    if (messages.length === 0) {
-      // Silent when empty — clean for PTY injection and hook usage
-    } else {
-      for (const msg of messages) {
-        console.log(`[${msg.fromName}] ${msg.text}`);
-      }
-    }
-    process.exit(0);
-  }
-
-  // Email system
-  if (verb === "email") {
-    const { sendEmail, sendOwnerEmail, getInbox, getEmail, markEmailAsRead, deleteEmail, formatEmail, formatInboxList } = await import("./engine/email.js");
-    const sessionId = process.env.TERMLINGS_SESSION_ID;
-    const agentName = process.env.TERMLINGS_AGENT_NAME || "Agent";
-
-    if (!sessionId) {
-      console.error("Error: TERMLINGS_SESSION_ID env var not set");
-      process.exit(1);
-    }
-
-    const subcommand = positional[2];
-
-    if (subcommand === "list") {
-      const emails = getInbox(sessionId);
-      console.log(formatInboxList(emails));
-      process.exit(0);
-    }
-
-    if (subcommand === "read") {
-      const emailId = positional[3];
-      if (!emailId) {
-        console.error("Usage: termlings action email read <email-id>");
-        process.exit(1);
-      }
-
-      const email = getEmail(sessionId, emailId);
-      if (!email) {
-        console.error(`Email not found: ${emailId}`);
-        process.exit(1);
-      }
-
-      // Mark as read
-      if (!email.read) {
-        markEmailAsRead(sessionId, emailId);
-      }
-
-      console.log(formatEmail(email));
-      process.exit(0);
-    }
-
-    if (subcommand === "send") {
-      const toId = positional[3];
-      const subject = positional[4];
-      const body = positional.slice(5).join(" ");
-
-      if (!toId || !subject) {
-        console.error("Usage: termlings action email send <to-id|owner> <subject> <body...>");
-        process.exit(1);
-      }
-
-      let emailId: string;
-      if (toId.toLowerCase() === "owner") {
-        // Send to owner/spectator
-        emailId = sendOwnerEmail(sessionId, agentName, subject, body || "");
-        console.log(`✓ Email sent to owner (ID: ${emailId})`);
-      } else {
-        // Send to another agent
-        emailId = sendEmail(sessionId, agentName, toId, subject, body || "");
-        console.log(`✓ Email sent (ID: ${emailId})`);
-      }
-      process.exit(0);
-    }
-
-    if (subcommand === "delete") {
-      const emailId = positional[3];
-      if (!emailId) {
-        console.error("Usage: termlings action email delete <email-id>");
-        process.exit(1);
-      }
-
-      deleteEmail(sessionId, emailId);
-      console.log(`✓ Email deleted`);
-      process.exit(0);
-    }
-
-    console.error("Usage: termlings action email <list|read|send|delete>");
-    process.exit(1);
-  }
 
   if (verb === "place") {
     const { readState: readStatePlace, writeCommand } = await import("./engine/ipc.js");
@@ -1269,57 +1171,6 @@ if (positional[0] === "scheduler") {
   }
 }
 
-// 2c. Owner inbox: termlings inbox [--read <id>] [--delete <id>]
-if (positional[0] === "inbox") {
-  const { getOwnerInbox, getOwnerEmail, markOwnerEmailAsRead, deleteOwnerEmail, formatEmail, formatInboxList } = await import("./engine/email.js");
-
-  const readId = positional[1] === "--read" ? positional[2] : null;
-  const deleteId = positional[1] === "--delete" ? positional[2] : null;
-
-  if (readId) {
-    // Read specific owner email
-    const email = getOwnerEmail(readId);
-    if (!email) {
-      console.error(`Email not found: ${readId}`);
-      process.exit(1);
-    }
-    if (!email.read) {
-      markOwnerEmailAsRead(readId);
-    }
-    console.log(formatEmail(email));
-    process.exit(0);
-  }
-
-  if (deleteId) {
-    // Delete owner email
-    deleteOwnerEmail(deleteId);
-    console.log(`✓ Email deleted`);
-    process.exit(0);
-  }
-
-  // List all owner emails
-  const emails = getOwnerInbox();
-  if (emails.length === 0) {
-    console.log("No emails from agents");
-  } else {
-    const unread = emails.filter(e => !e.read).length;
-    const lines: string[] = [];
-    lines.push(`📧 Agent Emails (${unread} unread):`);
-    lines.push("");
-    for (const email of emails) {
-      const status = email.read ? "  " : "→ ";
-      const subject = email.subject.substring(0, 50) + (email.subject.length > 50 ? "..." : "");
-      const date = new Date(email.timestamp).toLocaleDateString();
-      lines.push(`${status}[${email.id}] ${email.fromName}: "${subject}" (${date})`);
-    }
-    lines.push("");
-    lines.push("Usage: termlings inbox --read <id>   - Read full email from agent");
-    lines.push("       termlings inbox --delete <id> - Delete email");
-    console.log(lines.join("\n"));
-  }
-  process.exit(0);
-}
-
 // 3. Render subcommand: termlings render [avatar|object] [dna|name|type] [options]
 if (positional[0] === "render") {
   const { OBJECT_DEFS, renderObjectToTerminal } = await import("./engine/objects.js");
@@ -1685,9 +1536,6 @@ Scheduler:
   scheduler --daemon       Run scheduler in background (checks every 60 seconds)
 
 Spectator (owner commands):
-  inbox                    Check emails from agents (questions, reports)
-  inbox --read <id>        Read a specific email from an agent
-  inbox --delete <id>      Delete an email
   cron create <agent-id> <schedule> <msg>  Schedule a message to an agent
   cron list [--agent <id>] List scheduled cron jobs
   cron show <id>           Show cron job details
@@ -1747,7 +1595,6 @@ Actions (in-game):
   action map [--ascii|--sessions]  See the world
   action send <id> <msg>   Direct message to agent
   action chat <msg>        Post to shared chat
-  action inbox             Read messages
   action place <type> <x>,<y>                Place object at coordinates
   action place <type> <x>,<y> --preview      Preview object before placing
   action place <type> <x>,<y> --color R,G,B  Place with custom color
@@ -1834,7 +1681,10 @@ Options:
     // Create .termlings directory structure
     const { mkdirSync } = await import("fs");
     mkdirSync(termlingsDir, { recursive: true });
-    mkdirSync(join(termlingsDir, "_data"), { recursive: true });
+    mkdirSync(join(termlingsDir, "map"), { recursive: true });
+    mkdirSync(join(termlingsDir, "agents"), { recursive: true });
+    mkdirSync(join(termlingsDir, "store"), { recursive: true });
+    mkdirSync(join(termlingsDir, "objects"), { recursive: true });
 
     // Use create command to set up agents
     const { generateRandomDNA, encodeDNA, traitsFromName } = await import("./index.js");
@@ -1869,7 +1719,7 @@ Options:
       }
 
       console.log(`\n✓ Created team: ${createdAgents.join(", ")}`);
-      console.log(`✓ Initialized project state in .termlings/_data/`);
+      console.log(`✓ Initialized project structure in .termlings/`);
       console.log(`\n🚀 Ready to go! Run 'termlings' to start the sim.\n`);
     } else {
       // Single agent setup
@@ -1937,7 +1787,7 @@ This agent will join the termlings world and work together with other agents.
       writeFileSync(join(agentDir, "SOUL.md"), soulContent);
 
       console.log(`✓ Created agent "${finalName}" in .termlings/${finalName.toLowerCase()}/`);
-      console.log(`✓ Initialized project state in .termlings/_data/`);
+      console.log(`✓ Initialized project structure in .termlings/`);
       console.log(`\n🚀 Ready to go! Run 'termlings' to start the sim.\n`);
     }
 

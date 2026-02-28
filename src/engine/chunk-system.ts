@@ -30,7 +30,7 @@ function getCacheKey(chunkX: number, chunkY: number): string {
  * Get the directory where chunks are stored
  */
 function getChunkDir(): string {
-  return join(getDataDir(), "map")
+  return join(process.cwd(), ".termlings", "map")
 }
 
 /**
