@@ -152,9 +152,7 @@ if (positional[0] === "action") {
   // IPC reads/writes go to the current project's .termlings directory
 
   const verb = positional[1];
-
-  if (!verb) {
-    console.error(`Usage: termlings action <command>
+  const helpText = `Usage: termlings action <command>
 
 Commands:
   walk <x>,<y>                Walk avatar to coordinates
@@ -179,7 +177,10 @@ Commands:
   task status <id> <status>  Update task (in-progress|completed|blocked)
   task note <id> <note>      Add a note to a task
   build <type> <x>,<y>       Build a custom object
-  destroy <x>,<y>            Destroy an object`);
+  destroy <x>,<y>            Destroy an object`;
+
+  if (!verb || verb === "--help" || verb === "-h") {
+    console.error(helpText);
     process.exit(1);
   }
 

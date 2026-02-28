@@ -180,7 +180,7 @@ export function readMessages(sessionId: string): AgentMessage[] {
   }
 }
 
-const PERSIST_FILES = new Set(["agents.json", "chat.jsonl", "placements.json"])
+const PERSIST_FILES = new Set(["agents.json", "chat.jsonl"])
 
 export function cleanupIpc(): void {
   if (!existsSync(IPC_DIR)) return

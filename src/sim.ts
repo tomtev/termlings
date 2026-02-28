@@ -70,7 +70,14 @@ import {
 } from "./engine/index.js"
 import { resolve, join } from "path"
 import { readFileSync, writeFileSync, appendFileSync, existsSync, readdirSync, unlinkSync } from "fs"
-import { assignDesk, releaseDesk, type DeskAssignment } from "./engine/desk-assignment.js"
+import {
+  CHUNK_SIZE,
+  ensureChunkLoaded,
+  initializeChunksFromPlacements,
+  loadAllChunks,
+  saveChunk,
+  worldToChunk,
+} from "./engine/chunk-system.js"
 
 // --- CLI args ---
 
@@ -117,36 +124,31 @@ const mergedDefs = { ...OBJECT_DEFS, ...world.objectDefs, ...customObjectDefs }
 let objectPlacements = [...world.placements]
 let objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
 
-// --- Persist agent-built objects ---
+// --- Persist agent-built objects (chunk-based) ---
 
 ensureDataDir()
-const PLACEMENTS_FILE = join(getDataDir(), "placements.json")
 
 function loadPersistedPlacements() {
-  if (!existsSync(PLACEMENTS_FILE)) return
-  try {
-    const data = readFileSync(PLACEMENTS_FILE, "utf8")
-    const saved = JSON.parse(data) as ObjectPlacement[]
-    let missing = 0
-    for (const p of saved) {
-      if (mergedDefs[p.def]) {
-        objectPlacements.push(p)
-      } else {
-        missing++
-        console.error(`Warning: Placed object "${p.def}" not found in definitions (at ${p.x},${p.y})`)
-      }
+  // Load all persisted chunks and merge placements
+  const persistedPlacements = loadAllChunks()
+  let missing = 0
+  for (const p of persistedPlacements) {
+    if (mergedDefs[p.def]) {
+      objectPlacements.push(p)
+    } else {
+      missing++
+      console.error(`Warning: Placed object "${p.def}" not found in definitions (at ${p.x},${p.y})`)
     }
-    if (missing > 0) {
-      console.error(`⚠️ ${missing} placed object(s) could not be loaded - object definitions may be missing`)
-    }
-  } catch (e) {
-    console.error(`Error loading placements: ${e}`)
+  }
+  if (missing > 0) {
+    console.error(`⚠️ ${missing} placed object(s) could not be loaded - object definitions may be missing`)
   }
 }
 
 function savePersistedPlacements() {
   // Only persist agent-built objects (those beyond the original map placements)
   const agentBuilt = objectPlacements.slice(world.placements.length)
+
   // Ensure all placements have roomId
   for (const p of agentBuilt) {
     if (p.roomId === undefined) {
@@ -157,7 +159,28 @@ function savePersistedPlacements() {
       p.roomId = room?.id
     }
   }
-  try { writeFileSync(PLACEMENTS_FILE, JSON.stringify(agentBuilt) + "\n") } catch {}
+
+  // Organize by chunk and save
+  const chunkMap = new Map<string, ObjectPlacement[]>()
+  for (const placement of agentBuilt) {
+    const { chunkX, chunkY } = worldToChunk(placement.x, placement.y)
+    const key = `${chunkX},${chunkY}`
+
+    if (!chunkMap.has(key)) {
+      chunkMap.set(key, [])
+    }
+    chunkMap.get(key)!.push(placement)
+  }
+
+  // Save modified chunks
+  for (const [key, placements] of chunkMap) {
+    const [chunkXStr, chunkYStr] = key.split(",")
+    const chunkX = parseInt(chunkXStr!, 10)
+    const chunkY = parseInt(chunkYStr!, 10)
+    const chunk = ensureChunkLoaded(chunkX, chunkY)
+    chunk.placements = placements
+    saveChunk(chunk)
+  }
 }
 
 loadPersistedPlacements()
@@ -805,30 +828,19 @@ function spawnAgentEntity(sessionId: string, cmd: AgentCommand): Entity {
   const sprH = spriteHeight(dna)
   const h = entityHeight(decodeDNA(dna), zoomLevel)
 
-  // Assign a desk to this agent
   const agentName = cmd.name || sessionId.slice(0, 12)
-  const deskAssignment = assignDesk(sessionId, agentName, dna)
 
-  let spawnX: number
-  let spawnY: number
-
-  if (deskAssignment) {
-    // Position agent at their assigned desk
-    spawnX = deskAssignment.x
-    spawnY = deskAssignment.y - h + 1 // Convert from foot position to top position
-  } else {
-    // Fallback: use first spawn point if no desks available
-    const spawn = npcSpawns[0] || { x: mapWidth / 2, y: mapHeight / 2 }
-    spawnX = spawn.x
-    spawnY = spawn.y - h + 1
-  }
+  // Find first available spawn point or fallback to center
+  const spawn = npcSpawns[0] || { x: mapWidth / 2, y: mapHeight / 2 }
+  const spawnX = spawn.x
+  const spawnY = spawn.y - h + 1
 
   const entity = makeEntity(dna, spawnX, spawnY, zoomLevel, { idle: true })
   entity.name = agentName
 
   const ai = createNpcAIState()
   ai.phase = "idle"
-  ai.idleRemaining = Infinity // Agents stay at their desk
+  ai.idleRemaining = Infinity // Agents stay idle at spawn point
 
   agentSessions.set(sessionId, { entity, ai, gestureExpiry: 0 })
   return entity
@@ -885,8 +897,6 @@ function processAgentCommands() {
         const name = session.entity.name || sessionId
         const dna = session.entity.dna
         agentSessions.delete(sessionId)
-        // Release desk assignment
-        releaseDesk(dna)
         // Remove from persistence
         try {
           const data = readFileSync(AGENTS_FILE, "utf8")
