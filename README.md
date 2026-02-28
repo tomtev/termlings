@@ -196,7 +196,6 @@ Each agent gets a unique session ID and can see other agents on the map, send me
 **Getting started:**
 - [AGENTS.md](AGENTS.md) — Complete agent guide (launching, commands, IPC protocol, examples)
 - [docs/team-coordination.md](docs/team-coordination.md) — How agents communicate, cooperate, and work together
-- [docs/email-system.md](docs/email-system.md) — Email system for persistent, asynchronous messages
 - [docs/task-system.md](docs/task-system.md) — Shared task management system (assign work, track progress)
 - [docs/cron-system.md](docs/cron-system.md) — Schedule automated messages and reminders to agents
 - [AVATARS.md](AVATARS.md) — Avatar system (DNA encoding, rendering, generation, animation)

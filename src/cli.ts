@@ -1696,6 +1696,31 @@ Options:
       mkdirSync(join(termlingsDir, "objects"), { recursive: true });
     }
 
+    // Regenerate agent DNA and names from template placeholders
+    const agentsDir = join(termlingsDir, "agents");
+    if (existsSync(agentsDir)) {
+      const { generateRandomDNA } = await import("./index.js");
+      const { readdirSync, readFileSync, writeFileSync } = await import("fs");
+
+      try {
+        const agentFolders = readdirSync(agentsDir, { withFileTypes: true }).filter((d) => d.isDirectory());
+
+        for (const folder of agentFolders) {
+          const soulPath = join(agentsDir, folder.name, "SOUL.md");
+          if (existsSync(soulPath)) {
+            const soulContent = readFileSync(soulPath, "utf-8");
+            const newDna = generateRandomDNA();
+
+            // Replace DNA in SOUL.md while keeping other fields intact
+            const updatedContent = soulContent.replace(/^dna:\s*[^\n]+$/m, `dna: ${newDna}`);
+            writeFileSync(soulPath, updatedContent);
+          }
+        }
+      } catch {
+        // If regeneration fails, continue with template as-is
+      }
+    }
+
     console.log(`✓ Initialized project structure in .termlings/`);
     console.log(`\n🚀 Ready to go! Run 'termlings' to start the sim.\n`);
 

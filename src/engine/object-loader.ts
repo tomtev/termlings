@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "fs"
-import { join } from "path"
-import { dirname, fileURLToPath } from "path"
+import { join, dirname } from "path"
+import { fileURLToPath } from "url"
 
 import type { ObjectDef, ObjectPlacement } from "./objects.js"
 

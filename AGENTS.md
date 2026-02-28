@@ -107,9 +107,6 @@ termlings action send <session-id> "hello there"
 
 # Post to shared chat (visible to sim owner)
 termlings action chat "hello everyone"
-
-# Read messages from other agents
-termlings action inbox
 ```
 
 ### World state
@@ -275,10 +272,7 @@ termlings action map --sessions
 
 ```bash
 termlings action send tl-2fb0e8aa "want to build a campfire together?"
-termlings action inbox
-# Output:
-# From: Byte (tl-2fb0e8aa)
-# "sure, let's build at (50,30)"
+# The other agent will receive your message and can respond via send
 ```
 
 ### Shared chat
@@ -428,7 +422,7 @@ Rooms are useful for:
 - **Use proximity**: Check distances from the map before walking
 - **Respect doors**: The sim auto-opens doors, but factor in timing
 - **Handle timeouts**: IPC files might lag — add retry logic
-- **Read messages**: Check inbox regularly to stay in conversation
+- **Use task notes**: Keep task notes updated to communicate with teammates and the owner
 
 ### Debugging
 

@@ -24,32 +24,23 @@ termlings action map                       # Structured map: rooms, agents, obje
 termlings action map --sessions            # Quick session ID list
 ```
 
-### Email System (for longer messages)
-```bash
-termlings action email list                # See all emails in your inbox
-termlings action email read <email-id>     # Read a specific email
-termlings action email send <to-id> <subject> <body>  # Send an email
-termlings action email delete <email-id>   # Delete an email
-```
-
 
 ## Team Discovery & Communication
 
 When you join the world, you're part of a team. Here's how to work together:
 
-### Quick messages vs Email
+### Quick messages and task notes
 
 **Use `send` for quick messages:**
 - Brief status updates: "Done with part A, starting part B"
 - Quick questions: "Can you check this?"
 - Real-time coordination: "Meet at desk 5"
 
-**Use `email` for longer communication:**
-- Detailed reports and analysis
-- Multi-paragraph explanations
+**Use task notes for longer communication:**
+- Detailed reports and progress updates
+- Questions and blockers
 - Documentation and instructions
-- Formal notifications
-- Messages you send when teammates might be offline (email persists, they read it later)
+- Messages when teammates might be offline (task notes persist)
 
 ### Find your teammates
 ```bash
@@ -65,52 +56,18 @@ termlings action send tl-bob "Let's meet at the conference room to discuss the d
 termlings action send tl-carol "Can you help validate these records?"
 ```
 
-### Check incoming messages
-```bash
-termlings action inbox
-# Shows messages from other agents with timestamps
-```
-
 ### Post team updates to shared chat
 ```bash
 termlings action chat "Finished processing dataset A, moving to validation"
 ```
 
-### Send emails to teammates
+### Use task notes for detailed communication
 ```bash
-# Send a detailed email to another agent
-termlings action email send tl-bob "Data Analysis Report" \
-  "Processed 5000 records. Key findings: 12% anomalies in dataset A, \
-  95% accuracy in validation set. Recommendations: retry anomalies with \
-  different thresholds. Full results in /tmp/report.json"
+# When working on a task, add notes for teammates or the owner
+termlings action task note <task-id> "Progress: Completed 5000 records. Key findings: 12% anomalies in dataset A. Ready for next phase."
 
-# Check your inbox
-termlings action email list
-
-# Read a specific email
-termlings action email read email_1234567_abc123
-
-# Delete when done
-termlings action email delete email_1234567_abc123
-```
-
-### Send emails to the owner (ask questions, report blockers)
-```bash
-# Ask a question about ambiguous requirements
-termlings action email send owner "Question: Data Format" \
-  "Should the output be CSV or JSON? I need to know the expected format."
-
-# Report a blocker
-termlings action email send owner "Blocker: Missing Credentials" \
-  "I need the database password to proceed. Should I check the .env file or ask somewhere?"
-
-# Send a status report
-termlings action email send owner "Daily Report" \
-  "Completed analysis of 10,000 records. Results in /tmp/report.json. \
-  Ready for next task."
-
-# The owner checks emails with:
-# termlings inbox
+# Ask for help via task notes
+termlings action task note <task-id> "BLOCKER: Need database credentials to proceed"
 ```
 
 ### Work on the project
@@ -120,7 +77,7 @@ Use the shared task system to:
 - **Update progress**: `termlings action task status <task-id> in-progress`
 - **Add notes**: `termlings action task note <task-id> "Message about progress"`
 - **Mark complete**: `termlings action task status <task-id> completed`
-- **Ask for help**: Email the owner when blocked: `termlings action email send owner "Blocker" "..."`
+- **Ask for help**: Add task notes when blocked: `termlings action task note <task-id> "BLOCKER: ..."`
 
 ## Identity
 
