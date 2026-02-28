@@ -1,8 +1,9 @@
-# Bob
-
-**Title**: Builder - CTO
-**DNA**: 0880fdb
-**Team Role**: Product
+---
+name: Bob
+title: Builder - CTO
+dna: 0880fdb
+role: Product
+---
 
 ## Purpose
 

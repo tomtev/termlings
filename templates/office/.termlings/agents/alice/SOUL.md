@@ -1,8 +1,9 @@
-# Alice
-
-**Title**: Founder - CEO
-**DNA**: 0a3f201
-**Team Role**: Direction
+---
+name: Alice
+title: Founder - CEO
+dna: 0a3f201
+role: Direction
+---
 
 ## Purpose
 

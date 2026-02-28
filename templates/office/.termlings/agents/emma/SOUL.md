@@ -1,8 +1,9 @@
-# Emma
-
-**Title**: Operator - COO
-**DNA**: 0d9c47a
-**Team Role**: Scale
+---
+name: Emma
+title: Operator - COO
+dna: 0d9c47a
+role: Scale
+---
 
 ## Purpose
 

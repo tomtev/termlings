@@ -1682,28 +1682,34 @@ Options:
 
     const useTeam = setupChoice === "team";
 
-    // Create .termlings directory structure
-    const { mkdirSync, copyFileSync } = await import("fs");
-    mkdirSync(termlingsDir, { recursive: true });
-    mkdirSync(join(termlingsDir, "map"), { recursive: true });
-    mkdirSync(join(termlingsDir, "agents"), { recursive: true });
-    mkdirSync(join(termlingsDir, "store"), { recursive: true });
-    mkdirSync(join(termlingsDir, "objects"), { recursive: true });
+    // Load template (default to office)
+    const templateName = opts.template || "office";
+    const templatePath = join(__dirname, "..", "..", "templates", templateName);
+    const templateTermlingsPath = join(templatePath, ".termlings");
 
-    // Copy starter files from templates/
-    try {
-      const starterMapPath = join(__dirname, "..", "..", "templates", "maps", "cozy-office.json");
-      const starterObjectsPath = join(__dirname, "..", "..", "templates", "objects", "starter.json");
+    // Copy template .termlings/ directory if it exists
+    const { mkdirSync, copyFileSync, readdirSync } = await import("fs");
+    const { cp } = await import("fs/promises");
 
-      if (existsSync(starterMapPath)) {
-        copyFileSync(starterMapPath, join(termlingsDir, "maps", "cozy-office.json"));
+    if (existsSync(templateTermlingsPath)) {
+      // Copy entire .termlings directory from template
+      try {
+        await cp(templateTermlingsPath, termlingsDir, { recursive: true });
+        console.log(`✓ Loaded template: ${templateName}`);
+      } catch (e) {
+        console.error(`Failed to copy template: ${e}`);
+        // Continue anyway - create empty structure below
       }
-      if (existsSync(starterObjectsPath)) {
-        copyFileSync(starterObjectsPath, join(termlingsDir, "objects", "starter.json"));
-      }
-    } catch (e) {
-      // Silently ignore if templates not found
+    } else {
+      // Fallback: create empty structure
+      mkdirSync(termlingsDir, { recursive: true });
+      mkdirSync(join(termlingsDir, "map"), { recursive: true });
+      mkdirSync(join(termlingsDir, "agents"), { recursive: true });
+      mkdirSync(join(termlingsDir, "store"), { recursive: true });
+      mkdirSync(join(termlingsDir, "objects"), { recursive: true });
     }
+
+    mkdirSync(termlingsDir, { recursive: true });
 
     // Use create command to set up agents
     const { generateRandomDNA, encodeDNA, traitsFromName } = await import("./index.js");

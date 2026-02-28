@@ -1,8 +1,9 @@
-# Carol
-
-**Title**: Grower - CMO
-**DNA**: 07b5592
-**Team Role**: Users
+---
+name: Carol
+title: Grower - CMO
+dna: 07b5592
+role: Users
+---
 
 ## Purpose
 

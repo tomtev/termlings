@@ -34,22 +34,52 @@ export function discoverLocalAgents(): LocalAgent[] {
       let soul: LocalAgent["soul"] | undefined;
       try {
         const content = readFileSync(soulPath, "utf-8");
-        const nameMatch = content.match(/^# (.+)$/m);
-        const titleMatch = content.match(/\*\*Title\*\*:\s*(.+)$/m);
-        // Purpose can be inline (**Purpose**: text) or as heading (## Purpose \n text)
-        const purposeInlineMatch = content.match(/\*\*Purpose\*\*:\s*(.+)$/m);
-        const purposeHeadingMatch = content.match(/^## Purpose\s*\n+(.+?)(?:\n\n|\n##)/m);
-        const purposeMatch = purposeInlineMatch || purposeHeadingMatch;
-        const dnaMatch = content.match(/\*\*DNA\*\*:\s*(.+)$/m);
-        const commandMatch = content.match(/\*\*Command\*\*:\s*(.+)$/m);
 
-        if (nameMatch && dnaMatch) {
+        // Try parsing YAML front-matter first
+        const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+        let name: string | undefined;
+        let title: string | undefined;
+        let dna: string | undefined;
+        let purpose: string = "";
+        let command: string | undefined;
+
+        if (frontmatterMatch) {
+          // Parse YAML front-matter
+          const yaml = frontmatterMatch[1];
+          name = yaml.match(/^name:\s*(.+)$/m)?.[1];
+          title = yaml.match(/^title:\s*(.+)$/m)?.[1];
+          dna = yaml.match(/^dna:\s*(.+)$/m)?.[1];
+          command = yaml.match(/^command:\s*(.+)$/m)?.[1];
+
+          // Get purpose from markdown section (after front-matter)
+          const purposeMatch = content.match(/^## Purpose\s*\n+(.+?)(?:\n\n|\n##|$)/m);
+          if (purposeMatch) purpose = purposeMatch[1];
+        } else {
+          // Fallback to legacy markdown format
+          const nameMatch = content.match(/^# (.+)$/m);
+          const titleMatch = content.match(/\*\*Title\*\*:\s*(.+)$/m);
+          const dnaMatch = content.match(/\*\*DNA\*\*:\s*(.+)$/m);
+          const commandMatch = content.match(/\*\*Command\*\*:\s*(.+)$/m);
+
+          // Purpose can be inline or as heading
+          const purposeInlineMatch = content.match(/\*\*Purpose\*\*:\s*(.+)$/m);
+          const purposeHeadingMatch = content.match(/^## Purpose\s*\n+(.+?)(?:\n\n|\n##)/m);
+          const purposeMatch = purposeInlineMatch || purposeHeadingMatch;
+
+          name = nameMatch ? nameMatch[1] : undefined;
+          title = titleMatch ? titleMatch[1] : undefined;
+          dna = dnaMatch ? dnaMatch[1] : undefined;
+          command = commandMatch ? commandMatch[1] : undefined;
+          purpose = purposeMatch ? purposeMatch[1] : "";
+        }
+
+        if (name && dna) {
           soul = {
-            name: nameMatch[1],
-            title: titleMatch ? titleMatch[1] : undefined,
-            purpose: purposeMatch ? purposeMatch[1] : "",
-            dna: dnaMatch[1],
-            command: commandMatch ? commandMatch[1] : undefined,
+            name,
+            title,
+            purpose,
+            dna,
+            command,
           };
 
           agents.push({
