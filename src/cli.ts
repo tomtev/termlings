@@ -583,10 +583,67 @@ Commands:
       console.error("Error: TERMLINGS_SESSION_ID env var not set");
       process.exit(1);
     }
-    const objectType = positional[2];
+
+    let objectType = positional[2];
     const coord = positional[3];
+    const textContent = opts.text;
+
+    // Handle --text flag: create sign on the fly
+    if (textContent) {
+      const style = opts.style || "small";
+      const { createBracketedLabel, createFramedLabel, renderTextToCells, generateSignWithTermfont } =
+        await import("./engine/text-renderer.js");
+      const { writeFileSync, mkdirSync } = await import("fs");
+      const { join, resolve } = await import("path");
+
+      try {
+        let objectDef;
+        if (style === "small") {
+          const cells = createBracketedLabel(textContent, [200, 180, 150]);
+          objectDef = {
+            name: `sign-${textContent.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`,
+            width: cells[0]?.length || 1,
+            height: cells.length,
+            cells: cells,
+          };
+        } else if (style === "medium") {
+          const { createFramedLabel } = await import("./engine/text-renderer.js");
+          const cells = createFramedLabel(textContent, [200, 180, 150]);
+          objectDef = {
+            name: `sign-${textContent.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`,
+            width: cells[0]?.length || 1,
+            height: cells.length,
+            cells: cells,
+          };
+        } else if (style === "large") {
+          const cells = renderTextToCells(textContent, [100, 200, 100]);
+          objectDef = {
+            name: `sign-${textContent.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`,
+            width: cells[0]?.length || 1,
+            height: cells.length,
+            cells: cells,
+          };
+        } else {
+          objectDef = await generateSignWithTermfont(textContent, style as "block" | "bubble" | "thin", [100, 200, 100]);
+        }
+
+        // Save to .termlings/objects/
+        const objectsDir = resolve(".termlings", "objects");
+        mkdirSync(objectsDir, { recursive: true });
+        const filePath = join(objectsDir, `${objectDef.name}.json`);
+        writeFileSync(filePath, JSON.stringify(objectDef, null, 2));
+
+        objectType = objectDef.name;
+        console.log(`✓ Created sign: ${objectType}`);
+      } catch (err) {
+        console.error(`Failed to create sign: ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+      }
+    }
+
     if (!objectType) {
       console.error("Usage: termlings action place <objectType> <x>,<y>");
+      console.error("       termlings action place sign <x>,<y> --text 'Hello' --style [small|medium|large|block|bubble|thin]");
       process.exit(1);
     }
     let x: number | undefined;
