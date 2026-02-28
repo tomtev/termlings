@@ -9,12 +9,12 @@ function projectObjectsDir(): string {
 }
 
 /**
- * Load starter objects from templates/objects/
+ * Load starter objects from templates/office/objects/
  */
 export function loadStarterObjects(): Record<string, ObjectDef> {
   try {
     const dir = dirname(fileURLToPath(import.meta.url))
-    const starterPath = join(dir, "..", "..", "templates", "objects", "starter.json")
+    const starterPath = join(dir, "..", "..", "templates", "office", "objects", "starter.json")
 
     if (!existsSync(starterPath)) {
       return {}

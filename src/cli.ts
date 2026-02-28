@@ -1685,16 +1685,15 @@ Options:
     // Load template (default to office)
     const templateName = opts.template || "office";
     const templatePath = join(__dirname, "..", "..", "templates", templateName);
-    const templateTermlingsPath = join(templatePath, ".termlings");
 
-    // Copy template .termlings/ directory if it exists
+    // Copy template directory if it exists
     const { mkdirSync, copyFileSync, readdirSync } = await import("fs");
     const { cp } = await import("fs/promises");
 
-    if (existsSync(templateTermlingsPath)) {
-      // Copy entire .termlings directory from template
+    if (existsSync(templatePath)) {
+      // Copy entire template to .termlings/
       try {
-        await cp(templateTermlingsPath, termlingsDir, { recursive: true });
+        await cp(templatePath, termlingsDir, { recursive: true });
         console.log(`✓ Loaded template: ${templateName}`);
       } catch (e) {
         console.error(`Failed to copy template: ${e}`);
@@ -1708,8 +1707,6 @@ Options:
       mkdirSync(join(termlingsDir, "store"), { recursive: true });
       mkdirSync(join(termlingsDir, "objects"), { recursive: true });
     }
-
-    mkdirSync(termlingsDir, { recursive: true });
 
     // Use create command to set up agents
     const { generateRandomDNA, encodeDNA, traitsFromName } = await import("./index.js");
