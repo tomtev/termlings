@@ -40,9 +40,9 @@ function loadContext(): string {
     } catch {}
   }
 
-  // Append project TERMLING-OBJECTIVES.md if it exists
+  // Append project OBJECTIVES.md if it exists
   try {
-    const objectivesPath = resolvePath("TERMLING-OBJECTIVES.md")
+    const objectivesPath = resolvePath("OBJECTIVES.md")
     if (existsSync(objectivesPath)) {
       const objectives = readFileSync(objectivesPath, "utf8")
       context += "\n\n" + objectives + "\n"
