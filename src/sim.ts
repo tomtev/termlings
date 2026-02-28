@@ -126,13 +126,16 @@ let objectOverlay = buildObjectOverlay(objectPlacements, mergedDefs)
 
 // --- Persist agent-built objects (chunk-based) ---
 
-function ensureAgentsDir() {
-  const dir = join(process.cwd(), ".termlings", "agents")
-  mkdirSync(dir, { recursive: true })
+function ensureProjectDirs() {
+  const basePath = join(process.cwd(), ".termlings")
+  mkdirSync(join(basePath, "agents"), { recursive: true })
+  mkdirSync(join(basePath, "map"), { recursive: true })
+  mkdirSync(join(basePath, "objects"), { recursive: true })
+  mkdirSync(join(basePath, "store"), { recursive: true })
 }
 
 ensureIpcDir()
-ensureAgentsDir()
+ensureProjectDirs()
 
 function loadPersistedPlacements() {
   // Load all persisted chunks and merge placements

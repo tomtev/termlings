@@ -49,76 +49,9 @@ export function darken(rgb: RGB, factor = 0.7): RGB {
 
 
 
-// Built-in default objects
-export const OBJECT_DEFS: Record<string, ObjectDef> = {
-  desk: {
-    name: "desk",
-    width: 8,
-    height: 6,
-    cells: [
-      [
-        { ch: "▬", fg: [140, 100, 60], bg: null, walkable: false },
-        { ch: "▬", fg: [140, 100, 60], bg: null, walkable: false },
-        { ch: "▬", fg: [140, 100, 60], bg: null, walkable: false },
-        { ch: "▬", fg: [140, 100, 60], bg: null, walkable: false },
-        { ch: "▬", fg: [140, 100, 60], bg: null, walkable: false },
-        { ch: "▬", fg: [140, 100, 60], bg: null, walkable: false },
-        { ch: "▬", fg: [140, 100, 60], bg: null, walkable: false },
-        { ch: "▬", fg: [140, 100, 60], bg: null, walkable: false },
-      ],
-      [
-        { ch: "█", fg: [100, 75, 50], bg: null, walkable: false },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-      ],
-      [
-        { ch: "█", fg: [100, 75, 50], bg: null, walkable: false },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-      ],
-      [
-        { ch: "█", fg: [100, 75, 50], bg: null, walkable: false },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-      ],
-      [
-        { ch: "█", fg: [100, 75, 50], bg: null, walkable: false },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-      ],
-      [
-        { ch: "█", fg: [100, 75, 50], bg: null, walkable: false },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-      ],
-    ],
-  },
-}
+// Objects are loaded from project folder, not hard-coded
+// Use loadStarterObjects() to get defaults or loadProjectObjects() to load from .termlings/objects/
+export const OBJECT_DEFS: Record<string, ObjectDef> = {}
 
 /** Render a single object piece to the buffer (used in entity z-sort pass) */
 export function stampObjectPiece(

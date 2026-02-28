@@ -1,34 +1,78 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs"
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "fs"
 import { join } from "path"
+import { dirname, fileURLToPath } from "path"
 
 import type { ObjectDef, ObjectPlacement } from "./objects.js"
 
-function customObjectsDir(room = "default"): string {
-  return join(process.cwd(), ".termlings")
+function projectObjectsDir(): string {
+  return join(process.cwd(), ".termlings", "objects")
 }
 
-function customObjectsFile(room = "default"): string {
-  return join(customObjectsDir, "custom-objects.json")
-}
+/**
+ * Load starter objects from templates/objects/
+ */
+export function loadStarterObjects(): Record<string, ObjectDef> {
+  try {
+    const dir = dirname(fileURLToPath(import.meta.url))
+    const starterPath = join(dir, "..", "..", "templates", "objects", "starter.json")
 
-export function loadCustomObjects(room = "default"): Record<string, ObjectDef> {
-  const file = customObjectsFile
-  if (!existsSync(file)) {
+    if (!existsSync(starterPath)) {
+      return {}
+    }
+
+    const data = readFileSync(starterPath, "utf-8")
+    const objects = JSON.parse(data) as Record<string, ObjectDef>
+    return objects
+  } catch (e) {
+    // Silently fail if templates not found (library mode)
     return {}
+  }
+}
+
+/**
+ * Load project-specific objects from .termlings/objects/
+ */
+export function loadProjectObjects(): Record<string, ObjectDef> {
+  const dir = projectObjectsDir()
+  const objects: Record<string, ObjectDef> = {}
+
+  if (!existsSync(dir)) {
+    return objects
   }
 
   try {
-    const data = readFileSync(file, "utf-8")
-    const objects = JSON.parse(data)
+    const files = readdirSync(dir)
+    for (const file of files) {
+      if (!file.endsWith(".json")) continue
+
+      try {
+        const filePath = join(dir, file)
+        const data = readFileSync(filePath, "utf-8")
+        const fileObjects = JSON.parse(data) as Record<string, ObjectDef>
+        Object.assign(objects, fileObjects)
+      } catch (e) {
+        console.error(`Error loading object file ${file}: ${e}`)
+      }
+    }
+
     const count = Object.keys(objects).length
     if (count > 0) {
-      console.log(`✓ Loaded ${count} custom object(s) from ${room}`)
+      console.log(`✓ Loaded ${count} project object(s) from .termlings/objects/`)
     }
     return objects
   } catch (e) {
-    console.error(`Error loading custom objects from ${file}: ${e}`)
+    console.error(`Error loading project objects: ${e}`)
     return {}
   }
+}
+
+/**
+ * Load all objects: starter + project-specific
+ */
+export function loadCustomObjects(): Record<string, ObjectDef> {
+  const starter = loadStarterObjects()
+  const project = loadProjectObjects()
+  return { ...starter, ...project }
 }
 
 export function saveCustomObjects(objects: Record<string, ObjectDef>): void {

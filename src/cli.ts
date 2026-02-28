@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { dirname } from "path";
+import { fileURLToPath } from "url";
 import {
   renderTerminal,
   renderTerminalSmall,
@@ -15,6 +17,8 @@ import {
   LEGS,
 } from "./index.js";
 import type { Pixel } from "./index.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const args = process.argv.slice(2);
 const flags = new Set<string>();
@@ -1679,12 +1683,27 @@ Options:
     const useTeam = setupChoice === "team";
 
     // Create .termlings directory structure
-    const { mkdirSync } = await import("fs");
+    const { mkdirSync, copyFileSync } = await import("fs");
     mkdirSync(termlingsDir, { recursive: true });
     mkdirSync(join(termlingsDir, "map"), { recursive: true });
     mkdirSync(join(termlingsDir, "agents"), { recursive: true });
     mkdirSync(join(termlingsDir, "store"), { recursive: true });
     mkdirSync(join(termlingsDir, "objects"), { recursive: true });
+
+    // Copy starter files from templates/
+    try {
+      const starterMapPath = join(__dirname, "..", "..", "templates", "maps", "cozy-office.json");
+      const starterObjectsPath = join(__dirname, "..", "..", "templates", "objects", "starter.json");
+
+      if (existsSync(starterMapPath)) {
+        copyFileSync(starterMapPath, join(termlingsDir, "maps", "cozy-office.json"));
+      }
+      if (existsSync(starterObjectsPath)) {
+        copyFileSync(starterObjectsPath, join(termlingsDir, "objects", "starter.json"));
+      }
+    } catch (e) {
+      // Silently ignore if templates not found
+    }
 
     // Use create command to set up agents
     const { generateRandomDNA, encodeDNA, traitsFromName } = await import("./index.js");
