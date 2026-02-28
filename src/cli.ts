@@ -719,6 +719,71 @@ Commands:
     process.exit(0);
   }
 
+  // Create a sign with text (small, medium, or large style)
+  if (verb === "create-sign") {
+    const text = positional[2];
+    const style = flags.get("style") || "small";
+
+    if (!text) {
+      console.error("Usage: termlings action create-sign <text> --style [small|medium|large]");
+      console.error("Examples:");
+      console.error("  termlings action create-sign 'Tommy' --style small");
+      console.error("  termlings action create-sign 'Welcome' --style medium");
+      console.error("  termlings action create-sign 'ROOM A' --style large");
+      process.exit(1);
+    }
+
+    if (!["small", "medium", "large"].includes(style)) {
+      console.error("Style must be: small, medium, or large");
+      process.exit(1);
+    }
+
+    const { createBracketedLabel, createFramedLabel, renderTextToCells } =
+      await import("./engine/text-renderer.js");
+    const { writeFileSync, mkdirSync } = await import("fs");
+    const { join, resolve } = await import("path");
+
+    // Generate cells based on style
+    let cells;
+    const fgColor = [200, 180, 150];
+
+    if (style === "small") {
+      cells = createBracketedLabel(text, fgColor);
+    } else if (style === "medium") {
+      cells = createFramedLabel(text, fgColor);
+    } else {
+      // large - use pixel font
+      cells = renderTextToCells(text, [100, 200, 100]);
+    }
+
+    // Create object definition
+    const signName = `sign-${text
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")}`;
+
+    const objectDef = {
+      name: signName,
+      width: cells[0]?.length || 1,
+      height: cells.length,
+      cells: cells,
+    };
+
+    // Save to .termlings/objects/
+    const objectsDir = resolve(".termlings", "objects");
+    mkdirSync(objectsDir, { recursive: true });
+    const filePath = join(objectsDir, `${signName}.json`);
+
+    writeFileSync(filePath, JSON.stringify(objectDef, null, 2));
+
+    console.log(`✓ Created sign: ${signName}`);
+    console.log(`  Style: ${style}`);
+    console.log(`  Size: ${cells[0]?.length || 1}×${cells.length}`);
+    console.log(`  File: .termlings/objects/${signName}.json`);
+    console.log(`\nPlace it with: termlings action place ${signName} <x>,<y>`);
+    process.exit(0);
+  }
+
   // List all objects (built-in and custom)
   if (verb === "list-objects") {
     const { loadCustomObjects } = await import("./engine/object-loader.js");
