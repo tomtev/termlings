@@ -1696,23 +1696,33 @@ Options:
       mkdirSync(join(termlingsDir, "objects"), { recursive: true });
     }
 
-    // Regenerate agent DNA and names from template placeholders
+    // Regenerate agent DNA and fun names from template
     const agentsDir = join(termlingsDir, "agents");
     if (existsSync(agentsDir)) {
       const { generateRandomDNA } = await import("./index.js");
+      const { generateFunNames } = await import("./name-generator.js");
       const { readdirSync, readFileSync, writeFileSync } = await import("fs");
 
       try {
-        const agentFolders = readdirSync(agentsDir, { withFileTypes: true }).filter((d) => d.isDirectory());
+        const agentFolders = readdirSync(agentsDir, { withFileTypes: true })
+          .filter((d) => d.isDirectory())
+          .sort();
 
-        for (const folder of agentFolders) {
+        const newNames = generateFunNames(agentFolders.length);
+
+        for (let i = 0; i < agentFolders.length; i++) {
+          const folder = agentFolders[i]!;
           const soulPath = join(agentsDir, folder.name, "SOUL.md");
           if (existsSync(soulPath)) {
             const soulContent = readFileSync(soulPath, "utf-8");
             const newDna = generateRandomDNA();
+            const newName = newNames[i]!;
 
-            // Replace DNA in SOUL.md while keeping other fields intact
-            const updatedContent = soulContent.replace(/^dna:\s*[^\n]+$/m, `dna: ${newDna}`);
+            // Replace DNA and name in SOUL.md while keeping other fields intact
+            let updatedContent = soulContent
+              .replace(/^name:\s*[^\n]+$/m, `name: ${newName}`)
+              .replace(/^dna:\s*[^\n]+$/m, `dna: ${newDna}`);
+
             writeFileSync(soulPath, updatedContent);
           }
         }
