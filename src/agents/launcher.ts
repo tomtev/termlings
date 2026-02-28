@@ -24,18 +24,32 @@ function pickRandomName(): string {
 }
 
 function loadContext(): string {
+  // Load framework context (termling-context.md)
+  let context = ""
+
   // Try sibling file first (installed / built layout)
   const siblingPath = joinPath(__dirname, "..", "termling-context.md")
   try {
-    return readFileSync(siblingPath, "utf8")
+    context = readFileSync(siblingPath, "utf8")
   } catch {}
 
   // Fallback: dev mode with ts runner
+  if (!context) {
+    try {
+      context = readFileSync(resolvePath("src/termling-context.md"), "utf8")
+    } catch {}
+  }
+
+  // Append project OBJECTIVES.md if it exists
   try {
-    return readFileSync(resolvePath("src/termling-context.md"), "utf8")
+    const objectivesPath = resolvePath("OBJECTIVES.md")
+    if (existsSync(objectivesPath)) {
+      const objectives = readFileSync(objectivesPath, "utf8")
+      context += "\n\n<PROJECT-OBJECTIVES>\n" + objectives + "\n</PROJECT-OBJECTIVES>\n"
+    }
   } catch {}
 
-  return ""
+  return context
 }
 
 function parseSoul(): { name: string; dna: string } {
