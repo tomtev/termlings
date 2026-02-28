@@ -6,6 +6,21 @@
 import type { ObjectCell, ObjectDef, RGB } from "./objects.js"
 
 /**
+ * Convert termfont grid to ObjectCell array
+ * termfont returns a 2D grid of characters with ANSI codes
+ */
+function termfontGridToCells(grid: string[][], fgColor: RGB): (ObjectCell | null)[][] {
+  return grid.map((row) =>
+    row.map((ch) => ({
+      ch: ch || " ",
+      fg: fgColor,
+      bg: null,
+      walkable: true,
+    }))
+  )
+}
+
+/**
  * Create a simple text nameplate/label
  * Renders readable text directly (one row, normal character size)
  * Perfect for desk nameplates, office signs, etc.
@@ -134,5 +149,48 @@ export function generateSignObjectDef(
     width: cells[0]?.length ?? 1,
     height: cells.length,
     cells: cells as (ObjectCell | null)[][],
+  }
+}
+
+/**
+ * Generate sign using termfont (requires dynamic import)
+ * Supports: block, bubble, thin, thick, rounded fonts
+ */
+export async function generateSignWithTermfont(
+  text: string,
+  font: "block" | "bubble" | "thin" | "thick" = "block",
+  fgColor: RGB = [100, 200, 100],
+): Promise<ObjectDef> {
+  try {
+    const { composeText } = await import("termfont");
+    const grid = composeText(text, { font });
+
+    // Convert grid to cells (strip ANSI codes from characters)
+    const cells = grid.map((row: string[]) =>
+      row.map((ch: string) => {
+        const cleanChar = ch.replace(/\x1b\[[0-9;]*m/g, "") || " ";
+        return {
+          ch: cleanChar,
+          fg: fgColor,
+          bg: null,
+          walkable: true,
+        };
+      })
+    );
+
+    const signName = `sign-${text
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "")}`;
+
+    return {
+      name: signName,
+      width: cells[0]?.length ?? 1,
+      height: cells.length,
+      cells: cells as (ObjectCell | null)[][],
+    };
+  } catch (e) {
+    // Fallback to simple text if termfont fails
+    return generateSignObjectDef(text, fgColor);
   }
 }

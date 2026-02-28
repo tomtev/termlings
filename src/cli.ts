@@ -719,69 +719,88 @@ Commands:
     process.exit(0);
   }
 
-  // Create a sign with text (small, medium, or large style)
+  // Create a sign with text (various styles and fonts)
   if (verb === "create-sign") {
     const text = positional[2];
     const style = flags.get("style") || "small";
 
     if (!text) {
-      console.error("Usage: termlings action create-sign <text> --style [small|medium|large]");
-      console.error("Examples:");
-      console.error("  termlings action create-sign 'Tommy' --style small");
-      console.error("  termlings action create-sign 'Welcome' --style medium");
-      console.error("  termlings action create-sign 'ROOM A' --style large");
+      console.error("Usage: termlings action create-sign <text> --style [small|medium|large|block|bubble|thin]");
+      console.error("Styles:");
+      console.error("  small     [Text] with brackets (desk nameplates)");
+      console.error("  medium    Framed box around text");
+      console.error("  large     Simple blocky pixel font");
+      console.error("  block     Fancy termfont block font ███");
+      console.error("  bubble    Rounded termfont bubbles");
+      console.error("  thin      Thin termfont style");
       process.exit(1);
     }
 
-    if (!["small", "medium", "large"].includes(style)) {
-      console.error("Style must be: small, medium, or large");
+    const validStyles = ["small", "medium", "large", "block", "bubble", "thin"];
+    if (!validStyles.includes(style)) {
+      console.error(`Style must be one of: ${validStyles.join(", ")}`);
       process.exit(1);
     }
 
-    const { createBracketedLabel, createFramedLabel, renderTextToCells } =
+    const { createBracketedLabel, createFramedLabel, renderTextToCells, generateSignWithTermfont } =
       await import("./engine/text-renderer.js");
     const { writeFileSync, mkdirSync } = await import("fs");
     const { join, resolve } = await import("path");
 
-    // Generate cells based on style
-    let cells;
-    const fgColor = [200, 180, 150];
+    // Generate object definition based on style
+    let objectDef;
 
-    if (style === "small") {
-      cells = createBracketedLabel(text, fgColor);
-    } else if (style === "medium") {
-      cells = createFramedLabel(text, fgColor);
-    } else {
-      // large - use pixel font
-      cells = renderTextToCells(text, [100, 200, 100]);
+    try {
+      if (style === "small") {
+        const cells = createBracketedLabel(text, [200, 180, 150]);
+        const signName = `sign-${text.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`;
+        objectDef = {
+          name: signName,
+          width: cells[0]?.length || 1,
+          height: cells.length,
+          cells: cells,
+        };
+      } else if (style === "medium") {
+        const cells = createFramedLabel(text, [200, 180, 150]);
+        const signName = `sign-${text.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`;
+        objectDef = {
+          name: signName,
+          width: cells[0]?.length || 1,
+          height: cells.length,
+          cells: cells,
+        };
+      } else if (style === "large") {
+        const cells = renderTextToCells(text, [100, 200, 100]);
+        const signName = `sign-${text.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`;
+        objectDef = {
+          name: signName,
+          width: cells[0]?.length || 1,
+          height: cells.length,
+          cells: cells,
+        };
+      } else {
+        // Use termfont for block, bubble, thin
+        const termfontStyle = style as "block" | "bubble" | "thin";
+        objectDef = await generateSignWithTermfont(text, termfontStyle, [100, 200, 100]);
+      }
+
+      // Save to .termlings/objects/
+      const objectsDir = resolve(".termlings", "objects");
+      mkdirSync(objectsDir, { recursive: true });
+      const filePath = join(objectsDir, `${objectDef.name}.json`);
+
+      writeFileSync(filePath, JSON.stringify(objectDef, null, 2));
+
+      console.log(`✓ Created sign: ${objectDef.name}`);
+      console.log(`  Style: ${style}`);
+      console.log(`  Size: ${objectDef.width}×${objectDef.height}`);
+      console.log(`  File: .termlings/objects/${objectDef.name}.json`);
+      console.log(`\nPlace it with: termlings action place ${objectDef.name} <x>,<y>`);
+      process.exit(0);
+    } catch (err) {
+      console.error(`Failed to create sign: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
     }
-
-    // Create object definition
-    const signName = `sign-${text
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9-]/g, "")}`;
-
-    const objectDef = {
-      name: signName,
-      width: cells[0]?.length || 1,
-      height: cells.length,
-      cells: cells,
-    };
-
-    // Save to .termlings/objects/
-    const objectsDir = resolve(".termlings", "objects");
-    mkdirSync(objectsDir, { recursive: true });
-    const filePath = join(objectsDir, `${signName}.json`);
-
-    writeFileSync(filePath, JSON.stringify(objectDef, null, 2));
-
-    console.log(`✓ Created sign: ${signName}`);
-    console.log(`  Style: ${style}`);
-    console.log(`  Size: ${cells[0]?.length || 1}×${cells.length}`);
-    console.log(`  File: .termlings/objects/${signName}.json`);
-    console.log(`\nPlace it with: termlings action place ${signName} <x>,<y>`);
-    process.exit(0);
   }
 
   // Edit an existing sign's text
