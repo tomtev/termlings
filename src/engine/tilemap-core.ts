@@ -10,7 +10,6 @@ export const DEFAULT_TILE_DEFS: Record<string, TileDef> = {
   "*": { ch: "*", fg: [255, 200, 80],  bg: null,            walkable: true  },
   "~": { ch: "~", fg: [60, 120, 200],  bg: [20, 40, 80],    walkable: false },
   ",": { ch: ",", fg: [60, 120, 50],   bg: null,            walkable: true  },
-  "T": { ch: "♣", fg: [30, 80, 30],   bg: [30, 30, 40],    walkable: false },
   "D": { ch: "·", fg: [35, 35, 40],   bg: null,            walkable: true  },
   "P": { ch: "·", fg: [35, 35, 40],   bg: null,            walkable: true  },
   "S": { ch: "·", fg: [35, 35, 40],   bg: null,            walkable: true  },

@@ -10,7 +10,6 @@ export function getTileChar(tile: string): string {
     "B": "█", // building
     "W": "█", // wall
     "G": "█", // gate
-    "T": "🌲", // tree (or could use "T" for ASCII)
     "~": "≈", // water (or could use "~" for ASCII)
     "D": "╳", // door
     "e": "·", // egg (item)
@@ -40,7 +39,6 @@ export function getTileColor(tile: string): RGB | null {
     "B": [120, 100, 80], // building - brown/gray
     "W": [120, 100, 80], // wall - brown/gray
     "G": [140, 120, 100], // gate - tan
-    "T": [34, 100, 50], // tree - dark green
     "~": [100, 150, 200], // water - blue
     "D": [150, 120, 80], // door - tan/brown
     "e": [200, 100, 100], // egg - reddish

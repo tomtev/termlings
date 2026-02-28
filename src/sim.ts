@@ -689,16 +689,6 @@ const simOnKey = (ch: string) => {
     return
   }
 
-  // Number keys 1-9, 0 select entities
-  if (ch >= "1" && ch <= "9") {
-    selectEntity(ch.charCodeAt(0) - "1".charCodeAt(0))
-    return
-  }
-  if (ch === "0") {
-    selectEntity(9)
-    return
-  }
-
   // Normal mode
   if (ch === "c") {
     chatMode = true
@@ -1305,7 +1295,6 @@ function buildHud(): { text: string; active?: boolean; fg?: RGB }[] {
 
   hud.push(
     { text: "| [C]hat " },
-    { text: "| [1-9] select " },
     { text: "| [\u2190\u2192] cycle " },
     { text: "| " },
     { text: "[Z]oom", active: zoomLevel === 1 },
