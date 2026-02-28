@@ -3,7 +3,8 @@ import { join } from "path"
 
 
 export interface DeskAssignment {
-  sessionId: string           // Agent session ID
+  agentDNA: string            // Agent DNA (persistent identifier)
+  sessionId: string           // Current session ID (updates on reconnect)
   agentName: string           // Agent display name
   deskNumber: number          // Desk number (0-19 for 5x4 grid)
   deskCol: number             // Column (0-4)
@@ -43,22 +44,25 @@ export function getAllAssignments(room = "default"): DeskAssignment[] {
 }
 
 /**
- * Get assignment for a specific agent
+ * Get assignment for a specific agent by DNA
  */
-export function getAssignment(sessionId: string): DeskAssignment | null {
+export function getAssignment(agentDNA: string): DeskAssignment | null {
   const assignments = getAllAssignments()
-  return assignments.find(a => a.sessionId === sessionId) || null
+  return assignments.find(a => a.agentDNA === agentDNA) || null
 }
 
 /**
- * Assign an agent to the next available desk
+ * Assign an agent to the next available desk (or return existing desk if agent reconnects)
  */
-export function assignDesk(sessionId: string, agentName: string): DeskAssignment | null {
+export function assignDesk(sessionId: string, agentName: string, agentDNA: string): DeskAssignment | null {
   const assignments = getAllAssignments()
 
-  // Check if already assigned
-  const existing = assignments.find(a => a.sessionId === sessionId)
+  // Check if already assigned by DNA (agent reconnecting)
+  const existing = assignments.find(a => a.agentDNA === agentDNA)
   if (existing && existing.active) {
+    // Update session ID for reconnect
+    existing.sessionId = sessionId
+    saveAssignments(assignments)
     return existing
   }
 
@@ -95,6 +99,7 @@ export function assignDesk(sessionId: string, agentName: string): DeskAssignment
   const y = 5 + deskRow * (DESK_HEIGHT + DESK_SPACING_Y)
 
   const assignment: DeskAssignment = {
+    agentDNA,
     sessionId,
     agentName,
     deskNumber,
@@ -106,8 +111,8 @@ export function assignDesk(sessionId: string, agentName: string): DeskAssignment
     active: true,
   }
 
-  // Remove old assignment if exists
-  const filtered = assignments.filter(a => a.sessionId !== sessionId)
+  // Remove old assignment if exists for this DNA
+  const filtered = assignments.filter(a => a.agentDNA !== agentDNA)
   filtered.push(assignment)
 
   saveAssignments(filtered)
@@ -117,9 +122,9 @@ export function assignDesk(sessionId: string, agentName: string): DeskAssignment
 /**
  * Release a desk (agent logged out)
  */
-export function releaseDesk(sessionId: string): void {
+export function releaseDesk(agentDNA: string): void {
   const assignments = getAllAssignments()
-  const assignment = assignments.find(a => a.sessionId === sessionId)
+  const assignment = assignments.find(a => a.agentDNA === agentDNA)
 
   if (assignment) {
     assignment.active = false

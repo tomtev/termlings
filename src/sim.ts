@@ -807,7 +807,7 @@ function spawnAgentEntity(sessionId: string, cmd: AgentCommand): Entity {
 
   // Assign a desk to this agent
   const agentName = cmd.name || sessionId.slice(0, 12)
-  const deskAssignment = assignDesk(sessionId, agentName)
+  const deskAssignment = assignDesk(sessionId, agentName, dna)
 
   let spawnX: number
   let spawnY: number
@@ -886,7 +886,7 @@ function processAgentCommands() {
         const dna = session.entity.dna
         agentSessions.delete(sessionId)
         // Release desk assignment
-        releaseDesk(sessionId)
+        releaseDesk(dna)
         // Remove from persistence
         try {
           const data = readFileSync(AGENTS_FILE, "utf8")
@@ -899,12 +899,35 @@ function processAgentCommands() {
       continue
     }
 
-    // Spawn entity if new session
+    // Check if agent with this DNA already exists (resuming)
+    const dna = cmd.dna && /^[0-9a-f]{6,7}$/i.test(cmd.dna)
+      ? cmd.dna.toLowerCase()
+      : encodeDNA(traitsFromName(sessionId))
+
     let session = agentSessions.get(sessionId)
+    let isResuming = false
+
     if (!session) {
+      // Check if agent with same DNA already exists
+      for (const [oldSessionId, oldSession] of agentSessions) {
+        if (oldSession.entity.dna === dna) {
+          // Resume existing agent - update session ID
+          agentSessions.delete(oldSessionId)
+          agentSessions.set(sessionId, oldSession)
+          session = oldSession
+          isResuming = true
+          break
+        }
+      }
+    }
+
+    if (!session) {
+      // New agent - spawn entity
       const entity = spawnAgentEntity(sessionId, cmd)
       chat("system", `${entity.name} connected (${sessionId})`, [120, 120, 120])
       session = agentSessions.get(sessionId)!
+    } else if (isResuming) {
+      chat("system", `${session.entity.name} reconnected (${sessionId})`, [120, 180, 120])
     }
 
     const { entity, ai } = session
