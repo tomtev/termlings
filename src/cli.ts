@@ -784,6 +784,79 @@ Commands:
     process.exit(0);
   }
 
+  // Edit an existing sign's text
+  if (verb === "edit-sign") {
+    const signName = positional[2];
+    const newText = positional[3];
+    const style = flags.get("style");
+
+    if (!signName || !newText) {
+      console.error("Usage: termlings action edit-sign <sign-name> <new-text> [--style small|medium|large]");
+      console.error("Examples:");
+      console.error("  termlings action edit-sign sign-tommy 'Thomas'");
+      console.error("  termlings action edit-sign sign-welcome 'Hello!' --style large");
+      process.exit(1);
+    }
+
+    const { createBracketedLabel, createFramedLabel, renderTextToCells } =
+      await import("./engine/text-renderer.js");
+    const { readFileSync, writeFileSync } = await import("fs");
+    const { join, resolve } = await import("path");
+
+    const filePath = resolve(".termlings", "objects", `${signName}.json`);
+
+    // Read existing sign to get current style if not specified
+    let currentStyle = style;
+    if (!currentStyle) {
+      try {
+        const existing = JSON.parse(readFileSync(filePath, "utf-8"));
+        // Infer style from height: height 1 = small, height 3 = medium, height > 3 = large
+        if (existing.height === 1) {
+          currentStyle = "small";
+        } else if (existing.height === 3) {
+          currentStyle = "medium";
+        } else {
+          currentStyle = "large";
+        }
+      } catch {
+        currentStyle = "small";
+      }
+    }
+
+    if (!["small", "medium", "large"].includes(currentStyle)) {
+      console.error("Style must be: small, medium, or large");
+      process.exit(1);
+    }
+
+    // Generate new cells based on style
+    let cells;
+    const fgColor = [200, 180, 150];
+
+    if (currentStyle === "small") {
+      cells = createBracketedLabel(newText, fgColor);
+    } else if (currentStyle === "medium") {
+      cells = createFramedLabel(newText, fgColor);
+    } else {
+      cells = renderTextToCells(newText, [100, 200, 100]);
+    }
+
+    // Update object definition
+    const objectDef = {
+      name: signName,
+      width: cells[0]?.length || 1,
+      height: cells.length,
+      cells: cells,
+    };
+
+    writeFileSync(filePath, JSON.stringify(objectDef, null, 2));
+
+    console.log(`✓ Updated sign: ${signName}`);
+    console.log(`  New text: ${newText}`);
+    console.log(`  Style: ${currentStyle}`);
+    console.log(`  Size: ${cells[0]?.length || 1}×${cells.length}`);
+    process.exit(0);
+  }
+
   // List all objects (built-in and custom)
   if (verb === "list-objects") {
     const { loadCustomObjects } = await import("./engine/object-loader.js");
