@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { createCustomObject, loadCustomObjects } from "../custom-objects.js"
+import { createCustomObject, loadCustomObjects } from "../object-loader.js"
 import type { ObjectDef } from "../types.js"
 
 describe("Custom Objects", () => {

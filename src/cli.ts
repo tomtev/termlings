@@ -593,7 +593,7 @@ Commands:
   if (verb === "place") {
     const { readState: readStatePlace, writeCommand } = await import("./engine/ipc.js");
     const { OBJECT_DEFS, renderObjectToTerminal } = await import("./engine/objects.js");
-    const { loadCustomObjects } = await import("./engine/custom-objects.js");
+    const { loadCustomObjects } = await import("./engine/object-loader.js");
     const _statePlace = readStatePlace();
     const customObjects = loadCustomObjects("default");
     if (_statePlace?.map?.mode === "simple") {
@@ -670,7 +670,7 @@ Commands:
   // Inspect existing object JSON
   if (verb === "inspect-object") {
     const { OBJECT_DEFS } = await import("./engine/objects.js");
-    const { loadCustomObjects } = await import("./engine/custom-objects.js");
+    const { loadCustomObjects } = await import("./engine/object-loader.js");
     const objectType = positional[2];
     if (!objectType) {
       console.error("Usage: termlings action inspect-object <type>");
@@ -712,7 +712,7 @@ Commands:
 
   // Create custom object
   if (verb === "create-object") {
-    const { createCustomObject } = await import("./engine/custom-objects.js");
+    const { createCustomObject } = await import("./engine/object-loader.js");
     const objectName = positional[2];
     const jsonString = positional[3];
 
@@ -743,7 +743,7 @@ Commands:
 
   // List all objects (built-in and custom)
   if (verb === "list-objects") {
-    const { loadCustomObjects } = await import("./engine/custom-objects.js");
+    const { loadCustomObjects } = await import("./engine/object-loader.js");
     const customObjects = loadCustomObjects("default");
 
     if (Object.keys(customObjects).length > 0) {
@@ -1186,7 +1186,7 @@ if (positional[0] === "render") {
   // Handle object rendering
   if (renderType === "object") {
     if (flags.has("list")) {
-      const { loadCustomObjects } = await import("./engine/custom-objects.js");
+      const { loadCustomObjects } = await import("./engine/object-loader.js");
       const customObjects = loadCustomObjects("default");
       const allObjects = { ...OBJECT_DEFS, ...customObjects };
 
@@ -1208,7 +1208,7 @@ if (positional[0] === "render") {
       ? opts.color.split(",").map((c: string) => parseInt(c.trim(), 10)) as [number, number, number]
       : undefined;
 
-    const { loadCustomObjects } = await import("./engine/custom-objects.js");
+    const { loadCustomObjects } = await import("./engine/object-loader.js");
     const customObjects = loadCustomObjects("default");
     const allObjects = { ...OBJECT_DEFS, ...customObjects };
 

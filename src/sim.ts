@@ -118,7 +118,7 @@ const detectedRoomsSerialized = detectedRooms.map(r => ({
 
 // --- Objects (merge map-defined objects with built-in defs) ---
 
-const { loadCustomObjects } = await import("./engine/custom-objects.js")
+const { loadCustomObjects } = await import("./engine/object-loader.js")
 const customObjectDefs = loadCustomObjects()
 const mergedDefs = { ...OBJECT_DEFS, ...world.objectDefs, ...customObjectDefs }
 let objectPlacements = [...world.placements]
