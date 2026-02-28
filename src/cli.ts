@@ -1670,18 +1670,6 @@ Options:
     console.log(`${yellow}    ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦${reset}`);
     console.log();
 
-    // Ask whether to create single agent or team
-    const { selectMenu } = await import("./interactive-menu.js");
-    const setupChoice = await selectMenu(
-      [
-        { label: "Single Agent", value: "single", description: "Create one agent to start" },
-        { label: "5-Person Team", value: "team", description: "Create a full SaaS Strike Team (CEO, CTO, CMO, CRO, COO)" },
-      ],
-      "How would you like to set up your project?"
-    );
-
-    const useTeam = setupChoice === "team";
-
     // Load template (default to office)
     const templateName = opts.template || "office";
     const templatePath = join(__dirname, "..", "..", "templates", templateName);
@@ -1708,110 +1696,8 @@ Options:
       mkdirSync(join(termlingsDir, "objects"), { recursive: true });
     }
 
-    // Use create command to set up agents
-    const { generateRandomDNA, encodeDNA, traitsFromName } = await import("./index.js");
-    const { writeFileSync } = await import("fs");
-
-    if (useTeam) {
-      // Create 5-person leadership team
-      console.log("\n👥 Creating 5-person SaaS Strike Team...\n");
-
-      const { getTeamRolesInOrder, generateTeamMemberSoul, getRandomTeamMemberName } =
-        await import("./team-roles.js");
-
-      const roles = getTeamRolesInOrder();
-      const usedNames = new Set<string>();
-      const createdAgents: string[] = [];
-
-      for (const role of roles) {
-        const randomName = getRandomTeamMemberName(usedNames);
-        usedNames.add(randomName);
-        const dna = generateRandomDNA();
-
-        // Create agent directory
-        const agentDir = join(termlingsDir, randomName.toLowerCase());
-        mkdirSync(agentDir, { recursive: true });
-
-        // Generate SOUL.md with team role context
-        const soulContent = generateTeamMemberSoul(randomName, dna, role);
-        writeFileSync(join(agentDir, "SOUL.md"), soulContent);
-
-        createdAgents.push(randomName);
-        console.log(`  ✓ ${randomName.padEnd(15)} (${role.title})`);
-      }
-
-      console.log(`\n✓ Created team: ${createdAgents.join(", ")}`);
-      console.log(`✓ Initialized project structure in .termlings/`);
-      console.log(`\n🚀 Ready to go! Run 'termlings' to start the sim.\n`);
-    } else {
-      // Single agent setup
-      console.log("🎨 Creating your first agent...\n");
-
-      const rl3 = createInterface({ input: process.stdin, output: process.stdout });
-
-      const agentName = await new Promise<string>((resolve) => {
-        rl3.question("Agent name (or Enter for random): ", (answer) => {
-          rl3.close();
-          resolve(answer.trim() || "");
-        });
-      });
-
-      const randomNames = [
-        "Pixel",
-        "Sprout",
-        "Ember",
-        "Nimbus",
-        "Glitch",
-        "Ziggy",
-        "Quill",
-        "Cosmo",
-        "Maple",
-        "Flint",
-        "Wren",
-        "Dusk",
-        "Byte",
-        "Fern",
-        "Spark",
-        "Nova",
-        "Haze",
-        "Basil",
-        "Reef",
-        "Orbit",
-        "Sage",
-        "Rusty",
-        "Coral",
-        "Luna",
-        "Cinder",
-        "Pip",
-        "Storm",
-        "Ivy",
-        "Blaze",
-        "Mochi",
-      ];
-
-      const finalName = agentName || randomNames[Math.floor(Math.random() * randomNames.length)]!;
-      const dna = agentName ? encodeDNA(traitsFromName(agentName)) : generateRandomDNA();
-
-      // Create agent directory (agents live at .termlings/agent-name/)
-      const agentDir = join(termlingsDir, finalName.toLowerCase());
-      mkdirSync(agentDir, { recursive: true });
-
-      // Write SOUL.md
-      const soulContent = `# ${finalName}
-
-**DNA**: ${dna}
-**Purpose**: Autonomous agent
-
----
-
-This agent will join the termlings world and work together with other agents.
-`;
-      writeFileSync(join(agentDir, "SOUL.md"), soulContent);
-
-      console.log(`✓ Created agent "${finalName}" in .termlings/${finalName.toLowerCase()}/`);
-      console.log(`✓ Initialized project structure in .termlings/`);
-      console.log(`\n🚀 Ready to go! Run 'termlings' to start the sim.\n`);
-    }
+    console.log(`✓ Initialized project structure in .termlings/`);
+    console.log(`\n🚀 Ready to go! Run 'termlings' to start the sim.\n`);
 
     process.exit(0);
   }

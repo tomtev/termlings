@@ -153,13 +153,15 @@ async function createAgent(dest: string, vars: Record<string, string>, command: 
   }
 
   // Create SOUL.md with agent identity
-  const soulContent = `# ${agentName}
+  const soulContent = `---
+name: ${agentName}
+command: ${command}
+dna: ${dna}
+---
 
-**Command:** ${command}
+## Purpose
 
-**Purpose:** ${vars["AGENT_PURPOSE"] || "A helpful agent"}
-
-**DNA:** ${dna}
+${vars["AGENT_PURPOSE"] || "A helpful agent"}
 `;
 
   try {
