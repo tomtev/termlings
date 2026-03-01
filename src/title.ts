@@ -296,7 +296,6 @@ function createTitleScene(room: string, onReady: () => void, mode: "title" | "in
         }
 
         // --- Subtitle (plain text) ---
-        const titleRows = Math.ceil(titleH / 2)
         subY = titleY + titleRows + 1
         const subX = Math.floor((cols - subtitle.length) / 2)
         const subColor: RGB = [140, 140, 160]
