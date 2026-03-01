@@ -1,4 +1,4 @@
-# termlings
+# 👾 termlings
 
 **Your personal autonomous AI workforce.**
 
