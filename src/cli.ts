@@ -1906,148 +1906,37 @@ Options:
 
   const termlingsDir = join(process.cwd(), ".termlings");
   if (!existsSync(termlingsDir)) {
-    const cyan = "\x1b[36m";
-    const yellow = "\x1b[33m";
-    const reset = "\x1b[0m";
+    // Use scene-based init screen
+    const { InitScene } = await import("./engine/init-scene.js");
+    const { runScene } = await import("./engine/scene.js");
 
-    // Clear screen and show full-screen init with title
-    process.stdout.write("\x1b[2J\x1b[H");
+    let confirmed = false;
 
-    const cols = process.stdout.columns || 80;
-    const rows = process.stdout.rows || 24;
-    const cyan = "\x1b[36m";
-    const yellow = "\x1b[33m";
-    const reset = "\x1b[0m";
+    const scene = new InitScene({
+      onConfirm: (result: boolean) => {
+        confirmed = result;
+        handle.stop();
+      },
+    });
 
-    let confirmed: boolean;
+    // Enter alt screen
+    process.stdout.write("\x1b[?1049h");
 
-    try {
-      const { renderTerminalSmall } = await import("./index.js");
-      const dnas = [generateRandomDNA(), generateRandomDNA(), generateRandomDNA(), generateRandomDNA(), generateRandomDNA()];
+    const handle = runScene(scene);
 
-      const getVisibleWidth = (str: string) => {
-        return str.replace(/\x1b\[[0-9;]*m/g, '').length;
-      };
-
-      // Title lines
-      const titleLines = [
-        `${cyan}termlings${reset}`,
-        `${yellow}Build autonomous AI agents & teams${reset}`,
-      ];
-
-      // Render a frame and return the avatar lines
-      const renderFrame = (frame: number): string[] => {
-        const avatars = dnas.map(dna => renderTerminalSmall(dna, frame));
-        const allLines = avatars.map(a => a.split('\n').filter(l => l.trim()));
-        const maxWidths = allLines.map(lines => Math.max(...lines.map(getVisibleWidth), 0));
-        const maxLines = Math.max(...allLines.map(l => l.length));
-        const topPadding = allLines.map(lines => maxLines - lines.length);
-
-        const result: string[] = [];
-        for (let i = 0; i < maxLines; i++) {
-          let row = "";
-          for (let j = 0; j < allLines.length; j++) {
-            let line = "";
-            if (i >= topPadding[j]!) {
-              line = allLines[j]![i - topPadding[j]!] || "";
-            }
-            const width = maxWidths[j]!;
-            row += line + " ".repeat(Math.max(2, width - getVisibleWidth(line) + 2));
-          }
-          result.push(row);
+    // Wait for scene to complete
+    await new Promise<void>((resolve) => {
+      const checkInterval = setInterval(() => {
+        if (confirmed || !handle) {
+          clearInterval(checkInterval);
+          // Exit alt screen
+          process.stdout.write("\x1b[?1049l");
+          resolve();
         }
-        return result;
-      };
-
-      // Get initial frame to calculate dimensions
-      const frames = [0, 1, 2, 3];
-      const avatarLines = renderFrame(frames[0]!);
-      const avatarHeight = avatarLines.length;
-
-      // Calculate layout: title + avatars + prompt
-      const promptText = "Create .termlings and initialize first agent? (y/n) ";
-      const titleHeight = titleLines.length + 1; // title + spacing
-      const totalHeight = titleHeight + avatarHeight + 3; // title + avatars + spacing + prompt
-      const startRow = Math.max(0, Math.floor((rows - totalHeight) / 2));
-
-      // Helper to position and render full screen
-      const renderScreen = (frameLines: string[], showPrompt: boolean = false) => {
-        // Clear screen
-        process.stdout.write("\x1b[2J\x1b[H");
-
-        // Top padding
-        for (let i = 0; i < startRow; i++) {
-          process.stdout.write("\n");
-        }
-
-        // Title centered horizontally
-        for (const title of titleLines) {
-          const padding = Math.max(0, Math.floor((cols - getVisibleWidth(title)) / 2));
-          process.stdout.write(" ".repeat(padding) + title + "\n");
-        }
-
-        // Spacing after title
-        process.stdout.write("\n");
-
-        // Avatars centered horizontally
-        for (const line of frameLines) {
-          const padding = Math.max(0, Math.floor((cols - getVisibleWidth(line)) / 2));
-          process.stdout.write(" ".repeat(padding) + line + "\n");
-        }
-
-        // Spacing before prompt
-        process.stdout.write("\n");
-
-        // Prompt centered horizontally
-        if (showPrompt) {
-          const promptPadding = Math.max(0, Math.floor((cols - promptText.length) / 2));
-          process.stdout.write(" ".repeat(promptPadding) + promptText);
-        }
-      };
-
-      // Show initial frame
-      renderScreen(avatarLines, false);
-
-      const rl = createInterface({ input: process.stdin, output: process.stdout });
-
-      // Start animation loop
-      let currentFrameIdx = 0;
-      let isAnswered = false;
-
-      const animInterval = setInterval(() => {
-        if (!isAnswered) {
-          currentFrameIdx = (currentFrameIdx + 1) % 4;
-          const frameLines = renderFrame(frames[currentFrameIdx]!);
-          renderScreen(frameLines, false);
-        }
-      }, 200);
-
-      // Show prompt and wait
-      renderScreen(avatarLines, true);
-
-      confirmed = await new Promise<boolean>((resolve) => {
-        rl.on("line", (answer) => {
-          isAnswered = true;
-          clearInterval(animInterval);
-          rl.close();
-          resolve(answer.toLowerCase() === "y");
-        });
-      });
-    } catch (e) {
-      // Skip if rendering fails - show simple prompt
-      process.stdout.write("\x1b[2J\x1b[H");
-      const rl = createInterface({ input: process.stdin, output: process.stdout });
-
-      confirmed = await new Promise<boolean>((resolve) => {
-        rl.question("Create .termlings and initialize first agent? (y/n) ", (answer) => {
-          rl.close();
-          resolve(answer.toLowerCase() === "y");
-        });
-      });
-    }
+      }, 50);
+    });
 
     if (!confirmed) {
-      process.stdout.write("\x1b[2J\x1b[H");
       console.log("Run 'termlings --help' to see all commands.");
       process.exit(0);
     }
