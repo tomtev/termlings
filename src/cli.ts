@@ -29,7 +29,15 @@ const positional: string[] = [];
 let agentPassthrough: string[] = [];
 
 // Known flags that take a space-separated value (--name Foo, --dna abc123, etc.)
-const VALUE_FLAGS = new Set(["name", "dna", "owner", "purpose", "with", "dangerous-skip-confirmation"]);
+const VALUE_FLAGS = new Set([
+  "name",
+  "dna",
+  "owner",
+  "purpose",
+  "dangerous-skip-confirmation",
+  "port",
+  "host",
+]);
 
 // Check if first arg is an agent name — if so, pass everything after it through raw
 const { agents: _agentRegistry } = await import("./agents/index.js");
@@ -82,36 +90,23 @@ if (args[0] && _agentRegistry[args[0]]) {
 
 // --- Routing ---
 
+if (flags.has("with") || args.some((arg) => arg === "--with" || arg.startsWith("--with="))) {
+  console.error("The --with option has been removed. Termlings now supports Claude only.")
+  process.exit(1)
+}
+
+if (positional[0] === "codex" || positional[0] === "pi") {
+  console.error(`'${positional[0]}' support has been removed. Use: termlings claude`)
+  process.exit(1)
+}
+
 // 0. Clear command: termlings --clear
 if (flags.has("clear")) {
-  const { rmSync, readdirSync } = await import("fs");
-  const { join } = await import("path");
-  const ipcDir = join(process.cwd(), ".termlings");
-
-  try {
-    // Only clear IPC state files (agent data, queue files, messages, state)
-    // Keep .termlings/agent-name/, .termlings/agents/, .termlings/map/, .termlings/store/, etc.
-    const entries = readdirSync(ipcDir);
-    for (const entry of entries) {
-      // Clear IPC files: *.queue.jsonl, *.msg.json, state.json, hook files
-      // Don't clear persistent data directories
-      if (entry.startsWith(".") ||
-          ["agents", "map", "store", "objects"].includes(entry)) {
-        continue;
-      }
-      if (entry.endsWith(".queue.jsonl") ||
-          entry.endsWith(".msg.json") ||
-          entry === "state.json" ||
-          entry.endsWith(".hook.json")) {
-        rmSync(join(ipcDir, entry), { force: true });
-      }
-    }
-    console.log(`✓ Cleared agent data and IPC state`);
-    console.log(`✓ Kept: saved agents and persistent data in .termlings/`);
-  } catch (e) {
-    console.error(`Failed to clear sim state: ${e}`);
-    process.exit(1);
-  }
+  const { clearWorkspaceRuntime, ensureWorkspaceDirs } = await import("./workspace/state.js");
+  ensureWorkspaceDirs();
+  clearWorkspaceRuntime();
+  console.log(`✓ Cleared runtime session + IPC state`);
+  console.log(`✓ Kept saved agents and persistent workspace data`);
   process.exit(0);
 }
 
@@ -120,31 +115,9 @@ if (flags.has("clear")) {
 let agentAdapter = _agentRegistry[positional[0] ?? ""];
 
 if (agentAdapter) {
-  // Check if sim is running by looking for either:
-  // 1. map-metadata.json (written by sim every ~2s)
-  // 2. agents.json (persisted agents file)
-  // 3. map/ directory with chunks (map is loaded at startup)
-  const termlingsDir = join(process.cwd(), ".termlings");
-  const mapMetadataPath = join(termlingsDir, "map-metadata.json");
-  const agentsPath = join(termlingsDir, "agents.json");
-  const mapDirPath = join(termlingsDir, "map");
+  const { ensureWorkspaceDirs } = await import("./workspace/state.js");
+  ensureWorkspaceDirs();
 
-  const simIsRunning =
-    existsSync(mapMetadataPath) ||
-    existsSync(agentsPath) ||
-    existsSync(mapDirPath);
-
-  if (!simIsRunning) {
-    const cyan = "\x1b[36m";
-    const reset = "\x1b[0m";
-    const cwd = process.cwd();
-    console.error(`\n❌ No active termlings sim found!\n`);
-    console.error(`You need to start the sim first in another terminal:\n`);
-    console.error(`  ${cyan}cd ${cwd}${reset}`);
-    console.error(`  ${cyan}termlings${reset}\n`);
-    console.error(`Then run this command again to connect your agent.\n`);
-    process.exit(1);
-  }
   const { discoverLocalAgents } = await import("./agents/discover.js");
   const localAgents = discoverLocalAgents();
 
@@ -168,10 +141,8 @@ if (agentAdapter) {
     } else if (selected) {
       process.env.TERMLINGS_AGENT_NAME = opts.name || selected.soul?.name;
       process.env.TERMLINGS_AGENT_DNA = opts.dna || selected.soul?.dna;
-      const commandName = opts.with || selected.soul?.command || positional[0];
-
       const { launchLocalAgent } = await import("./agents/launcher.js");
-      await launchLocalAgent(selected, agentPassthrough, opts, commandName);
+      await launchLocalAgent(selected, agentPassthrough, opts);
       process.exit(0);
     }
   } else {
@@ -189,24 +160,16 @@ if (positional[0] === "action") {
   const helpText = `Usage: termlings action <command>
 
 Commands:
-  walk <x>,<y>                Walk avatar to coordinates
-  talk                       Toggle talk animation
-  gesture --wave             Wave gesture
-  stop                       Stop current action
-  map                        Structured map with rooms, agents, distances
-  map --ascii [--large]      ASCII grid (--large for bigger view)
-  map --agents             Quick session ID list
-  chat <message>             Post to sim chat log (visible to owner)
-  send <session-id> <msg>    Direct message to a specific agent
-  cron list                  See your scheduled cron jobs
-  cron show <id>             See cron job details
+  sessions                    List active agent sessions
+  send <target> <msg>        Direct message to an agent or human operator
+                            Targets: <session-id> | agent:<dna> | human:<id>
+  calendar list              See your scheduled calendar events
+  calendar show <id>         See calendar event details
   task list                  See all project tasks
   task show <id>             See task details
   task claim <id>            Claim a task to work on
   task status <id> <status>  Update task (in-progress|completed|blocked)
-  task note <id> <note>      Add a note to a task
-  place <type> <x>,<y>       Place object at coordinates
-  destroy <x>,<y>            Destroy an object`;
+  task note <id> <note>      Add a note to a task`;
 
   if (!verb || verb === "--help" || verb === "-h") {
     console.error(helpText);
@@ -216,842 +179,124 @@ Commands:
   // Common env vars for agent commands
   const _agentName = process.env.TERMLINGS_AGENT_NAME || undefined;
   const _agentDna = process.env.TERMLINGS_AGENT_DNA || undefined;
+  const sessionId = process.env.TERMLINGS_SESSION_ID;
 
-  if (verb === "walk") {
-    const { writeCommand } = await import("./engine/ipc.js");
-    const sessionId = process.env.TERMLINGS_SESSION_ID;
-    if (!sessionId) {
-      console.error("Error: TERMLINGS_SESSION_ID env var not set");
-      process.exit(1);
+  const removedVerbs = new Set([
+    "walk",
+    "map",
+    "chat",
+    "place",
+    "destroy",
+    "inspect-object",
+    "create-object",
+    "create-sign",
+    "edit-sign",
+    "list-objects",
+  ]);
+
+  if (removedVerbs.has(verb)) {
+    if (verb === "chat") {
+      console.error(`'chat' is no longer available. Use direct messages only.`);
+      console.error(`Use: termlings action send human:<id> "<message>"`);
+    } else {
+      console.error(`'${verb}' is no longer available. The terminal sim/map engine has been removed.`);
+      console.error(`Use the web workspace and messaging/task commands instead.`);
     }
-    const coord = positional[2];
-    if (!coord || !coord.includes(",")) {
-      console.error("Usage: termlings action walk <x>,<y>");
-      process.exit(1);
-    }
-    const [xStr, yStr] = coord.split(",");
-    const x = parseInt(xStr!, 10);
-    const y = parseInt(yStr!, 10);
-    if (isNaN(x) || isNaN(y)) {
-      console.error("Error: coordinates must be numbers");
-      process.exit(1);
-    }
-    writeCommand(sessionId, { action: "walk", x, y, name: _agentName, dna: _agentDna, ts: Date.now() });
-    console.log(`Walk command sent → (${x}, ${y})`);
-    process.exit(0);
+    process.exit(1);
   }
 
-  if (verb === "talk") {
-    const { writeCommand } = await import("./engine/ipc.js");
-    const sessionId = process.env.TERMLINGS_SESSION_ID;
-    if (!sessionId) {
-      console.error("Error: TERMLINGS_SESSION_ID env var not set");
-      process.exit(1);
-    }
-    writeCommand(sessionId, { action: "gesture", type: "talk", name: _agentName, dna: _agentDna, ts: Date.now() });
-    console.log("Talk gesture sent");
-    process.exit(0);
-  }
-
-  if (verb === "gesture") {
-    const { writeCommand } = await import("./engine/ipc.js");
-    const sessionId = process.env.TERMLINGS_SESSION_ID;
-    if (!sessionId) {
-      console.error("Error: TERMLINGS_SESSION_ID env var not set");
-      process.exit(1);
-    }
-    const type = flags.has("wave") ? "wave" as const : "talk" as const;
-    writeCommand(sessionId, { action: "gesture", type, name: _agentName, dna: _agentDna, ts: Date.now() });
-    console.log(`Gesture sent: ${type}`);
-    process.exit(0);
-  }
-
-  if (verb === "stop") {
-    const { writeCommand } = await import("./engine/ipc.js");
-    const sessionId = process.env.TERMLINGS_SESSION_ID;
-    if (!sessionId) {
-      console.error("Error: TERMLINGS_SESSION_ID env var not set");
-      process.exit(1);
-    }
-    writeCommand(sessionId, { action: "stop", name: _agentName, dna: _agentDna, ts: Date.now() });
-    console.log("Stop command sent");
-    process.exit(0);
-  }
-
-  if (verb === "map") {
-    const { readSessionState } = await import("./engine/ipc.js");
-    const { OBJECT_DEFS } = await import("./engine/objects.js");
-    const { describeRelative } = await import("./engine/room-detect.js");
-    const { readFileSync, existsSync, readdirSync } = await import("fs");
-    const { join } = await import("path");
-    const { homedir } = await import("os");
-    const { CHUNK_SIZE, getChunkPath, worldToChunk } = await import("./engine/chunk-system.js");
-
-    // Compute IPC_DIR based on room from environment
-    const IPC_DIR = join(process.cwd(), ".termlings");
-
-    // Try to load map metadata (stored by sim)
-    // If not found, use minimal metadata from session position
-    let mapData: any = { width: 100, height: 100, rooms: [], tiles: [] };
-    const mapFile = join(IPC_DIR, "map-metadata.json");
-    try {
-      const data = readFileSync(mapFile, "utf8");
-      mapData = JSON.parse(data);
-    } catch {
-      // Map metadata not available - use defaults for chunk queries
-    }
-
-    const mySessionId = process.env.TERMLINGS_SESSION_ID;
-    const mySession = mySessionId ? readSessionState(mySessionId) : null;
-
-    // Query nearby chunks for entities and objects
-    const queryChunks = (centerX: number, centerY: number, radius: number = 2) => {
-      const entities: { sessionId: string; name: string; x: number; y: number; footY: number; idle: boolean; dna: string }[] = [];
-      const objects: { x: number; y: number; type: string; width: number; height: number; walkable: boolean }[] = [];
-
-      const { chunkX, chunkY } = worldToChunk(centerX, centerY);
-
-      // Load nearby chunks (within radius)
-      for (let cx = chunkX - radius; cx <= chunkX + radius; cx++) {
-        for (let cy = chunkY - radius; cy <= chunkY + radius; cy++) {
-          const chunkFile = getChunkPath(cx, cy);
-          if (!existsSync(chunkFile)) continue;
-
-          try {
-            const data = readFileSync(chunkFile, "utf8");
-            const chunk = JSON.parse(data);
-
-            // Extract entities from chunk
-            if (chunk.entities && Array.isArray(chunk.entities)) {
-              for (const e of chunk.entities) {
-                entities.push({
-                  sessionId: e.sessionId,
-                  name: e.name || e.sessionId,
-                  x: e.x,
-                  y: e.y,
-                  footY: e.y + 6, // Approximate foot position
-                  idle: true,
-                  dna: e.dna,
-                });
-              }
-            }
-
-            // Extract placements (objects) from chunk
-            if (chunk.placements && Array.isArray(chunk.placements)) {
-              for (const p of chunk.placements) {
-                const def = OBJECT_DEFS[p.def];
-                objects.push({
-                  x: p.x,
-                  y: p.y,
-                  type: p.def,
-                  width: def?.width || 1,
-                  height: def?.height || 1,
-                  walkable: def?.cells ? false : true,
-                });
-              }
-            }
-          } catch (e) {
-            // Skip chunk on error
-          }
-        }
-      }
-
-      return { entities, objects };
-    };
-
-    // Sessions-only mode: show just session IDs and positions
-    if (flags.has("agents")) {
-      if (mySession) {
-        const { entities } = queryChunks(mySession.x, mySession.y, 3);
-        for (const e of entities) {
-          const status = e.idle ? "idle" : "active";
-          const isMe = e.sessionId === mySessionId;
-          console.log(`${e.sessionId.padEnd(16)} (${e.x}, ${e.footY}) [${status}]${isMe ? " (you)" : ""}`);
-        }
-      }
+  if (verb === "sessions") {
+    const { listSessions } = await import("./workspace/state.js");
+    const sessions = listSessions();
+    if (sessions.length === 0) {
+      console.log("No active sessions");
       process.exit(0);
     }
 
-    const { width, height, name, tiles, rooms: stateRooms } = mapData;
-
-    // Find "me" for centering the local view
-    let centerX = Math.floor(width / 2);
-    let centerY = Math.floor(height / 2);
-    if (mySession) {
-      centerX = mySession.x;
-      centerY = mySession.footY;
+    for (const s of sessions) {
+      const ageSeconds = Math.max(0, Math.floor((Date.now() - s.lastSeenAt) / 1000));
+      const you = s.sessionId === sessionId ? " (you)" : "";
+      console.log(`${s.sessionId.padEnd(16)} ${s.name.padEnd(14)} [${s.dna}] last-seen ${ageSeconds}s ago${you}`);
     }
-
-    // Query nearby chunks for entities and objects
-    const nearbyData = queryChunks(centerX, centerY, 2);
-    const nearbyEntities = nearbyData.entities;
-    const nearbyObjects = nearbyData.objects;
-
-    // Helper: find which room a coordinate is in
-    type StateRoom = NonNullable<typeof stateRooms>[number];
-    function findRoom(x: number, y: number): StateRoom | null {
-      if (!stateRooms) return null;
-      for (const r of stateRooms) {
-        const b = r.bounds;
-        if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) return r;
-      }
-      return null;
-    }
-
-    // --- ASCII mode (--ascii flag) ---
-    if (flags.has("ascii")) {
-      const tileChar: Record<string, string> = {
-        " ": " ", ".": "·", ",": ",", "#": "#", "B": "#", "W": "#", "G": "#",
-        "~": "~", "D": "D", "e": ".", "p": ".", "n": ".", "h": ".",
-        "*": ",", "f": ",", "c": ",", "r": ",", "v": ",", "o": ",", "w": ",",
-        "P": ".", "S": ".",
-      };
-
-      const largeMap = flags.has("large");
-      const viewW = largeMap ? 140 : 70;
-      const viewH = largeMap ? 60 : 30;
-      const x0 = Math.max(0, Math.min(centerX - Math.floor(viewW / 2), width - viewW));
-      const y0 = Math.max(0, Math.min(centerY - Math.floor(viewH / 2), height - viewH));
-
-      console.log(`Map: ${name || "unknown"} (${width}x${height})  View: (${x0},${y0}) to (${x0 + viewW},${y0 + viewH})`);
-      console.log();
-
-      const grid = Array.from({ length: viewH }, (_, vy) =>
-        Array.from({ length: viewW }, (_, vx) => {
-          if (!tiles) return " ";
-          const tile = tiles[y0 + vy]?.[x0 + vx] ?? " ";
-          return tileChar[tile] ?? tile;
-        })
-      );
-
-      // Convert door markers to [door] label
-      for (let vy = 0; vy < viewH; vy++) {
-        for (let vx = 0; vx < viewW; vx++) {
-          if (grid[vy]![vx] !== "D") continue;
-          const leftDoor = vx > 0 && grid[vy]![vx - 1] === "D";
-          const upDoor = vy > 0 && grid[vy - 1]![vx] === "D";
-          if (!leftDoor && !upDoor) {
-            const label = "[door]";
-            for (let c = 0; c < label.length; c++) {
-              if (vx + c < viewW) grid[vy]![vx + c] = label[c]!;
-            }
-          } else {
-            if (grid[vy]![vx] === "D") grid[vy]![vx] = " ";
-          }
-        }
-      }
-
-      // Load objects from nearby chunks
-      const placements = nearbyObjects;
-
-      const objectLegend: { num: number; name: string; x: number; y: number }[] = [];
-      let objNum = 1;
-      for (const p of placements) {
-        const def = OBJECT_DEFS[p.type];
-        if (!def) continue;
-        const objW = def.width;
-        const objH = def.height;
-        const vx0 = p.x - x0;
-        const vy0 = p.y - y0;
-        if (vx0 + objW <= 0 || vx0 >= viewW || vy0 + objH <= 0 || vy0 >= viewH) continue;
-
-        const bracketedName = `[${p.type}]`;
-        const bracketedNum = `[${objNum}]`;
-        let label: string;
-        if (objW >= bracketedName.length) {
-          label = bracketedName;
-        } else if (objW >= bracketedNum.length) {
-          label = bracketedNum;
-          objectLegend.push({ num: objNum, name: p.type, x: p.x, y: p.y });
-        } else {
-          label = `${objNum}`;
-          objectLegend.push({ num: objNum, name: p.type, x: p.x, y: p.y });
-        }
-        objNum++;
-
-        const startCol = vx0 + Math.max(0, Math.floor((objW - label.length) / 2));
-        const stampY = Math.max(0, vy0);
-        if (stampY >= viewH) continue;
-        for (let c = 0; c < label.length; c++) {
-          const gx = startCol + c;
-          if (gx >= 0 && gx < viewW) grid[stampY]![gx] = label[c]!;
-        }
-      }
-
-      // Place entities
-      for (let i = 0; i < nearbyEntities.length; i++) {
-        const e = nearbyEntities[i]!;
-        const footLeft = e.x + 1 - x0;
-        const gy = e.footY - y0;
-        if (gy < 0 || gy >= viewH) continue;
-        const eName = e.name || "???";
-        const inner = eName.length <= 5 ? eName.padStart(Math.ceil((5 + eName.length) / 2)).padEnd(5) : eName.slice(0, 5);
-        const label = `[${inner}]`;
-        for (let c = 0; c < 7; c++) {
-          const gx = footLeft + c;
-          if (gx < 0 || gx >= viewW) continue;
-          grid[gy]![gx] = label[c]!;
-        }
-      }
-
-      for (const row of grid) console.log(row.join(""));
-
-      console.log();
-      console.log("Agents:");
-      for (let i = 0; i < nearbyEntities.length; i++) {
-        const e = nearbyEntities[i]!;
-        const status = e.idle ? "idle" : "active";
-        const isMe = e.sessionId === mySessionId;
-        const eName = e.name || "???";
-        console.log(`  [${eName.padEnd(5).slice(0, 5)}]  ${eName.padEnd(14)} ${e.sessionId.padEnd(16)} (${e.x + 4}, ${e.footY}) [${status}]${isMe ? " (you)" : ""}`);
-      }
-
-      if (objectLegend.length > 0) {
-        console.log();
-        console.log("Objects:");
-        for (const obj of objectLegend) {
-          console.log(`  [${obj.num}] ${obj.name.padEnd(14)} (${obj.x}, ${obj.y})`);
-        }
-      }
-
-      console.log();
-      console.log("Legend: [Name] = agent  # = wall  T = tree  ~ = water  , = grass  · = path  [door] = door");
-      if (!flags.has("large")) console.log("Use --large for a bigger view");
-      process.exit(0);
-    }
-
-    // --- Structured output (default) ---
-
-    const myRoom = mySession ? findRoom(mySession.x + 4, mySession.footY) : null;
-    const myX = mySession ? mySession.x + 4 : centerX;
-    const myY = mySession ? mySession.footY : centerY;
-
-    // Header
-    console.log(`Map: ${name || "unknown"} (${width}x${height})`);
-    if (mySession) {
-      const roomLabel = myRoom ? `in ${myRoom.wallType} room (room${myRoom.id})` : "outdoors";
-      console.log(`You: (${myX}, ${myY}) — ${roomLabel}`);
-    }
-
-    // Rooms section
-    if (stateRooms && stateRooms.length > 0) {
-      console.log();
-      console.log(`Rooms (${stateRooms.length}):`);
-      for (const r of stateRooms) {
-        const b = r.bounds;
-        // Group doors by direction+target to avoid listing 8 individual door tiles
-        const doorGroups = new Map<string, { dir: string; target: string; count: number; x: number; y: number }>();
-        for (const d of r.doors) {
-          let dir = "";
-          if (d.x <= b.x) dir = "west";
-          else if (d.x >= b.x + b.w - 1) dir = "east";
-          else if (d.y <= b.y) dir = "north";
-          else dir = "south";
-          const target = d.toRoom ? `room${d.toRoom}` : "outside";
-          const key = `${dir}-${target}`;
-          const existing = doorGroups.get(key);
-          if (existing) {
-            existing.count++;
-          } else {
-            doorGroups.set(key, { dir, target, count: 1, x: d.x, y: d.y });
-          }
-        }
-        const doorParts: string[] = [];
-        for (const g of doorGroups.values()) {
-          doorParts.push(`${g.dir}(${g.x},${g.y})->${g.target}`);
-        }
-        const doorsStr = doorParts.length > 0 ? `  doors: ${doorParts.join(" ")}` : "";
-        console.log(`  room${String(r.id).padEnd(4)} ${r.wallType.padEnd(6)} (${b.x},${b.y})-(${b.x + b.w},${b.y + b.h})${doorsStr}`);
-      }
-    }
-
-    // Agents section
-    console.log();
-    console.log("Agents:");
-    for (const e of nearbyEntities) {
-      const status = e.idle ? "idle" : "active";
-      const isMe = e.sessionId === mySessionId;
-      const eName = e.name || "???";
-      const ex = e.x + 4;
-      const ey = e.footY;
-      const eRoom = findRoom(ex, ey);
-      const roomLabel = eRoom ? `room${eRoom.id}` : "outdoors";
-      const rel = isMe ? "(you)" : describeRelative(myX, myY, ex, ey);
-      console.log(`  ${eName.padEnd(10)} ${e.sessionId.padEnd(16)} (${ex},${ey})  ${status.padEnd(6)}  ${roomLabel.padEnd(10)}  ${rel}`);
-    }
-
-    // Objects section — show objects from nearby chunks
-    if (nearbyObjects && nearbyObjects.length > 0) {
-      console.log();
-      console.log("Objects:");
-      for (const o of nearbyObjects) {
-        const oRoom = findRoom(o.x, o.y);
-        const roomLabel = oRoom ? `room${oRoom.id}` : "outdoors";
-        // Show object with room indicator
-        const roomInfo = o.roomId !== undefined ? ` [room${o.roomId}]` : "";
-        const occupancy = o.occupants && o.occupants.length > 0 ? ` — ${o.occupants.length} agent(s)` : "";
-        console.log(`  ${o.type.padEnd(16)} (${o.x},${o.y})  ${roomLabel}${roomInfo}${occupancy}`);
-      }
-    }
-
-    // Nearby doors from agent position
-    if (mySession && stateRooms && stateRooms.length > 0) {
-      const allDoors: { x: number; y: number; toRoom: number | null; fromRoom: number }[] = [];
-      for (const r of stateRooms) {
-        for (const d of r.doors) {
-          allDoors.push({ ...d, fromRoom: r.id });
-        }
-      }
-      // Sort by distance from me
-      allDoors.sort((a, b) => {
-        const da = Math.abs(a.x - myX) + Math.abs(a.y - myY);
-        const db = Math.abs(b.x - myX) + Math.abs(b.y - myY);
-        return da - db;
-      });
-      // Show closest 5 unique doors
-      const shown = new Set<string>();
-      const nearby: typeof allDoors = [];
-      for (const d of allDoors) {
-        const key = `${d.x},${d.y}`;
-        if (shown.has(key)) continue;
-        shown.add(key);
-        nearby.push(d);
-        if (nearby.length >= 5) break;
-      }
-      if (nearby.length > 0) {
-        console.log();
-        console.log("Nearby doors:");
-        for (const d of nearby) {
-          const target = d.toRoom ? `room${d.toRoom}` : "outside";
-          const rel = describeRelative(myX, myY, d.x, d.y);
-          console.log(`  (${d.x},${d.y}) -> ${target.padEnd(10)}  ${rel}`);
-        }
-      }
-    }
-
-    console.log();
-    console.log("Use --ascii for visual map, --agents for session IDs only");
     process.exit(0);
   }
 
   if (verb === "send") {
-    const { writeCommand } = await import("./engine/ipc.js");
-    const sessionId = process.env.TERMLINGS_SESSION_ID;
+    const { writeMessages } = await import("./engine/ipc.js");
+    const { appendWorkspaceMessage, readSession, upsertSession } = await import("./workspace/state.js");
     if (!sessionId) {
       console.error("Error: TERMLINGS_SESSION_ID env var not set");
       process.exit(1);
     }
-    const target = positional[2];
+    const rawTarget = positional[2];
     const text = positional.slice(3).join(" ");
-    if (!target || !text) {
-      console.error("Usage: termlings action send <session-id> <message>");
+    if (!rawTarget || !text) {
+      console.error("Usage: termlings action send <target> <message>");
+      console.error("Targets: <session-id> | agent:<dna> | human:<id> (aliases: operator, owner)");
       process.exit(1);
     }
-    writeCommand(sessionId, { action: "send", target, text, name: _agentName, dna: _agentDna, ts: Date.now() });
+    const target =
+      rawTarget === "owner" || rawTarget === "operator"
+        ? "human:default"
+        : rawTarget;
+    const fromName = _agentName || "agent";
+    const fromDna = _agentDna || "0000000";
+    const isHumanTarget = target.startsWith("human:");
+    let targetSession = isHumanTarget ? null : readSession(target);
+    let targetDna = targetSession?.dna;
+    let resolvedTarget = target;
+
+    if (!isHumanTarget && target.startsWith("agent:")) {
+      const { listSessions } = await import("./workspace/state.js");
+      const dna = target.slice("agent:".length);
+      if (dna.length > 0) {
+        const candidates = listSessions()
+          .filter((session) => session.dna === dna)
+          .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+        targetSession = candidates[0] ?? null;
+        targetDna = dna;
+        resolvedTarget = targetSession?.sessionId ?? target;
+      }
+    }
+
+    if (!isHumanTarget && !targetSession) {
+      console.error(`Unknown target: ${target}`);
+      console.error("Use `termlings action sessions` to discover agent IDs, `agent:<dna>` for stable threads, or `human:<id>` for a human operator.");
+      process.exit(1);
+    }
+
+    // Keep sender fresh in session listing while chatting.
+    upsertSession(sessionId, {
+      name: fromName,
+      dna: fromDna,
+    });
+
+    if (targetSession) {
+      writeMessages(resolvedTarget, [{
+        from: sessionId,
+        fromName,
+        text,
+        ts: Date.now(),
+      }]);
+    }
+
+    appendWorkspaceMessage({
+      kind: "dm",
+      from: sessionId,
+      fromName,
+      fromDna,
+      target: resolvedTarget,
+      targetName: targetSession?.name ?? (isHumanTarget ? "Human Operator" : undefined),
+      targetDna,
+      text,
+    });
+
     console.log(`Sent to ${target}: "${text}"`);
     process.exit(0);
   }
 
-  if (verb === "chat") {
-    const { writeCommand } = await import("./engine/ipc.js");
-    const sessionId = process.env.TERMLINGS_SESSION_ID;
-    if (!sessionId) {
-      console.error("Error: TERMLINGS_SESSION_ID env var not set");
-      process.exit(1);
-    }
-    const text = positional.slice(2).join(" ");
-    if (!text) {
-      console.error("Usage: termlings action chat <message>");
-      process.exit(1);
-    }
-    writeCommand(sessionId, { action: "chat", text, name: _agentName, dna: _agentDna, ts: Date.now() });
-    console.log(`Chat: "${text}"`);
-    process.exit(0);
-  }
-
-
-  if (verb === "place") {
-    const { writeCommand } = await import("./engine/ipc.js");
-    const { OBJECT_DEFS, renderObjectToTerminal } = await import("./engine/objects.js");
-    const { loadCustomObjects } = await import("./engine/object-loader.js");
-    const customObjects = loadCustomObjects("default");
-    const sessionId = process.env.TERMLINGS_SESSION_ID;
-    if (!sessionId) {
-      console.error("Error: TERMLINGS_SESSION_ID env var not set");
-      process.exit(1);
-    }
-
-    let objectType = positional[2];
-    const coord = positional[3];
-    const textContent = opts.text;
-
-    // Handle --text flag: create sign on the fly
-    if (textContent) {
-      const style = opts.style || "small";
-      const { createBracketedLabel, createFramedLabel, renderTextToCells, generateSignWithTermfont } =
-        await import("./engine/text-renderer.js");
-      const { writeFileSync, mkdirSync } = await import("fs");
-      const { join, resolve } = await import("path");
-
-      try {
-        let objectDef;
-        if (style === "small") {
-          const cells = createBracketedLabel(textContent, [200, 180, 150]);
-          objectDef = {
-            name: `sign-${textContent.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`,
-            width: cells[0]?.length || 1,
-            height: cells.length,
-            cells: cells,
-          };
-        } else if (style === "medium") {
-          const { createFramedLabel } = await import("./engine/text-renderer.js");
-          const cells = createFramedLabel(textContent, [200, 180, 150]);
-          objectDef = {
-            name: `sign-${textContent.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`,
-            width: cells[0]?.length || 1,
-            height: cells.length,
-            cells: cells,
-          };
-        } else if (style === "large") {
-          const cells = renderTextToCells(textContent, [100, 200, 100]);
-          objectDef = {
-            name: `sign-${textContent.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`,
-            width: cells[0]?.length || 1,
-            height: cells.length,
-            cells: cells,
-          };
-        } else {
-          objectDef = await generateSignWithTermfont(textContent, style as "block" | "bubble" | "thin", [100, 200, 100]);
-        }
-
-        // Save to .termlings/objects/
-        const objectsDir = resolve(".termlings", "objects");
-        mkdirSync(objectsDir, { recursive: true });
-        const filePath = join(objectsDir, `${objectDef.name}.json`);
-        writeFileSync(filePath, JSON.stringify(objectDef, null, 2));
-
-        objectType = objectDef.name;
-        console.log(`✓ Created sign: ${objectType}`);
-      } catch (err) {
-        console.error(`Failed to create sign: ${err instanceof Error ? err.message : String(err)}`);
-        process.exit(1);
-      }
-    }
-
-    if (!objectType) {
-      console.error("Usage: termlings action place <objectType> <x>,<y>");
-      console.error("       termlings action place sign <x>,<y> --text 'Hello' --style [small|medium|large|block|bubble|thin]");
-      process.exit(1);
-    }
-    let x: number | undefined;
-    let y: number | undefined;
-    if (coord && coord.includes(",")) {
-      const [xStr, yStr] = coord.split(",");
-      x = parseInt(xStr!, 10);
-      y = parseInt(yStr!, 10);
-      if (isNaN(x) || isNaN(y)) {
-        console.error("Error: coordinates must be numbers");
-        process.exit(1);
-      }
-    }
-
-    // Handle --preview flag
-    if (flags.has("preview")) {
-      const color = opts.color
-        ? opts.color.split(",").map((c: string) => parseInt(c.trim(), 10)) as [number, number, number]
-        : undefined;
-
-      // Check both built-in and custom objects
-      const allDefs = { ...OBJECT_DEFS, ...customObjects };
-      if (!allDefs[objectType]) {
-        console.error(`Unknown object type: ${objectType}`);
-        console.error(`Use 'termlings action list-objects' to see available types`);
-        process.exit(1);
-      }
-
-      const colorLabel = color ? ` [color: rgb(${color.join(", ")})]` : "";
-      const coordLabel = x !== undefined ? ` at (${x}, ${y})` : "";
-      console.log(`\nPreview: ${objectType}${colorLabel}${coordLabel}\n`);
-      console.log(renderObjectToTerminal(objectType, color, allDefs));
-      console.log();
-      console.log(`To place this object, run:`);
-      const colorOpt = color ? ` --color "${color.join(",")}"` : "";
-      const coordStr = x !== undefined ? ` ${x},${y}` : "";
-      console.log(`  termlings action place ${objectType}${coordStr}${colorOpt}`);
-      console.log();
-      process.exit(0);
-    }
-
-    // If coordinates provided, walk nearby first, then place
-    if (x !== undefined && y !== undefined) {
-      // Walk to a nearby location (above the placement) so agent can reach it
-      const walkX = x;
-      const walkY = Math.max(0, y - 5); // Walk 5 cells above placement location
-      writeCommand(sessionId, { action: "walk", x: walkX, y: walkY, name: _agentName, dna: _agentDna, ts: Date.now() });
-      // Queue the place command to follow after walking
-      writeCommand(sessionId, { action: "place", objectType, x, y, name: _agentName, dna: _agentDna, ts: Date.now() + 1 });
-      console.log(`Walk queued to (${walkX},${walkY}) near (${x},${y}), then place ${objectType}`);
-    } else {
-      // No coordinates: place at current location
-      writeCommand(sessionId, { action: "place", objectType, name: _agentName, dna: _agentDna, ts: Date.now() });
-      console.log(`Place command sent: ${objectType}`);
-    }
-    process.exit(0);
-  }
-
-  // Inspect existing object JSON
-  if (verb === "inspect-object") {
-    const { OBJECT_DEFS } = await import("./engine/objects.js");
-    const { loadCustomObjects } = await import("./engine/object-loader.js");
-    const objectType = positional[2];
-    if (!objectType) {
-      console.error("Usage: termlings action inspect-object <type>");
-      process.exit(1);
-    }
-
-    // Check both built-in and custom objects
-    const customObjects = loadCustomObjects("default");
-    const allObjects = { ...OBJECT_DEFS, ...customObjects };
-    const def = allObjects[objectType];
-    if (!def) {
-      console.error(`Unknown object type: ${objectType}`);
-      console.error(`Available types: ${Object.keys(allObjects).join(", ")}`);
-      process.exit(1);
-    }
-
-    // Format for display
-    const cellsForDisplay = def.cells.map(row =>
-      row.map(cell =>
-        cell === null ? null : {
-          ch: cell.ch,
-          fg: cell.fg,
-          bg: cell.bg,
-          walkable: cell.walkable
-        }
-      )
-    );
-
-    const output = {
-      name: def.name,
-      width: def.width,
-      height: def.height,
-      cells: cellsForDisplay
-    };
-
-    console.log(JSON.stringify(output, null, 2));
-    process.exit(0);
-  }
-
-  // Create custom object
-  if (verb === "create-object") {
-    const { createCustomObject } = await import("./engine/object-loader.js");
-    const objectName = positional[2];
-    const jsonString = positional[3];
-
-    if (!objectName || !jsonString) {
-      console.error("Usage: termlings action create-object <name> <json-definition>");
-      console.error("Example: termlings action create-object my-bench '{\"width\": 5, \"height\": 2, \"cells\": ...}'");
-      process.exit(1);
-    }
-
-    let definition: unknown;
-    try {
-      definition = JSON.parse(jsonString);
-    } catch (e) {
-      console.error(`Invalid JSON: ${e}`);
-      process.exit(1);
-    }
-
-    const result = createCustomObject(objectName, definition, "default");
-    if (!result.success) {
-      console.error(`Error creating object: ${result.error}`);
-      process.exit(1);
-    }
-
-    console.log(`✓ Created custom object: ${objectName}`);
-    console.log(`You can now use: termlings action place ${objectName} <x>,<y>`);
-    process.exit(0);
-  }
-
-  // Create a sign with text (various styles and fonts)
-  if (verb === "create-sign") {
-    const text = positional[2];
-    const style = flags.get("style") || "small";
-
-    if (!text) {
-      console.error("Usage: termlings action create-sign <text> --style [small|medium|large|block|bubble|thin]");
-      console.error("Styles:");
-      console.error("  small     [Text] with brackets (desk nameplates)");
-      console.error("  medium    Framed box around text");
-      console.error("  large     Simple blocky pixel font");
-      console.error("  block     Fancy termfont block font ███");
-      console.error("  bubble    Rounded termfont bubbles");
-      console.error("  thin      Thin termfont style");
-      process.exit(1);
-    }
-
-    const validStyles = ["small", "medium", "large", "block", "bubble", "thin"];
-    if (!validStyles.includes(style)) {
-      console.error(`Style must be one of: ${validStyles.join(", ")}`);
-      process.exit(1);
-    }
-
-    const { createBracketedLabel, createFramedLabel, renderTextToCells, generateSignWithTermfont } =
-      await import("./engine/text-renderer.js");
-    const { writeFileSync, mkdirSync } = await import("fs");
-    const { join, resolve } = await import("path");
-
-    // Generate object definition based on style
-    let objectDef;
-
-    try {
-      if (style === "small") {
-        const cells = createBracketedLabel(text, [200, 180, 150]);
-        const signName = `sign-${text.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`;
-        objectDef = {
-          name: signName,
-          width: cells[0]?.length || 1,
-          height: cells.length,
-          cells: cells,
-        };
-      } else if (style === "medium") {
-        const cells = createFramedLabel(text, [200, 180, 150]);
-        const signName = `sign-${text.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`;
-        objectDef = {
-          name: signName,
-          width: cells[0]?.length || 1,
-          height: cells.length,
-          cells: cells,
-        };
-      } else if (style === "large") {
-        const cells = renderTextToCells(text, [100, 200, 100]);
-        const signName = `sign-${text.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}`;
-        objectDef = {
-          name: signName,
-          width: cells[0]?.length || 1,
-          height: cells.length,
-          cells: cells,
-        };
-      } else {
-        // Use termfont for block, bubble, thin
-        const termfontStyle = style as "block" | "bubble" | "thin";
-        objectDef = await generateSignWithTermfont(text, termfontStyle, [100, 200, 100]);
-      }
-
-      // Save to .termlings/objects/
-      const objectsDir = resolve(".termlings", "objects");
-      mkdirSync(objectsDir, { recursive: true });
-      const filePath = join(objectsDir, `${objectDef.name}.json`);
-
-      writeFileSync(filePath, JSON.stringify(objectDef, null, 2));
-
-      console.log(`✓ Created sign: ${objectDef.name}`);
-      console.log(`  Style: ${style}`);
-      console.log(`  Size: ${objectDef.width}×${objectDef.height}`);
-      console.log(`  File: .termlings/objects/${objectDef.name}.json`);
-      console.log(`\nPlace it with: termlings action place ${objectDef.name} <x>,<y>`);
-      process.exit(0);
-    } catch (err) {
-      console.error(`Failed to create sign: ${err instanceof Error ? err.message : String(err)}`);
-      process.exit(1);
-    }
-  }
-
-  // Edit an existing sign's text
-  if (verb === "edit-sign") {
-    const signName = positional[2];
-    const newText = positional[3];
-    const style = flags.get("style");
-
-    if (!signName || !newText) {
-      console.error("Usage: termlings action edit-sign <sign-name> <new-text> [--style small|medium|large]");
-      console.error("Examples:");
-      console.error("  termlings action edit-sign sign-tommy 'Thomas'");
-      console.error("  termlings action edit-sign sign-welcome 'Hello!' --style large");
-      process.exit(1);
-    }
-
-    const { createBracketedLabel, createFramedLabel, renderTextToCells } =
-      await import("./engine/text-renderer.js");
-    const { readFileSync, writeFileSync } = await import("fs");
-    const { join, resolve } = await import("path");
-
-    const filePath = resolve(".termlings", "objects", `${signName}.json`);
-
-    // Read existing sign to get current style if not specified
-    let currentStyle = style;
-    if (!currentStyle) {
-      try {
-        const existing = JSON.parse(readFileSync(filePath, "utf-8"));
-        // Infer style from height: height 1 = small, height 3 = medium, height > 3 = large
-        if (existing.height === 1) {
-          currentStyle = "small";
-        } else if (existing.height === 3) {
-          currentStyle = "medium";
-        } else {
-          currentStyle = "large";
-        }
-      } catch {
-        currentStyle = "small";
-      }
-    }
-
-    if (!["small", "medium", "large"].includes(currentStyle)) {
-      console.error("Style must be: small, medium, or large");
-      process.exit(1);
-    }
-
-    // Generate new cells based on style
-    let cells;
-    const fgColor = [200, 180, 150];
-
-    if (currentStyle === "small") {
-      cells = createBracketedLabel(newText, fgColor);
-    } else if (currentStyle === "medium") {
-      cells = createFramedLabel(newText, fgColor);
-    } else {
-      cells = renderTextToCells(newText, [100, 200, 100]);
-    }
-
-    // Update object definition
-    const objectDef = {
-      name: signName,
-      width: cells[0]?.length || 1,
-      height: cells.length,
-      cells: cells,
-    };
-
-    writeFileSync(filePath, JSON.stringify(objectDef, null, 2));
-
-    console.log(`✓ Updated sign: ${signName}`);
-    console.log(`  New text: ${newText}`);
-    console.log(`  Style: ${currentStyle}`);
-    console.log(`  Size: ${cells[0]?.length || 1}×${cells.length}`);
-    process.exit(0);
-  }
-
-  // List all objects (built-in and custom)
-  if (verb === "list-objects") {
-    const { loadCustomObjects } = await import("./engine/object-loader.js");
-    const customObjects = loadCustomObjects("default");
-
-    if (Object.keys(customObjects).length > 0) {
-      console.log("\n✨ Custom Objects:\n");
-      for (const [name, def] of Object.entries(customObjects)) {
-        console.log(`  • ${name.padEnd(15)} (${def.width}×${def.height})`);
-      }
-      console.log();
-    } else {
-      console.log("\nNo objects yet. Agents can create custom objects with:");
-      console.log("  termlings action create-object <name> '<json>'");
-      console.log();
-    }
-
-    process.exit(0);
-  }
-
-  if (verb === "cron") {
-    const { getAgentCrons, getCron, formatCron, formatCronList } = await import("./engine/cron.js");
+  if (verb === "calendar") {
+    const { getAgentCalendarEvents, getCalendarEvent, formatCalendarEvent, formatAgentCalendarEventList } = await import("./engine/calendar.js");
     const sessionId = process.env.TERMLINGS_SESSION_ID;
 
     if (!sessionId) {
@@ -1060,45 +305,29 @@ Commands:
     }
 
     const subcommand = positional[2];
-    const cronId = positional[3];
+    const eventId = positional[3];
 
     if (subcommand === "list") {
-      const crons = getAgentCrons(sessionId);
-      if (crons.length === 0) {
-        console.log("No scheduled cron jobs for you");
-      } else {
-        const lines: string[] = [];
-        lines.push(`⏰ Your Scheduled Jobs (${crons.length}):`);
-        lines.push("");
-        for (const cron of crons) {
-          const status = cron.enabled ? "✓" : "✗";
-          const nextDate = cron.nextRun ? new Date(cron.nextRun).toLocaleString() : "unknown";
-          const msg = cron.message.substring(0, 50) + (cron.message.length > 50 ? "..." : "");
-          lines.push(`${status} [${cron.id}] ${msg}`);
-          lines.push(`   Next: ${nextDate}`);
-        }
-        lines.push("");
-        lines.push("Use: termlings action cron show <id> - See full details");
-        console.log(lines.join("\n"));
-      }
+      const events = getAgentCalendarEvents(sessionId);
+      console.log(formatAgentCalendarEventList(events));
       process.exit(0);
     }
 
     if (subcommand === "show") {
-      if (!cronId) {
-        console.error("Usage: termlings action cron show <cron-id>");
+      if (!eventId) {
+        console.error("Usage: termlings action calendar show <event-id>");
         process.exit(1);
       }
-      const cron = getCron(cronId);
-      if (!cron) {
-        console.error(`Cron not found: ${cronId}`);
+      const event = getCalendarEvent(eventId);
+      if (!event) {
+        console.error(`Calendar event not found: ${eventId}`);
         process.exit(1);
       }
-      console.log(formatCron(cron));
+      console.log(formatCalendarEvent(event));
       process.exit(0);
     }
 
-    console.error("Usage: termlings action cron <list|show>");
+    console.error("Usage: termlings action calendar <list|show>");
     process.exit(1);
   }
 
@@ -1184,169 +413,191 @@ Commands:
     process.exit(1);
   }
 
-  if (verb === "destroy") {
-    const { writeCommand } = await import("./engine/ipc.js");
-    const sessionId = process.env.TERMLINGS_SESSION_ID;
-    if (!sessionId) {
-      console.error("Error: TERMLINGS_SESSION_ID env var not set");
-      process.exit(1);
-    }
-    const coord = positional[2];
-    if (!coord || !coord.includes(",")) {
-      console.error("Usage: termlings action destroy <x>,<y>");
-      process.exit(1);
-    }
-    const [xStr, yStr] = coord.split(",");
-    const x = parseInt(xStr!, 10);
-    const y = parseInt(yStr!, 10);
-    if (isNaN(x) || isNaN(y)) {
-      console.error("Error: coordinates must be numbers");
-      process.exit(1);
-    }
-    writeCommand(sessionId, { action: "destroy", x, y, name: _agentName, dna: _agentDna, ts: Date.now() });
-    console.log(`Destroy command sent at (${x},${y})`);
-    process.exit(0);
-  }
-
   console.error(`Unknown action: ${verb}`);
   process.exit(1);
 }
 
-// 2a. Owner cron management: termlings cron <create|list|show|edit|delete|enable|disable>
-if (positional[0] === "cron") {
-  const { createCronJob, getAllCrons, getAgentCrons, getCron, updateCron, deleteCron, toggleCron, formatCron, formatCronList, formatSchedule } = await import("./engine/cron.js");
+// 2a. Owner calendar management: termlings calendar <create|list|show|edit|delete|enable|disable>
+if (positional[0] === "calendar") {
+  const { createCalendarEvent, getAllCalendarEvents, getCalendarEvent, updateCalendarEvent, deleteCalendarEvent, toggleCalendarEvent, formatCalendarEvent, formatCalendarEventList, formatRecurrence } = await import("./engine/calendar.js");
 
   const subcommand = positional[1];
 
   if (subcommand === "create") {
-    const agentId = positional[2];
-    const schedule = positional[3];
-    const message = positional.slice(4).join(" ");
-
-    if (!agentId || !schedule || !message) {
-      console.error("Usage: termlings cron create <agent-id> <schedule> <message...>");
+    // Usage: termlings calendar create <agent-id> [<agent-id> ...] <title> <start-iso-time> <end-iso-time> [recurrence]
+    // We need at least: agent-id, title, start, end
+    if (positional.length < 6) {
+      console.error("Usage: termlings calendar create <agent-id> [<agent-id> ...] <title> <start-iso-time> <end-iso-time> [recurrence]");
+      console.error("Recurrence: none (default), hourly, daily, weekly, monthly");
       console.error("Examples:");
-      console.error("  termlings cron create tl-alice hourly \"Check for new data\"");
-      console.error("  termlings cron create tl-bob \"0 9 * * *\" \"Good morning, process today's files\"");
-      console.error("  termlings cron create tl-carol \"daily@14:30\" \"Run validation tests\"");
+      console.error("  termlings calendar create tl-alice \"Team Standup\" \"2026-03-01T09:00:00Z\" \"2026-03-01T10:00:00Z\" daily");
+      console.error("  termlings calendar create tl-alice tl-bob \"Planning\" \"2026-03-01T14:00:00Z\" \"2026-03-01T15:30:00Z\"");
       process.exit(1);
     }
 
-    // Get agent name from session if available
-    const agentName = positional[2] || "Unknown";
-    const cron = createCronJob(agentId, agentName, schedule, message, "default");
+    // Parse positional args: [create, ...agents, title, start, end, [recurrence]]
+    let agents: string[] = [];
+    let titleIdx = 2;
 
-    console.log(`✓ Cron job created: ${cron.id}`);
-    console.log(`Schedule: ${formatSchedule(cron.schedule)}`);
-    console.log(`Agent: ${agentName}`);
-    console.log(`Message: "${message}"`);
-    process.exit(0);
+    // Collect agent IDs (they start with "tl-")
+    while (titleIdx < positional.length && positional[titleIdx]?.startsWith("tl-")) {
+      agents.push(positional[titleIdx]);
+      titleIdx++;
+    }
+
+    if (agents.length === 0) {
+      console.error("Error: At least one agent ID required (e.g., tl-alice)");
+      process.exit(1);
+    }
+
+    const title = positional[titleIdx];
+    const startIso = positional[titleIdx + 1];
+    const endIso = positional[titleIdx + 2];
+    const recurrence = (positional[titleIdx + 3] || "none") as any;
+
+    if (!title || !startIso || !endIso) {
+      console.error("Error: Missing title, start time, or end time");
+      process.exit(1);
+    }
+
+    try {
+      const startTime = new Date(startIso).getTime();
+      const endTime = new Date(endIso).getTime();
+
+      if (isNaN(startTime) || isNaN(endTime)) {
+        console.error("Error: Invalid date format (use ISO format like 2026-03-01T09:00:00Z)");
+        process.exit(1);
+      }
+
+      const event = createCalendarEvent(title, "", agents, startTime, endTime, recurrence);
+      console.log(`✓ Calendar event created: ${event.id}`);
+      console.log(`Title: ${title}`);
+      console.log(`Assigned to: ${agents.join(", ")}`);
+      console.log(`Recurrence: ${formatRecurrence(event.recurrence)}`);
+      console.log(`Starts: ${new Date(startTime).toLocaleString()}`);
+      process.exit(0);
+    } catch (e) {
+      console.error(`Error creating event: ${e}`);
+      process.exit(1);
+    }
   }
 
   if (subcommand === "list") {
     const agentId = positional[2] === "--agent" ? positional[3] : null;
-    const crons = agentId ? getAgentCrons(agentId) : getAllCrons();
+    const events = agentId
+      ? (await import("./engine/calendar.js")).getAgentCalendarEvents(agentId)
+      : getAllCalendarEvents();
 
-    console.log(formatCronList(crons));
+    console.log(formatCalendarEventList(events));
     process.exit(0);
   }
 
   if (subcommand === "show") {
-    const cronId = positional[2];
-    if (!cronId) {
-      console.error("Usage: termlings cron show <cron-id>");
+    const eventId = positional[2];
+    if (!eventId) {
+      console.error("Usage: termlings calendar show <event-id>");
       process.exit(1);
     }
 
-    const cron = getCron(cronId, "default");
-    if (!cron) {
-      console.error(`Cron not found: ${cronId}`);
+    const event = getCalendarEvent(eventId);
+    if (!event) {
+      console.error(`Calendar event not found: ${eventId}`);
       process.exit(1);
     }
 
-    console.log(formatCron(cron));
+    console.log(formatCalendarEvent(event));
     process.exit(0);
   }
 
   if (subcommand === "edit") {
-    const cronId = positional[2];
-    if (!cronId) {
-      console.error("Usage: termlings cron edit <cron-id> [--schedule SCHED] [--message MSG]");
+    const eventId = positional[2];
+    if (!eventId) {
+      console.error("Usage: termlings calendar edit <event-id> [--title TITLE] [--description DESC] [--recurrence REC] [--agents AGENT...]");
       process.exit(1);
     }
 
     const updates: any = {};
-    for (let i = 3; i < positional.length; i += 2) {
-      if (positional[i] === "--schedule") {
-        updates.schedule = positional[i + 1];
-      } else if (positional[i] === "--message") {
-        updates.message = positional.slice(i + 1).join(" ");
-        break;
+    for (let i = 3; i < positional.length; i++) {
+      if (positional[i] === "--title" && i + 1 < positional.length) {
+        updates.title = positional[++i];
+      } else if (positional[i] === "--description" && i + 1 < positional.length) {
+        updates.description = positional[++i];
+      } else if (positional[i] === "--recurrence" && i + 1 < positional.length) {
+        updates.recurrence = positional[++i];
+      } else if (positional[i] === "--agents") {
+        const agents: string[] = [];
+        i++;
+        while (i < positional.length && !positional[i]?.startsWith("--")) {
+          agents.push(positional[i]);
+          i++;
+        }
+        i--; // Back up one since the loop will increment
+        updates.assignedAgents = agents;
       }
     }
 
-    const cron = updateCron(cronId, updates);
-    if (!cron) {
-      console.error(`Cron not found: ${cronId}`);
+    const event = updateCalendarEvent(eventId, updates);
+    if (!event) {
+      console.error(`Calendar event not found: ${eventId}`);
       process.exit(1);
     }
 
-    console.log(`✓ Cron job updated`);
-    console.log(formatCron(cron));
+    console.log(`✓ Calendar event updated`);
+    console.log(formatCalendarEvent(event));
     process.exit(0);
   }
 
   if (subcommand === "delete") {
-    const cronId = positional[2];
-    if (!cronId) {
-      console.error("Usage: termlings cron delete <cron-id>");
+    const eventId = positional[2];
+    if (!eventId) {
+      console.error("Usage: termlings calendar delete <event-id>");
       process.exit(1);
     }
 
-    if (deleteCron(cronId)) {
-      console.log(`✓ Cron job deleted`);
+    if (deleteCalendarEvent(eventId)) {
+      console.log(`✓ Calendar event deleted`);
     } else {
-      console.error(`Cron not found: ${cronId}`);
+      console.error(`Calendar event not found: ${eventId}`);
       process.exit(1);
     }
     process.exit(0);
   }
 
   if (subcommand === "enable") {
-    const cronId = positional[2];
-    if (!cronId) {
-      console.error("Usage: termlings cron enable <cron-id>");
+    const eventId = positional[2];
+    if (!eventId) {
+      console.error("Usage: termlings calendar enable <event-id>");
       process.exit(1);
     }
 
-    const cron = toggleCron(cronId, true);
-    if (!cron) {
-      console.error(`Cron not found: ${cronId}`);
+    const event = toggleCalendarEvent(eventId, true);
+    if (!event) {
+      console.error(`Calendar event not found: ${eventId}`);
       process.exit(1);
     }
 
-    console.log(`✓ Cron job enabled`);
+    console.log(`✓ Calendar event enabled`);
     process.exit(0);
   }
 
   if (subcommand === "disable") {
-    const cronId = positional[2];
-    if (!cronId) {
-      console.error("Usage: termlings cron disable <cron-id>");
+    const eventId = positional[2];
+    if (!eventId) {
+      console.error("Usage: termlings calendar disable <event-id>");
       process.exit(1);
     }
 
-    const cron = toggleCron(cronId, false);
-    if (!cron) {
-      console.error(`Cron not found: ${cronId}`);
+    const event = toggleCalendarEvent(eventId, false);
+    if (!event) {
+      console.error(`Calendar event not found: ${eventId}`);
       process.exit(1);
     }
 
-    console.log(`✓ Cron job disabled`);
+    console.log(`✓ Calendar event disabled`);
     process.exit(0);
   }
 
-  console.error("Usage: termlings cron <create|list|show|edit|delete|enable|disable>");
+  console.error("Usage: termlings calendar <create|list|show|edit|delete|enable|disable>");
   process.exit(1);
 }
 
@@ -1432,32 +683,291 @@ if (positional[0] === "task") {
   process.exit(1);
 }
 
-// 2b-scheduler. Run cron scheduler: termlings scheduler [--daemon]
+// 2b-scheduler. Run calendar scheduler: termlings scheduler [--daemon]
 if (positional[0] === "scheduler") {
-  const { executeScheduledCrons, formatExecutionResults, startScheduler } = await import("./engine/cron-scheduler.js");
+  const { executeScheduledCalendarEvents, formatExecutionResults, startScheduler } = await import("./engine/calendar-scheduler.js");
 
   if (flags.has("daemon")) {
     // Run as background daemon (keeps running)
-    console.log("⏰ Starting cron scheduler daemon (press Ctrl+C to stop)");
-    const interval = startScheduler("default", 60); // Check every 60 seconds
+    console.log("📅 Starting calendar scheduler daemon (press Ctrl+C to stop)");
+    const interval = startScheduler(60); // Check every 60 seconds
 
     // Handle graceful shutdown
     process.on("SIGINT", () => {
-      console.log("\n⏰ Stopping cron scheduler");
+      console.log("\n📅 Stopping calendar scheduler");
       clearInterval(interval);
       process.exit(0);
     });
   } else {
     // Single check
-    const results = executeScheduledCrons("default");
+    const results = executeScheduledCalendarEvents();
     if (results.length > 0) {
       console.log(formatExecutionResults(results));
     } else {
-      console.log("No cron jobs to execute");
+      console.log("No calendar events to execute");
     }
     process.exit(0);
   }
 }
+
+// 2c. Browser management: termlings browser <subcommand>
+if (positional[0] === "browser") {
+  const {
+    initializeBrowserDirs,
+    getBrowserConfig,
+    startBrowser,
+    stopBrowser,
+    isBrowserRunning,
+    logBrowserActivity,
+    readProcessState,
+  } = await import("./engine/browser.js");
+  const { BrowserClient } = await import("./engine/browser-client.js");
+
+  const subcommand = positional[1];
+
+  if (!subcommand) {
+    console.error(
+      "Usage: termlings browser <init|start|stop|status|navigate|screenshot|type|click|extract|cookies>"
+    );
+    process.exit(1);
+  }
+
+  // Control subcommands (no server needed)
+  if (subcommand === "init") {
+    try {
+      initializeBrowserDirs();
+      console.log("✓ Browser initialized. Profile directory created.");
+      console.log("Install PinchTab: npm install -g pinchtab");
+      process.exit(0);
+    } catch (e) {
+      console.error(`Error initializing browser: ${e}`);
+      process.exit(1);
+    }
+  }
+
+  if (subcommand === "start") {
+    try {
+      const wasRunning = await isBrowserRunning();
+      if (wasRunning) {
+        console.log("✓ Browser already running");
+        process.exit(0);
+      }
+
+      const { pid, port } = await startBrowser();
+      console.log(`✓ Browser started (PID ${pid}, port ${port})`);
+      console.log(`Profile: .termlings/browser/profile/`);
+      process.exit(0);
+    } catch (e) {
+      console.error(`Error starting browser: ${e}`);
+      process.exit(1);
+    }
+  }
+
+  if (subcommand === "stop") {
+    try {
+      const wasRunning = await isBrowserRunning();
+      if (!wasRunning) {
+        console.log("Browser not running");
+        process.exit(0);
+      }
+
+      await stopBrowser();
+      console.log("✓ Browser stopped");
+      process.exit(0);
+    } catch (e) {
+      console.error(`Error stopping browser: ${e}`);
+      process.exit(1);
+    }
+  }
+
+  if (subcommand === "status") {
+    try {
+      const running = await isBrowserRunning();
+      const state = readProcessState();
+
+      if (!running) {
+        console.log("Browser: stopped");
+        process.exit(0);
+      }
+
+      const uptime = state?.startedAt ? Math.floor((Date.now() - state.startedAt) / 1000) : 0;
+      console.log(`Browser: running`);
+      console.log(`  Port: ${state?.port}`);
+      console.log(`  PID: ${state?.pid}`);
+      console.log(`  Uptime: ${uptime}s`);
+      if (state?.url) {
+        console.log(`  URL: ${state.url}`);
+      }
+      process.exit(0);
+    } catch (e) {
+      console.error(`Error checking status: ${e}`);
+      process.exit(1);
+    }
+  }
+
+  // Special commands that work without running server
+  if (subcommand === "request-help") {
+    const { requestOperatorIntervention } = await import("./engine/browser.js");
+    const message = positional.slice(2).join(" ");
+    if (!message) {
+      console.error("Usage: termlings browser request-help <message>");
+      process.exit(1);
+    }
+    await requestOperatorIntervention(message);
+    process.exit(0);
+  }
+
+  // Browser interaction subcommands (requires running server)
+  const state = readProcessState();
+  if (!state || !state.pid) {
+    console.error("Browser not running. Use: termlings browser start");
+    process.exit(1);
+  }
+
+  const client = new BrowserClient(state.port);
+
+  try {
+    if (subcommand === "navigate") {
+      const url = positional[2];
+      if (!url) {
+        console.error("Usage: termlings browser navigate <url>");
+        process.exit(1);
+      }
+      await client.navigate(url);
+      await logBrowserActivity("navigate", [url], "success");
+      console.log(`✓ Navigated to ${url}`);
+      process.exit(0);
+    }
+
+    if (subcommand === "screenshot") {
+      const base64 = await client.screenshot();
+      await logBrowserActivity("screenshot", [], "success");
+      console.log(base64.slice(0, 100) + "...");
+      process.exit(0);
+    }
+
+    if (subcommand === "type") {
+      const text = positional.slice(2).join(" ");
+      if (!text) {
+        console.error("Usage: termlings browser type <text>");
+        process.exit(1);
+      }
+      await client.typeText(text);
+      await logBrowserActivity("type", [text], "success");
+      console.log(`✓ Typed: ${text}`);
+      process.exit(0);
+    }
+
+    if (subcommand === "click") {
+      const selector = positional[2];
+      if (!selector) {
+        console.error("Usage: termlings browser click <selector>");
+        process.exit(1);
+      }
+      await client.clickSelector(selector);
+      await logBrowserActivity("click", [selector], "success");
+      console.log(`✓ Clicked: ${selector}`);
+      process.exit(0);
+    }
+
+    if (subcommand === "extract") {
+      const text = await client.extractText();
+      await logBrowserActivity("extract", [], "success");
+      console.log(text);
+      process.exit(0);
+    }
+
+    if (subcommand === "cookies") {
+      const action = positional[2] || "list";
+      if (action === "list") {
+        const cookies = await client.getCookies();
+        await logBrowserActivity("cookies", ["list"], "success");
+        console.log(JSON.stringify(cookies, null, 2));
+        process.exit(0);
+      }
+      console.error("Usage: termlings browser cookies list");
+      process.exit(1);
+    }
+
+    if (subcommand === "check-login") {
+      const { checkIfLoginRequired } = await import("./engine/browser.js");
+      const needsLogin = await checkIfLoginRequired(client);
+      await logBrowserActivity("check-login", [], "success");
+      if (needsLogin) {
+        console.log("⚠️  Login required on current page");
+        process.exit(1);
+      } else {
+        console.log("✓ Page does not appear to require login");
+        process.exit(0);
+      }
+    }
+
+    if (subcommand === "patterns") {
+      const {
+        initializeQueryPatterns,
+        listPatterns,
+        getPattern,
+        savePattern,
+        resolvePattern,
+      } = await import("./engine/query-patterns.js");
+
+      const action = positional[2];
+
+      if (!action) {
+        console.error("Usage: termlings browser patterns <list|view|execute|save>");
+        process.exit(1);
+      }
+
+      if (action === "list") {
+        initializeQueryPatterns();
+        const patterns = listPatterns();
+        if (patterns.length === 0) {
+          console.log("📁 No patterns yet. Create one with: termlings browser patterns save");
+          process.exit(0);
+        }
+        console.log(`📋 ${patterns.length} patterns available:\n`);
+        patterns.forEach((p) => {
+          console.log(`  ${p.id.padEnd(20)} - ${p.name}`);
+          console.log(`    Sites: ${p.sites.join(", ")}`);
+          if (p.added_by) {
+            console.log(`    Added by: ${p.added_by}`);
+          }
+        });
+        process.exit(0);
+      }
+
+      if (action === "view") {
+        const patternId = positional[3];
+        if (!patternId) {
+          console.error("Usage: termlings browser patterns view <pattern-id>");
+          process.exit(1);
+        }
+        const pattern = getPattern(patternId);
+        if (!pattern) {
+          console.error(`Pattern not found: ${patternId}`);
+          process.exit(1);
+        }
+        console.log(JSON.stringify(pattern, null, 2));
+        process.exit(0);
+      }
+
+      console.error(`Unknown patterns action: ${action}`);
+      console.error("Usage: termlings browser patterns <list|view|execute|save>");
+      process.exit(1);
+    }
+
+    console.error(`Unknown browser command: ${subcommand}`);
+    console.error(
+      "Usage: termlings browser <init|start|stop|status|navigate|screenshot|type|click|extract|cookies|check-login|request-help|patterns>"
+    );
+    process.exit(1);
+  } catch (e) {
+    await logBrowserActivity(subcommand, positional.slice(2), "error", String(e));
+    console.error(`Error: ${e}`);
+    process.exit(1);
+  }
+}
+
 
 // 3. Render subcommand: termlings render [avatar|object] [dna|name|type] [options]
 if (positional[0] === "render") {
@@ -1786,33 +1296,10 @@ if (positional[0] === "create") {
 if (positional[0] === "list-agents") {
   const { discoverLocalAgents } = await import("./agents/discover.js");
   const { mergeSavedWithOnline, formatAgentListCompact, formatAgentListFull } = await import("./engine/agent-listing.js");
-  const { readdirSync, readFileSync, existsSync } = await import("fs");
-  const { join } = await import("path");
+  const { listSessions } = await import("./workspace/state.js");
 
   const saved = discoverLocalAgents();
-
-  // Get online agents from sessions directory
-  const online: any[] = [];
-  const sessionsDir = join(process.cwd(), ".termlings", "sessions");
-  if (existsSync(sessionsDir)) {
-    for (const file of readdirSync(sessionsDir)) {
-      if (!file.endsWith(".json")) continue;
-      try {
-        const data = readFileSync(join(sessionsDir, file), "utf8");
-        const session = JSON.parse(data);
-        online.push({
-          sessionId: session.sessionId,
-          name: session.name,
-          dna: session.dna,
-          x: session.x,
-          y: session.y,
-          footY: session.footY,
-        });
-      } catch {
-        // Skip invalid session files
-      }
-    }
-  }
+  const online = listSessions();
 
   const merged = mergeSavedWithOnline(saved, online);
 
@@ -1828,30 +1315,53 @@ if (positional[0] === "list-agents") {
   process.exit(0);
 }
 
+// 5b. Initialize workspace folder manually: termlings init [--force]
+if (positional[0] === "init") {
+  const forceSetup = flags.has("force");
+  if (!forceSetup) {
+    const { existsSync } = await import("fs");
+    const { join } = await import("path");
+    if (existsSync(join(process.cwd(), ".termlings"))) {
+      console.log("Workspace already exists at .termlings");
+      console.log("Run `termlings init --force` to re-run setup and template selection.");
+      process.exit(0);
+    }
+  }
+
+  const ready = await ensureWorkspaceInitializedForLaunch(forceSetup);
+  if (ready) {
+    console.log("Workspace is initialized.");
+  }
+  process.exit(0);
+}
+
 // 6. Help
 if (flags.has("help") || flags.has("h")) {
   console.log(`Usage: termlings [options]
        termlings render [dna|name] [options]
        termlings <agent> [options]
 
-Sim (default):
-  termlings                Start the sim
+Workspace (default):
+  termlings                Start the web workspace
+  workspace                Alias for web workspace startup
+  init                     Initialize .termlings in this project
+  init --force             Re-run setup wizard even if .termlings exists
 
-Sim management:
-  --clear                  Clear sim state (all agents, objects)
+Workspace management:
+  --clear                  Clear runtime IPC/session state
 
 Scheduler:
-  scheduler                Run cron scheduler (check for due jobs)
+  scheduler                Run calendar scheduler (check for due events)
   scheduler --daemon       Run scheduler in background (checks every 60 seconds)
 
 Spectator (owner commands):
-  cron create <agent-id> <schedule> <msg>  Schedule a message to an agent
-  cron list [--agent <id>] List scheduled cron jobs
-  cron show <id>           Show cron job details
-  cron edit <id> --schedule ... --message ...  Edit a cron job
-  cron delete <id>         Delete a cron job
-  cron enable <id>         Enable a disabled cron job
-  cron disable <id>        Disable a cron job
+  calendar create <agent-id> [<agent-id> ...] <title> <start-iso> <end-iso> [recurrence]  Create calendar event
+  calendar list [--agent <id>]  List calendar events
+  calendar show <id>           Show calendar event details
+  calendar edit <id> [--title] [--recurrence] [--agents]  Edit calendar event
+  calendar delete <id>         Delete calendar event
+  calendar enable <id>         Enable a calendar event
+  calendar disable <id>        Disable a calendar event
   task create <title> <description> [priority]  Create a new task
   task list                List all project tasks
   task show <id>           Show task details and updates
@@ -1860,12 +1370,9 @@ Spectator (owner commands):
 
 Agents (shared task system):
   claude [flags...]        Start Claude Code as an agent
-  codex [flags...]         Start Codex CLI as an agent
-  pi [flags...]            Start Pi coding agent
   <name> [flags...]        Launch saved agent (e.g., "termlings my-agent")
   --name <name>            Agent display name
   --dna <hex>              Agent avatar DNA
-  --with <cli> <name>      Use different CLI for saved agent
 
 Create:
   create [folder]          Interactive avatar builder for new agent
@@ -1899,239 +1406,229 @@ Render:
   render --fps=<n>         MP4 frame rate (default: 4)
   render --duration=<n>    MP4 duration in seconds (default: 3)
 
-Actions (in-sim):
-  action walk <x>,<y>      Walk avatar to coordinates
-  action map [--ascii|--agents]  See the world
-  action send <id> <msg>   Direct message to agent
-  action chat <msg>        Post to shared chat
-  action place <type> <x>,<y>                Place object at coordinates
-  action place <type> <x>,<y> --preview      Preview object before placing
-  action place <type> <x>,<y> --color R,G,B  Place with custom color
-  action inspect-object <type>                Show object JSON (for inspiration)
-  action create-object <name> '<json>'        Create custom object from JSON
-  action list-objects                         List all objects (built-in + custom)
-  action destroy <x>,<y>                      Remove object
-  action talk              Toggle talk animation
-  action gesture --wave    Wave gesture
-  action stop              Stop current action
+Actions:
+  action sessions          List active sessions
+  action send <target> <msg>  Direct message (target: <session-id>|agent:<dna>|human:<id>)
 
 Options:
+  --host <host>            Workspace host (default: 127.0.0.1)
+  --port <port>            Workspace port (default: 4173)
   --help, -h               Show this help`);
   process.exit(0);
 }
 
-// 7. Default: launch sim
-//    termlings              → start sim (shows title screen first)
-//    termlings play [path]  → backward compat for play subcommand
-//    termlings --play       → backward compat for --play flag
-{
-  // Check if .termlings exists, if not offer to initialize
-  const { join } = await import("path");
-  const { existsSync } = await import("fs");
-  const { createInterface } = await import("readline");
+async function ensureWorkspaceInitializedForLaunch(forceSetup = false): Promise<boolean> {
+  const { existsSync } = await import("fs")
+  const { join } = await import("path")
+  const { ensureWorkspaceDirs } = await import("./workspace/state.js")
+  const { listWorkspaceTemplates, initializeWorkspaceFromTemplate } = await import("./workspace/setup.js")
 
-  const termlingsDir = join(process.cwd(), ".termlings");
-  if (!existsSync(termlingsDir)) {
-    // Use title scene with init prompt overlay
-    const { createInitScene } = await import("./title.js");
-    const { runScene } = await import("./engine/scene.js");
-    const { enterScreen, exitScreen } = await import("./engine/renderer.js");
-
-    let confirmed: boolean | null = null;
-
-    const scene = createInitScene((key: string) => {
-      if (confirmed !== null) return;
-      if (key === "y" || key === "Y") {
-        confirmed = true;
-      } else if (key === "n" || key === "N") {
-        confirmed = false;
-      }
-    });
-
-    // Enter alt screen
-    const rows = process.stdout.rows || 24;
-    process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
-    process.stdout.write(enterScreen(rows));
-
-    const handle = runScene(scene);
-
-    // Wait for user response
-    await new Promise<void>((resolve) => {
-      const checkInterval = setInterval(() => {
-        if (confirmed !== null) {
-          clearInterval(checkInterval);
-          handle.stop();
-          // Exit alt screen
-          process.stdout.write(exitScreen());
-          resolve();
-        }
-      }, 50);
-    });
-
-    if (!confirmed) {
-      console.log("Run 'termlings --help' to see all commands.");
-      process.exit(0);
-    }
-
-    process.stdout.write("\x1b[2J\x1b[H");
-
-    // Show simple termlings text
-    const cyan = "\x1b[36m";
-    const yellow = "\x1b[33m";
-    const reset = "\x1b[0m";
-    console.log();
-    console.log(`${cyan}termlings${reset}`);
-    console.log(`${yellow}Build autonomous AI agents & teams${reset}`);
-    console.log();
-
-    // Load template (default to office)
-    const templateName = opts.template || "office";
-    const templatePath = join(__dirname, "..", "templates", templateName);
-
-    // Copy template directory if it exists
-    const { mkdirSync, copyFileSync, readdirSync } = await import("fs");
-    const { cp } = await import("fs/promises");
-
-    let templateLoaded = false;
-    if (existsSync(templatePath)) {
-      // Copy template to .termlings/, filtering out avatar.svg files
-      try {
-        const { copyFile, mkdir, readdir, stat } = await import("fs/promises");
-
-        async function copyDir(src: string, dst: string) {
-          await mkdir(dst, { recursive: true });
-          const entries = await readdir(src, { withFileTypes: true });
-
-          for (const entry of entries) {
-            // Skip avatar.svg files - they'll be generated from DNA instead
-            if (entry.name === "avatar.svg") continue;
-
-            const srcPath = join(src, entry.name);
-            const dstPath = join(dst, entry.name);
-
-            if (entry.isDirectory()) {
-              await copyDir(srcPath, dstPath);
-            } else {
-              await copyFile(srcPath, dstPath);
-            }
-          }
-        }
-
-        await copyDir(templatePath, termlingsDir);
-        console.log(`✓ Loaded template: ${templateName}`);
-        templateLoaded = true;
-      } catch (e) {
-        console.error(`Failed to copy template from ${templatePath}: ${e}`);
-        // Continue anyway - create empty structure below
-      }
-    }
-
-    if (!templateLoaded) {
-      // Template not found or copy failed - create empty structure
-      if (!existsSync(templatePath)) {
-        console.log(`(template not found at ${templatePath}, creating empty structure)`);
-      }
-      mkdirSync(termlingsDir, { recursive: true });
-      mkdirSync(join(termlingsDir, "map"), { recursive: true });
-      mkdirSync(join(termlingsDir, "agents"), { recursive: true });
-      mkdirSync(join(termlingsDir, "store"), { recursive: true });
-      mkdirSync(join(termlingsDir, "objects"), { recursive: true });
-
-      // Ensure map.json exists (copy from template or use minimal default)
-      const mapJsonPath = join(termlingsDir, "map.json");
-      if (!existsSync(mapJsonPath)) {
-        const defaultMapPath = join(__dirname, "..", "templates", "office", "map.json");
-        if (existsSync(defaultMapPath)) {
-          const { copyFileSync } = await import("fs");
-          copyFileSync(defaultMapPath, mapJsonPath);
-        }
-      }
-    }
-
-    // Regenerate agent DNA and fun names from template
-    const agentsDir = join(termlingsDir, "agents");
-    if (existsSync(agentsDir)) {
-      const { generateRandomDNA, renderSVG } = await import("./index.js");
-      const { generateFunNames } = await import("./name-generator.js");
-      const { readdirSync, readFileSync, writeFileSync } = await import("fs");
-
-      try {
-        const agentFolders = readdirSync(agentsDir, { withFileTypes: true })
-          .filter((d) => d.isDirectory())
-          .sort();
-
-        const newNames = generateFunNames(agentFolders.length);
-
-        for (let i = 0; i < agentFolders.length; i++) {
-          const folder = agentFolders[i]!;
-          const agentPath = join(agentsDir, folder.name);
-          const soulPath = join(agentPath, "SOUL.md");
-          if (existsSync(soulPath)) {
-            const soulContent = readFileSync(soulPath, "utf-8");
-            const newDna = generateRandomDNA();
-            const newName = newNames[i]!;
-
-            // Replace DNA and name in SOUL.md while keeping other fields intact
-            let updatedContent = soulContent
-              .replace(/^name:\s*[^\n]+$/m, `name: ${newName}`)
-              .replace(/^dna:\s*[^\n]+$/m, `dna: ${newDna}`);
-
-            writeFileSync(soulPath, updatedContent);
-
-            // Generate avatar SVG from DNA
-            const avatarPath = join(agentPath, "avatar.svg");
-            writeFileSync(avatarPath, renderSVG(newDna, 10, 0, null));
-          }
-        }
-      } catch {
-        // If regeneration fails, continue with template as-is
-      }
-    }
-
-    console.log(`✓ Initialized project structure in .termlings/`);
-    console.log(`\n🚀 Ready to go!\n`);
-
-    console.log(`First, start the sim in one terminal:`);
-    console.log(`  ${cyan}termlings${reset}\n`);
-
-    console.log(`Then, launch an agent in another terminal. Agents need autonomous permissions:\n`);
-
-    console.log(`${yellow}Claude Code:${reset}`);
-    console.log(`  termlings claude --dangerously-skip-permissions\n`);
-
-    console.log(`${yellow}Codex CLI:${reset}`);
-    console.log(`  termlings codex --dangerously-bypass-approvals-and-sandbox\n`);
-
-    console.log(`${yellow}Pi coding agent:${reset}`);
-    console.log(`  termlings pi\n`);
-
-    console.log(`${cyan}Why the --dangerous flags?${reset}`);
-    console.log(`Agents are autonomous AI workers that make decisions and execute commands`);
-    console.log(`without waiting for human approval. These flags allow them to:\n`);
-    console.log(`  • Execute code and shell commands`);
-    console.log(`  • Make API calls and read files`);
-    console.log(`  • Move around the world and interact with other agents`);
-    console.log(`  • Persist changes without asking for confirmation\n`);
-    console.log(`This is intentional - autonomous agents can't work while waiting for prompts!\n`);
-    console.log(`⚠️  ${yellow}USE WITH CAUTION!${reset}`);
-    console.log(`Run agents in isolated environments. They can modify files, execute code,`);
-    console.log(`and make decisions autonomously. Only use with agents you trust.\n`);
-
-    process.exit(0);
+  const termlingsDir = join(process.cwd(), ".termlings")
+  const workspaceExists = existsSync(termlingsDir)
+  if (!forceSetup && workspaceExists) {
+    ensureWorkspaceDirs()
+    return true
   }
 
-  const { showTitleScreen, roomHasAgents } = await import("./title.js");
-  if (!roomHasAgents("default")) {
-    await showTitleScreen("default");
+  const templates = listWorkspaceTemplates()
+  const templateOptions = templates.length > 0 ? templates : ["office"]
+  const defaultTemplate = templateOptions[0] || "office"
+
+  // Non-interactive shells still get initialized automatically with the default template.
+  // This makes `npx termlings` work in environments where stdin isn't a TTY.
+  if (!process.stdout.isTTY) {
+    const result = initializeWorkspaceFromTemplate(defaultTemplate)
+    console.log(`Initialized .termlings with template: ${result.templateName}`)
+    console.log(`Run 'termlings init' in an interactive terminal to choose a different template.`)
+    return true
   }
 
-  // Support "play ./path" and "--play" for backward compat
-  const mapArg = positional[0] === "play" ? (positional[1] || null) : null;
-  if (mapArg) process.env.TERMLINGS_MAP_PATH = mapArg;
+  const { createInterface } = await import("readline/promises")
+  const { createReadStream, createWriteStream } = await import("fs")
 
-  await import("./sim.js");
-  await new Promise(() => {});
+  let rlInput: NodeJS.ReadableStream = process.stdin
+  let rlOutput: NodeJS.WritableStream = process.stdout
+  let ttyFd: number | null = null
+
+  // Some launchers expose a TTY on /dev/tty even when process.stdin.isTTY is false.
+  if (!process.stdin.isTTY) {
+    try {
+      const { openSync } = await import("fs")
+      ttyFd = openSync("/dev/tty", "r+")
+      rlInput = createReadStream("/dev/tty", { fd: ttyFd, autoClose: false })
+      rlOutput = createWriteStream("/dev/tty", { fd: ttyFd, autoClose: false })
+    } catch {
+      const result = initializeWorkspaceFromTemplate(defaultTemplate)
+      console.log(`Initialized .termlings with template: ${result.templateName}`)
+      console.log(`No interactive TTY detected. Run 'termlings init' later to choose a template manually.`)
+      return true
+    }
+  }
+
+  const rl = createInterface({
+    input: rlInput,
+    output: rlOutput,
+  })
+
+  try {
+    const setupPrompt = workspaceExists
+      ? ".termlings already exists. Re-run setup and template selection? [Y/n] "
+      : "No .termlings folder found. Set up Termlings in this project? [Y/n] "
+    const setupAnswer = (await rl.question(setupPrompt)).trim().toLowerCase()
+    if (setupAnswer === "n" || setupAnswer === "no") {
+      console.log("Setup cancelled.")
+      return false
+    }
+
+    console.log("")
+    console.log("Available templates:")
+    templateOptions.forEach((template, index) => {
+      console.log(`  ${index + 1}. ${template}`)
+    })
+
+    const templateAnswer = (await rl.question(`Select template [1]: `)).trim()
+    let template = defaultTemplate
+    if (templateAnswer.length > 0) {
+      const idx = Number.parseInt(templateAnswer, 10)
+      if (!Number.isNaN(idx) && idx >= 1 && idx <= templateOptions.length) {
+        template = templateOptions[idx - 1]!
+      } else if (templateOptions.includes(templateAnswer)) {
+        template = templateAnswer
+      } else {
+        console.log(`Unknown template "${templateAnswer}". Using "${defaultTemplate}".`)
+      }
+    }
+
+    const result = initializeWorkspaceFromTemplate(template)
+    console.log(`✓ Initialized .termlings using template: ${result.templateName}`)
+    return true
+  } finally {
+    rl.close()
+    if (ttyFd !== null) {
+      try {
+        const { closeSync } = await import("fs")
+        closeSync(ttyFd)
+      } catch {}
+    }
+  }
 }
+
+async function launchWorkspaceWeb(opts: Record<string, string>): Promise<never> {
+  const workspaceReady = await ensureWorkspaceInitializedForLaunch()
+  if (!workspaceReady) {
+    process.exit(0)
+  }
+
+  const { existsSync } = await import("fs")
+  const { join } = await import("path")
+  const { spawn, spawnSync } = await import("child_process")
+  const {
+    clearHubServer,
+    isHubServerRunning,
+    readHubServer,
+    registerProject,
+    workspaceUrl,
+    writeHubServer,
+  } = await import("./workspace/hub.js")
+
+  const webRoot = join(__dirname, "..", "web")
+  if (!existsSync(webRoot)) {
+    console.error("Web workspace is missing. Expected ./web directory.")
+    process.exit(1)
+  }
+
+  const requestedHost = opts.host || "127.0.0.1"
+  const requestedPort = opts.port ? parseInt(opts.port, 10) : 4173
+  if (Number.isNaN(requestedPort) || requestedPort <= 0) {
+    console.error("Invalid --port value")
+    process.exit(1)
+  }
+
+  const project = registerProject(process.cwd())
+  const existingServer = readHubServer()
+  if (existingServer && await isHubServerRunning(existingServer)) {
+    if ((opts.host && requestedHost !== existingServer.host) || (opts.port && requestedPort !== existingServer.port)) {
+      console.warn(
+        `Workspace server already running at ${existingServer.host}:${existingServer.port}; ignoring requested ${requestedHost}:${requestedPort}.`,
+      )
+    }
+    console.log(`Registered project "${project.projectName}" with running workspace server.`)
+    console.log(`Open: ${workspaceUrl(existingServer.host, existingServer.port, project.projectId)}`)
+    process.exit(0)
+  }
+
+  const nodeModulesPath = join(webRoot, "node_modules")
+  if (!existsSync(nodeModulesPath)) {
+    console.log("Installing web workspace dependencies...")
+    const install = spawnSync("bun", ["install"], {
+      cwd: webRoot,
+      stdio: "inherit",
+      env: process.env,
+    })
+    if (install.status !== 0) {
+      process.exit(install.status ?? 1)
+    }
+  }
+
+  const startedAt = Date.now()
+  writeHubServer({
+    host: requestedHost,
+    port: requestedPort,
+    pid: 0,
+    startedAt,
+    updatedAt: startedAt,
+  })
+
+  console.log(`Starting Termlings web workspace on http://${requestedHost}:${requestedPort}`)
+  console.log(`Project tab: ${workspaceUrl(requestedHost, requestedPort, project.projectId)}`)
+  const child = spawn("bun", ["run", "dev", "--", "--host", requestedHost, "--port", String(requestedPort)], {
+    cwd: webRoot,
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      TERMLINGS_PROJECT_ROOT: process.cwd(),
+    },
+  })
+
+  writeHubServer({
+    host: requestedHost,
+    port: requestedPort,
+    pid: child.pid ?? 0,
+    startedAt,
+    updatedAt: Date.now(),
+  })
+
+  child.on("error", (err) => {
+    clearHubServer()
+    console.error(`Failed to start web workspace: ${err}`)
+    process.exit(1)
+  })
+
+  child.on("exit", (code) => {
+    const registered = readHubServer()
+    if (
+      registered &&
+      registered.host === requestedHost &&
+      registered.port === requestedPort &&
+      (registered.pid === 0 || registered.pid === child.pid)
+    ) {
+      clearHubServer()
+    }
+    process.exit(code ?? 0)
+  })
+
+  await new Promise(() => {})
+}
+
+// 7. Default: launch web workspace (or explicit `termlings workspace`)
+if (!positional[0] || positional[0] === "workspace") {
+  await launchWorkspaceWeb(opts)
+  process.exit(0)
+}
+
+console.error(`Unknown command: ${positional[0]}`)
+console.error("Run `termlings --help` for available commands.")
+process.exit(1)
 
 // --- Render helper functions (used by render subcommand) ---
 
