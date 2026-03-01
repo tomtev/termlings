@@ -368,12 +368,18 @@ function createTitleScene(room: string, onReady: () => void, mode: "title" | "in
       return {
         onArrow(_dir: string) {},
         onKey(ch: string) {
+          // Handle quit in any mode
+          if (ch === "\x03") {
+            process.stdout.write(exitScreen())
+            process.exit(0)
+          }
+
           if (mode === "init" && onKey) {
             // In init mode, handle y/n
             onKey(ch)
           } else {
             // In title mode, handle q to quit
-            if (ch === "q" || ch === "Q" || ch === "\x03") {
+            if (ch === "q" || ch === "Q") {
               process.stdout.write(exitScreen())
               process.exit(0)
             }
