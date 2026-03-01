@@ -60,7 +60,6 @@ import {
   IPC_DIR,
   getDataDir,
   pollCommands,
-  writeState,
   writeMessages,
   cleanupIpc,
   findPath,
@@ -77,7 +76,13 @@ import {
   loadAllChunks,
   saveChunk,
   worldToChunk,
+  addEntityToChunk,
+  removeEntityFromChunk,
+  moveEntityToChunk,
+  getEntitiesInRegion,
+  type ChunkEntity,
 } from "./engine/chunk-system.js"
+import { writeSessionState } from "./engine/ipc.js"
 
 // --- CLI args ---
 
@@ -308,6 +313,18 @@ function loadAgentSessions() {
       ai.phase = "idle"
       ai.idleRemaining = Infinity
       agentSessions.set(sessionId, { entity, ai, gestureExpiry: 0 })
+
+      // Add entity to chunk system
+      const { chunkX, chunkY } = worldToChunk(state.x, state.y)
+      const chunkEntity: ChunkEntity = {
+        sessionId,
+        name: state.name,
+        dna,
+        x: state.x,
+        y: state.y,
+      }
+      addEntityToChunk(chunkX, chunkY, chunkEntity)
+
       count++
     }
     if (count > 0) {
@@ -842,6 +859,18 @@ function spawnAgentEntity(sessionId: string, cmd: AgentCommand): Entity {
   ai.idleRemaining = Infinity // Agents stay idle at spawn point
 
   agentSessions.set(sessionId, { entity, ai, gestureExpiry: 0 })
+
+  // Add entity to chunk system
+  const { chunkX, chunkY } = worldToChunk(spawnX, spawnY)
+  const chunkEntity: ChunkEntity = {
+    sessionId,
+    name: agentName,
+    dna,
+    x: spawnX,
+    y: spawnY,
+  }
+  addEntityToChunk(chunkX, chunkY, chunkEntity)
+
   return entity
 }
 
@@ -895,7 +924,11 @@ function processAgentCommands() {
       if (session) {
         const name = session.entity.name || sessionId
         const dna = session.entity.dna
+        const { x, y } = session.entity
+        const { chunkX, chunkY } = worldToChunk(x, y)
         agentSessions.delete(sessionId)
+        // Remove from chunk system
+        removeEntityFromChunk(chunkX, chunkY, sessionId)
         // Remove from persistence
         try {
           const data = readFileSync(AGENTS_FILE, "utf8")
@@ -1214,66 +1247,53 @@ function updateAgentAI() {
   })
 }
 
+function updateEntitiesInChunks() {
+  // Sync active agent entities to their chunks
+  // Called periodically to keep chunk data up-to-date with actual positions
+  agentSessions.forEach((session, sessionId) => {
+    const { entity } = session
+    const { chunkX, chunkY } = worldToChunk(entity.x, entity.y)
+    const chunkEntity: ChunkEntity = {
+      sessionId,
+      name: entity.name,
+      dna: entity.dna,
+      x: entity.x,
+      y: entity.y,
+    }
+    addEntityToChunk(chunkX, chunkY, chunkEntity)
+
+    // Write session state for agent to read
+    writeSessionState(sessionId, {
+      x: entity.x,
+      y: entity.y,
+      footY: entity.y + entity.height - 1,
+      idle: entity.idle,
+      dna: entity.dna,
+      name: entity.name,
+    })
+  })
+}
+
 function writeSimState() {
   if (tick % 120 !== 0) return // Every ~2s
   saveAgentSessions()
+  updateEntitiesInChunks()
 
-  const entities: { sessionId: string; name: string; x: number; y: number; footY: number; idle: boolean; dna: string }[] = []
-  agentSessions.forEach((session, sessionId) => {
-    entities.push({
-      sessionId,
-      name: session.entity.name || sessionId,
-      x: session.entity.x,
-      y: session.entity.y,
-      footY: session.entity.y + session.entity.height - 1,
-      idle: session.entity.idle,
-      dna: session.entity.dna,
-    })
-  })
-
-  // Also include NPCs in state for map visibility
-  for (let i = 0; i < npcs.length; i++) {
-    const npc = npcs[i]!
-    entities.push({
-      sessionId: `npc-${i}`,
-      name: npc.name || `NPC ${i}`,
-      x: npc.x,
-      y: npc.y,
-      footY: npc.y + npc.height - 1,
-      idle: npc.idle,
-      dna: npc.dna,
-    })
-  }
-
-  // Determine which agents are occupying furniture
-  const objectsWithOccupants = objectPlacements.map((p, idx) => {
-    const def = mergedDefs[p.def]
-    const occupants: string[] = []
-
-    // Check if any agents are positioned on this furniture
-    entities.forEach(e => {
-      if (e.x >= p.x && e.x < p.x + (def?.width || 1) &&
-          e.y >= p.y && e.y < p.y + (def?.height || 1)) {
-        occupants.push(e.sessionId)
-      }
-    })
-
-    return {
-      x: p.x,
-      y: p.y,
-      type: p.def,
-      width: def?.width || 1,
-      height: def?.height || 1,
-      walkable: def?.cells ? false : true,
-      occupants: occupants.length > 0 ? occupants : undefined,
+  // Write map metadata for CLI map action
+  try {
+    const mapMetadata = {
+      width: mapWidth,
+      height: mapHeight,
+      name: world.name,
+      rooms: detectedRoomsSerialized,
     }
-  })
-
-  writeState({
-    entities,
-    map: { width: mapWidth, height: mapHeight, name: world.name, tiles, rooms: detectedRoomsSerialized },
-    objects: objectsWithOccupants,
-  })
+    writeFileSync(
+      join(process.cwd(), ".termlings", "map-metadata.json"),
+      JSON.stringify(mapMetadata) + "\n"
+    )
+  } catch {
+    // Ignore errors writing metadata
+  }
 }
 
 // --- HUD ---

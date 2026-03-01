@@ -102,18 +102,10 @@ export function discoverLocalAgents(): LocalAgent[] {
  */
 export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promise<LocalAgent | null | "create-random"> {
   // Get active agents in this room
+  // Note: With chunks, active agents are stored in sessions, not centralized state
   const activeAgentDnas = new Set<string>();
-  try {
-    const { readState } = await import("../engine/ipc.js");
-    const state = readState();
-    if (state?.entities) {
-      for (const entity of state.entities) {
-        if (entity.dna) activeAgentDnas.add(entity.dna);
-      }
-    }
-  } catch {
-    // No sim running, that's fine
-  }
+  // TODO: Query sessions directory to get active DNAs
+  // For now, all agents are available for selection
 
   const { selectMenu } = await import("../interactive-menu.js");
   const { decodeDNA, getTraitColors } = await import("../index.js");
@@ -185,18 +177,10 @@ export async function selectAgent(): Promise<{ type: "builtin" | "local"; name: 
   const localAgents = discoverLocalAgents();
 
   // Get active agents in this room
+  // Note: With chunks, active agents are stored in sessions, not centralized state
   const activeAgentDnas = new Set<string>();
-  try {
-    const { readState } = await import("../engine/ipc.js");
-    const state = readState();
-    if (state?.entities) {
-      for (const entity of state.entities) {
-        if (entity.dna) activeAgentDnas.add(entity.dna);
-      }
-    }
-  } catch {
-    // No sim running, that's fine
-  }
+  // TODO: Query sessions directory to get active DNAs
+  // For now, all agents are available for selection
 
   const allOptions = [
     ...builtins.map(name => ({ type: "builtin" as const, name, agent: undefined, taken: false })),

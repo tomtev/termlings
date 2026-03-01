@@ -107,46 +107,6 @@ export function pollCommands(): { sessionId: string; cmd: AgentCommand }[] {
   return results
 }
 
-// --- State IPC ---
-
-export interface AgentStateEntity {
-  sessionId: string
-  name: string
-  x: number
-  y: number
-  footY: number
-  idle: boolean
-  dna: string
-}
-
-export interface AgentState {
-  entities: AgentStateEntity[]
-  map: {
-    width: number; height: number; name?: string; tiles?: string[][]; mode?: "simple"
-    rooms?: {
-      id: number; wallType: string
-      bounds: { x: number; y: number; w: number; h: number }
-      center: { x: number; y: number }
-      doors: { x: number; y: number; toRoom: number | null }[]
-    }[]
-  }
-  objects?: { x: number; y: number; type: string; width: number; height: number; walkable: boolean; occupants?: string[] }[]
-}
-
-export function writeState(state: AgentState): void {
-  const file = join(IPC_DIR, "state.json")
-  writeFileSync(file, JSON.stringify(state) + "\n")
-}
-
-export function readState(): AgentState | null {
-  const file = join(IPC_DIR, "state.json")
-  try {
-    const data = readFileSync(file, "utf8")
-    return JSON.parse(data) as AgentState
-  } catch {
-    return null
-  }
-}
 
 // --- Message IPC ---
 
@@ -181,6 +141,38 @@ export function readMessages(sessionId: string): AgentMessage[] {
 }
 
 const PERSIST_FILES = new Set(["agents.json", "chat.jsonl"])
+
+// --- Session tracking ---
+
+export interface SessionState {
+  sessionId: string
+  x: number
+  y: number
+  footY: number
+  idle: boolean
+  dna: string
+  name?: string
+}
+
+export function writeSessionState(sessionId: string, state: Omit<SessionState, 'sessionId'>): void {
+  const file = join(IPC_DIR, `sessions`, `${sessionId}.json`)
+  try {
+    mkdirSync(join(IPC_DIR, `sessions`), { recursive: true })
+    writeFileSync(file, JSON.stringify({ sessionId, ...state }) + "\n")
+  } catch (e) {
+    // Silently fail - not critical
+  }
+}
+
+export function readSessionState(sessionId: string): SessionState | null {
+  const file = join(IPC_DIR, `sessions`, `${sessionId}.json`)
+  try {
+    const data = readFileSync(file, "utf8")
+    return JSON.parse(data) as SessionState
+  } catch {
+    return null
+  }
+}
 
 export function cleanupIpc(): void {
   if (!existsSync(IPC_DIR)) return

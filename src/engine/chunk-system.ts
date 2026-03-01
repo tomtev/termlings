@@ -2,8 +2,21 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlink
 import { join } from "path"
 import { getDataDir } from "./ipc.js"
 import type { ObjectPlacement } from "./objects.js"
+import type { Entity } from "./types.js"
 
 export const CHUNK_SIZE = 16
+
+/**
+ * Chunk entity - lightweight version of Entity stored in chunks
+ * Contains just the data needed for persistence and spatial queries
+ */
+export interface ChunkEntity {
+  sessionId: string
+  name?: string
+  dna: string
+  x: number
+  y: number
+}
 
 export interface ChunkData {
   chunkX: number
@@ -13,6 +26,7 @@ export interface ChunkData {
   width: number
   height: number
   placements: ObjectPlacement[]
+  entities: ChunkEntity[]
 }
 
 // In-memory chunk registry (LRU cache)
@@ -180,6 +194,7 @@ export function ensureChunkLoaded(chunkX: number, chunkY: number): ChunkData {
       width: CHUNK_SIZE,
       height: CHUNK_SIZE,
       placements: [],
+      entities: [],
     }
     saveChunk(chunk)
   }
@@ -282,6 +297,7 @@ export function initializeChunksFromPlacements(
         width: CHUNK_SIZE,
         height: CHUNK_SIZE,
         placements: [],
+        entities: [],
       })
     }
 
@@ -307,9 +323,133 @@ export function clearChunkCache(): void {
 export function getAllChunkPlacements(): Map<string, ObjectPlacement[]> {
   const result = new Map<string, ObjectPlacement[]>()
 
-  for (const [key, chunk] of loadedChunks) {
+  loadedChunks.forEach((chunk, key) => {
     result.set(key, [...chunk.placements])
-  }
+  })
 
   return result
+}
+
+/**
+ * Add or update an entity in a chunk
+ */
+export function addEntityToChunk(chunkX: number, chunkY: number, entity: ChunkEntity): void {
+  const chunk = ensureChunkLoaded(chunkX, chunkY)
+
+  // Remove existing entity with same sessionId if present
+  chunk.entities = chunk.entities.filter(e => e.sessionId !== entity.sessionId)
+
+  // Add new entity
+  chunk.entities.push(entity)
+  saveChunk(chunk)
+}
+
+/**
+ * Remove an entity from a chunk
+ */
+export function removeEntityFromChunk(chunkX: number, chunkY: number, sessionId: string): void {
+  const chunk = loadChunk(chunkX, chunkY)
+  if (!chunk) return
+
+  const originalLen = chunk.entities.length
+  chunk.entities = chunk.entities.filter(e => e.sessionId !== sessionId)
+
+  // Only save if something was removed
+  if (chunk.entities.length < originalLen) {
+    saveChunk(chunk)
+  }
+}
+
+/**
+ * Move an entity from one chunk to another
+ */
+export function moveEntityToChunk(
+  oldChunkX: number,
+  oldChunkY: number,
+  newChunkX: number,
+  newChunkY: number,
+  entity: ChunkEntity
+): void {
+  // Remove from old chunk
+  removeEntityFromChunk(oldChunkX, oldChunkY, entity.sessionId)
+
+  // Add to new chunk
+  addEntityToChunk(newChunkX, newChunkY, entity)
+}
+
+/**
+ * Get all entities in a specific chunk
+ */
+export function getEntitiesInChunk(chunkX: number, chunkY: number): ChunkEntity[] {
+  const chunk = loadChunk(chunkX, chunkY)
+  return chunk ? [...chunk.entities] : []
+}
+
+/**
+ * Get all entities in a rectangular region (by chunk bounds)
+ */
+export function getEntitiesInRegion(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): ChunkEntity[] {
+  const chunks = getChunksByRegion(x1, y1, x2, y2)
+  const entities: ChunkEntity[] = []
+
+  for (const chunk of chunks) {
+    entities.push(...chunk.entities)
+  }
+
+  return entities
+}
+
+/**
+ * Get an entity from any chunk by sessionId
+ */
+export function findEntity(sessionId: string): { entity: ChunkEntity; chunkX: number; chunkY: number } | null {
+  // Search loaded chunks only (avoid loading all chunks)
+  let result: { entity: ChunkEntity; chunkX: number; chunkY: number } | null = null
+  loadedChunks.forEach((chunk) => {
+    if (!result) {
+      const entity = chunk.entities.find(e => e.sessionId === sessionId)
+      if (entity) {
+        result = { entity, chunkX: chunk.chunkX, chunkY: chunk.chunkY }
+      }
+    }
+  })
+  return result
+}
+
+/**
+ * Load all persisted entities from chunks into a flat array
+ */
+export function loadAllChunkEntities(): ChunkEntity[] {
+  ensureChunkDir()
+
+  const entities: ChunkEntity[] = []
+  const mapDir = getChunkDir()
+
+  if (!existsSync(mapDir)) {
+    return entities
+  }
+
+  const files = readdirSync(mapDir)
+  for (const file of files) {
+    if (!file.startsWith("chunk_") || !file.endsWith(".json")) continue
+
+    // Parse filename to get chunk coordinates
+    const match = file.match(/chunk_(-?\d+)_(-?\d+)\.json/)
+    if (!match) continue
+
+    const chunkX = parseInt(match[1]!, 10)
+    const chunkY = parseInt(match[2]!, 10)
+
+    const chunk = loadChunk(chunkX, chunkY)
+    if (chunk) {
+      entities.push(...chunk.entities)
+    }
+  }
+
+  return entities
 }

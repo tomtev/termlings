@@ -192,7 +192,7 @@ Commands:
   const _agentDna = process.env.TERMLINGS_AGENT_DNA || undefined;
 
   if (verb === "walk") {
-    const { readState, writeCommand } = await import("./engine/ipc.js");
+    const { writeCommand } = await import("./engine/ipc.js");
     const sessionId = process.env.TERMLINGS_SESSION_ID;
     if (!sessionId) {
       console.error("Error: TERMLINGS_SESSION_ID env var not set");
@@ -253,41 +253,113 @@ Commands:
   }
 
   if (verb === "map") {
-    const { readState } = await import("./engine/ipc.js");
+    const { readSessionState } = await import("./engine/ipc.js");
     const { OBJECT_DEFS } = await import("./engine/objects.js");
     const { describeRelative } = await import("./engine/room-detect.js");
-    const { readFileSync, existsSync } = await import("fs");
+    const { readFileSync, existsSync, readdirSync } = await import("fs");
     const { join } = await import("path");
     const { homedir } = await import("os");
+    const { CHUNK_SIZE, getChunkPath, worldToChunk } = await import("./engine/chunk-system.js");
 
     // Compute IPC_DIR based on room from environment
     const IPC_DIR = join(process.cwd(), ".termlings");
 
-    const state = readState();
-    if (!state) {
-      console.error("No sim state found. Is termlings --play running?");
-      process.exit(1);
+    // Try to load map metadata (stored by sim)
+    // If not found, use minimal metadata from session position
+    let mapData: any = { width: 100, height: 100, rooms: [], tiles: [] };
+    const mapFile = join(IPC_DIR, "map-metadata.json");
+    try {
+      const data = readFileSync(mapFile, "utf8");
+      mapData = JSON.parse(data);
+    } catch {
+      // Map metadata not available - use defaults for chunk queries
     }
+
+    const mySessionId = process.env.TERMLINGS_SESSION_ID;
+    const mySession = mySessionId ? readSessionState(mySessionId) : null;
+
+    // Query nearby chunks for entities and objects
+    const queryChunks = (centerX: number, centerY: number, radius: number = 2) => {
+      const entities: { sessionId: string; name: string; x: number; y: number; footY: number; idle: boolean; dna: string }[] = [];
+      const objects: { x: number; y: number; type: string; width: number; height: number; walkable: boolean }[] = [];
+
+      const { chunkX, chunkY } = worldToChunk(centerX, centerY);
+
+      // Load nearby chunks (within radius)
+      for (let cx = chunkX - radius; cx <= chunkX + radius; cx++) {
+        for (let cy = chunkY - radius; cy <= chunkY + radius; cy++) {
+          const chunkFile = getChunkPath(cx, cy);
+          if (!existsSync(chunkFile)) continue;
+
+          try {
+            const data = readFileSync(chunkFile, "utf8");
+            const chunk = JSON.parse(data);
+
+            // Extract entities from chunk
+            if (chunk.entities && Array.isArray(chunk.entities)) {
+              for (const e of chunk.entities) {
+                entities.push({
+                  sessionId: e.sessionId,
+                  name: e.name || e.sessionId,
+                  x: e.x,
+                  y: e.y,
+                  footY: e.y + 6, // Approximate foot position
+                  idle: true,
+                  dna: e.dna,
+                });
+              }
+            }
+
+            // Extract placements (objects) from chunk
+            if (chunk.placements && Array.isArray(chunk.placements)) {
+              for (const p of chunk.placements) {
+                const def = OBJECT_DEFS[p.def];
+                objects.push({
+                  x: p.x,
+                  y: p.y,
+                  type: p.def,
+                  width: def?.width || 1,
+                  height: def?.height || 1,
+                  walkable: def?.cells ? false : true,
+                });
+              }
+            }
+          } catch (e) {
+            // Skip chunk on error
+          }
+        }
+      }
+
+      return { entities, objects };
+    };
 
     // Sessions-only mode: show just session IDs and positions
     if (flags.has("agents")) {
-      const mySessionId = process.env.TERMLINGS_SESSION_ID;
-      for (const e of state.entities) {
-        const status = e.idle ? "idle" : "active";
-        const isMe = e.sessionId === mySessionId;
-        console.log(`${e.sessionId.padEnd(16)} (${e.x}, ${e.footY}) [${status}]${isMe ? " (you)" : ""}`);
+      if (mySession) {
+        const { entities } = queryChunks(mySession.x, mySession.y, 3);
+        for (const e of entities) {
+          const status = e.idle ? "idle" : "active";
+          const isMe = e.sessionId === mySessionId;
+          console.log(`${e.sessionId.padEnd(16)} (${e.x}, ${e.footY}) [${status}]${isMe ? " (you)" : ""}`);
+        }
       }
       process.exit(0);
     }
 
-
-    const { width, height, name, tiles, rooms: stateRooms } = state.map;
-    const mySessionId = process.env.TERMLINGS_SESSION_ID;
+    const { width, height, name, tiles, rooms: stateRooms } = mapData;
 
     // Find "me" for centering the local view
-    const me = state.entities.find(e => e.sessionId === mySessionId);
-    const centerX = me ? me.x : (state.entities[0]?.x ?? Math.floor(width / 2));
-    const centerY = me ? me.footY : (state.entities[0]?.footY ?? Math.floor(height / 2));
+    let centerX = Math.floor(width / 2);
+    let centerY = Math.floor(height / 2);
+    if (mySession) {
+      centerX = mySession.x;
+      centerY = mySession.footY;
+    }
+
+    // Query nearby chunks for entities and objects
+    const nearbyData = queryChunks(centerX, centerY, 2);
+    const nearbyEntities = nearbyData.entities;
+    const nearbyObjects = nearbyData.objects;
 
     // Helper: find which room a coordinate is in
     type StateRoom = NonNullable<typeof stateRooms>[number];
@@ -343,8 +415,8 @@ Commands:
         }
       }
 
-      // Load all objects from state (both map-defined and agent-built)
-      const placements = state.objects || [];
+      // Load objects from nearby chunks
+      const placements = nearbyObjects;
 
       const objectLegend: { num: number; name: string; x: number; y: number }[] = [];
       let objNum = 1;
@@ -381,8 +453,8 @@ Commands:
       }
 
       // Place entities
-      for (let i = 0; i < state.entities.length; i++) {
-        const e = state.entities[i]!;
+      for (let i = 0; i < nearbyEntities.length; i++) {
+        const e = nearbyEntities[i]!;
         const footLeft = e.x + 1 - x0;
         const gy = e.footY - y0;
         if (gy < 0 || gy >= viewH) continue;
@@ -400,8 +472,8 @@ Commands:
 
       console.log();
       console.log("Agents:");
-      for (let i = 0; i < state.entities.length; i++) {
-        const e = state.entities[i]!;
+      for (let i = 0; i < nearbyEntities.length; i++) {
+        const e = nearbyEntities[i]!;
         const status = e.idle ? "idle" : "active";
         const isMe = e.sessionId === mySessionId;
         const eName = e.name || "???";
@@ -424,13 +496,13 @@ Commands:
 
     // --- Structured output (default) ---
 
-    const myRoom = me ? findRoom(me.x + 4, me.footY) : null;
-    const myX = me ? me.x + 4 : centerX;
-    const myY = me ? me.footY : centerY;
+    const myRoom = mySession ? findRoom(mySession.x + 4, mySession.footY) : null;
+    const myX = mySession ? mySession.x + 4 : centerX;
+    const myY = mySession ? mySession.footY : centerY;
 
     // Header
     console.log(`Map: ${name || "unknown"} (${width}x${height})`);
-    if (me) {
+    if (mySession) {
       const roomLabel = myRoom ? `in ${myRoom.wallType} room (room${myRoom.id})` : "outdoors";
       console.log(`You: (${myX}, ${myY}) — ${roomLabel}`);
     }
@@ -470,7 +542,7 @@ Commands:
     // Agents section
     console.log();
     console.log("Agents:");
-    for (const e of state.entities) {
+    for (const e of nearbyEntities) {
       const status = e.idle ? "idle" : "active";
       const isMe = e.sessionId === mySessionId;
       const eName = e.name || "???";
@@ -482,11 +554,11 @@ Commands:
       console.log(`  ${eName.padEnd(10)} ${e.sessionId.padEnd(16)} (${ex},${ey})  ${status.padEnd(6)}  ${roomLabel.padEnd(10)}  ${rel}`);
     }
 
-    // Objects section — show both map-defined and agent-built objects from state
-    if (state.objects && state.objects.length > 0) {
+    // Objects section — show objects from nearby chunks
+    if (nearbyObjects && nearbyObjects.length > 0) {
       console.log();
       console.log("Objects:");
-      for (const o of state.objects) {
+      for (const o of nearbyObjects) {
         const oRoom = findRoom(o.x, o.y);
         const roomLabel = oRoom ? `room${oRoom.id}` : "outdoors";
         // Show object with room indicator
@@ -573,10 +645,9 @@ Commands:
 
 
   if (verb === "place") {
-    const { readState: readStatePlace, writeCommand } = await import("./engine/ipc.js");
+    const { writeCommand } = await import("./engine/ipc.js");
     const { OBJECT_DEFS, renderObjectToTerminal } = await import("./engine/objects.js");
     const { loadCustomObjects } = await import("./engine/object-loader.js");
-    const _statePlace = readStatePlace();
     const customObjects = loadCustomObjects("default");
     const sessionId = process.env.TERMLINGS_SESSION_ID;
     if (!sessionId) {
@@ -1088,7 +1159,7 @@ Commands:
   }
 
   if (verb === "destroy") {
-    const { readState: readStateDestroy, writeCommand } = await import("./engine/ipc.js");
+    const { writeCommand } = await import("./engine/ipc.js");
     const sessionId = process.env.TERMLINGS_SESSION_ID;
     if (!sessionId) {
       console.error("Error: TERMLINGS_SESSION_ID env var not set");
@@ -1688,12 +1759,34 @@ if (positional[0] === "create") {
 // 5. List agents: termlings list-agents [--saved|--online|--full]
 if (positional[0] === "list-agents") {
   const { discoverLocalAgents } = await import("./agents/discover.js");
-  const { readState } = await import("./engine/ipc.js");
   const { mergeSavedWithOnline, formatAgentListCompact, formatAgentListFull } = await import("./engine/agent-listing.js");
+  const { readdirSync, readFileSync, existsSync } = await import("fs");
+  const { join } = await import("path");
 
   const saved = discoverLocalAgents();
-  const state = readState();
-  const online = state?.entities || [];
+
+  // Get online agents from sessions directory
+  const online: any[] = [];
+  const sessionsDir = join(process.cwd(), ".termlings", "sessions");
+  if (existsSync(sessionsDir)) {
+    for (const file of readdirSync(sessionsDir)) {
+      if (!file.endsWith(".json")) continue;
+      try {
+        const data = readFileSync(join(sessionsDir, file), "utf8");
+        const session = JSON.parse(data);
+        online.push({
+          sessionId: session.sessionId,
+          name: session.name,
+          dna: session.dna,
+          x: session.x,
+          y: session.y,
+          footY: session.footY,
+        });
+      } catch {
+        // Skip invalid session files
+      }
+    }
+  }
 
   const merged = mergeSavedWithOnline(saved, online);
 
