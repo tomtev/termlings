@@ -1932,6 +1932,7 @@ Options:
 
         const maxWidths = allLines.map(lines => Math.max(...lines.map(getVisibleWidth), 0));
         const maxLines = Math.max(...allLines.map(l => l.length));
+        const topPadding = allLines.map(lines => maxLines - lines.length);
 
         // Clear screen and show frame
         if (frame > 0) {
@@ -1943,7 +1944,11 @@ Options:
         for (let i = 0; i < maxLines; i++) {
           let row = "";
           for (let j = 0; j < allLines.length; j++) {
-            const line = allLines[j]![i] || "";
+            let line = "";
+            // Only show avatar lines after top padding
+            if (i >= topPadding[j]!) {
+              line = allLines[j]![i - topPadding[j]!] || "";
+            }
             const width = maxWidths[j]!;
             row += line + " ".repeat(Math.max(2, width - getVisibleWidth(line) + 2));
           }
