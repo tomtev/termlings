@@ -122,18 +122,39 @@ export class InitScene implements Scene {
 
     let currentCol = col
     let i = 0
+    let currentFg: [number, number, number] | null = null
+
     while (i < text.length && currentCol < this.cols) {
-      if (text[i] === "\x1b") {
-        // Skip ANSI escape sequence
-        while (i < text.length && text[i] !== "m") i++
+      if (text[i] === "\x1b" && text[i + 1] === "[") {
+        // Parse ANSI escape sequence
+        i += 2 // Skip \x1b[
+        let codeStr = ""
+        while (i < text.length && text[i] !== "m") {
+          codeStr += text[i]
+          i++
+        }
         i++ // Skip 'm'
+
+        // Handle color codes: 38;2;R;G;B (foreground RGB)
+        if (codeStr.startsWith("38;2;")) {
+          const parts = codeStr.split(";")
+          if (parts.length >= 5) {
+            const r = parseInt(parts[2] || "0")
+            const g = parseInt(parts[3] || "0")
+            const b = parseInt(parts[4] || "0")
+            currentFg = [r, g, b]
+          }
+        } else if (codeStr === "0") {
+          // Reset
+          currentFg = null
+        }
         continue
       }
 
       if (currentCol < buffer[row]!.length) {
         buffer[row]![currentCol] = {
           ch: text[i]!,
-          fg: null,
+          fg: currentFg,
           bg: null,
         }
       }
