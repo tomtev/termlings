@@ -39,7 +39,7 @@ Termlings solves this with:
 - **Persistent identities** — Each agent keeps the same name, avatar, and DNA across sessions
 - **Shared workspace** — One `.termlings/` directory, multiple agents reading/writing state
 - **Local-first** — Everything stays on your machine. No API calls, no auth keys, no vendor lock-in
-- **Claude-native** — Built for Claude Code. Uses hooks for typing presence, environment vars for context injection
+- **Agent-agnostic** — Works with Claude Code today, extensible for other agent runtimes in the future
 - **Human collaboration** — Operators can join the workspace, message agents, take over tasks, see what's happening in real-time
 
 ## Quick start
