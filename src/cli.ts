@@ -1940,23 +1940,30 @@ Options:
 
     // Load template (default to office)
     const templateName = opts.template || "office";
-    const templatePath = join(__dirname, "..", "..", "templates", templateName);
+    const templatePath = join(__dirname, "..", "templates", templateName);
 
     // Copy template directory if it exists
     const { mkdirSync, copyFileSync, readdirSync } = await import("fs");
     const { cp } = await import("fs/promises");
 
+    let templateLoaded = false;
     if (existsSync(templatePath)) {
       // Copy entire template to .termlings/
       try {
         await cp(templatePath, termlingsDir, { recursive: true });
         console.log(`✓ Loaded template: ${templateName}`);
+        templateLoaded = true;
       } catch (e) {
-        console.error(`Failed to copy template: ${e}`);
+        console.error(`Failed to copy template from ${templatePath}: ${e}`);
         // Continue anyway - create empty structure below
       }
-    } else {
-      // Fallback: create empty structure
+    }
+
+    if (!templateLoaded) {
+      // Template not found or copy failed - create empty structure
+      if (!existsSync(templatePath)) {
+        console.log(`(template not found at ${templatePath}, creating empty structure)`);
+      }
       mkdirSync(termlingsDir, { recursive: true });
       mkdirSync(join(termlingsDir, "map"), { recursive: true });
       mkdirSync(join(termlingsDir, "agents"), { recursive: true });

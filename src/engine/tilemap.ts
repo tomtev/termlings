@@ -27,23 +27,15 @@ export function loadMapFromFile(filePath: string): LoadedMap {
 
 /**
  * Load the default map for a project
- * Priority:
- * 1. .termlings/map.json (project custom - if renamed)
- * 2. templates/office/map.json (starter template)
+ * Requires .termlings/map.json (copied from template during init)
  */
 export function loadDefaultMap(): LoadedMap {
-  // Try project map first
   const projectMapPath = join(process.cwd(), ".termlings", "map.json")
-  if (existsSync(projectMapPath)) {
-    return loadMapFromFile(projectMapPath)
+  if (!existsSync(projectMapPath)) {
+    throw new Error(
+      `No map found: expected .termlings/map.json\n` +
+      `Run 'termlings' to initialize a new project with a default map.`
+    )
   }
-
-  // Try starter template
-  const dir = dirname(fileURLToPath(import.meta.url))
-  const starterMapPath = join(dir, "..", "..", "templates", "office", "map.json")
-  if (existsSync(starterMapPath)) {
-    return loadMapFromFile(starterMapPath)
-  }
-
-  throw new Error("No map found: expected .termlings/map.json or templates/office/map.json")
+  return loadMapFromFile(projectMapPath)
 }
