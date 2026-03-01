@@ -13,19 +13,19 @@ export interface LocalAgent {
  */
 export function discoverLocalAgents(): LocalAgent[] {
   const agents: LocalAgent[] = [];
-  const termlingsDir = join(process.cwd(), ".termlings");
+  const agentsDir = join(process.cwd(), ".termlings", "agents");
 
-  if (!existsSync(termlingsDir)) return agents;
+  if (!existsSync(agentsDir)) return agents;
 
   try {
-    const entries = readdirSync(termlingsDir, { withFileTypes: true });
+    const entries = readdirSync(agentsDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
 
-      // Skip special directories
-      if (["map", "agents", "store", "objects"].includes(entry.name) || entry.name.startsWith(".")) continue;
+      // Skip hidden directories
+      if (entry.name.startsWith(".")) continue;
 
-      const agentPath = join(termlingsDir, entry.name);
+      const agentPath = join(agentsDir, entry.name);
       const soulPath = join(agentPath, "SOUL.md");
 
       // Only consider it an agent if SOUL.md exists
