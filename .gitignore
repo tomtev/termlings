@@ -2,3 +2,5 @@ node_modules
 .frames
 .video-frames
 .DS_Store
+.termlings/**/*.queue.jsonl
+.termlings/**/*.msg.json
