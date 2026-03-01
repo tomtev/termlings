@@ -1910,11 +1910,14 @@ Options:
     const yellow = "\x1b[33m";
     const reset = "\x1b[0m";
 
-    // Clear screen and show full-screen init
+    // Clear screen and show full-screen init with title
     process.stdout.write("\x1b[2J\x1b[H");
 
     const cols = process.stdout.columns || 80;
     const rows = process.stdout.rows || 24;
+    const cyan = "\x1b[36m";
+    const yellow = "\x1b[33m";
+    const reset = "\x1b[0m";
 
     let confirmed: boolean;
 
@@ -1925,6 +1928,12 @@ Options:
       const getVisibleWidth = (str: string) => {
         return str.replace(/\x1b\[[0-9;]*m/g, '').length;
       };
+
+      // Title lines
+      const titleLines = [
+        `${cyan}termlings${reset}`,
+        `${yellow}Build autonomous AI agents & teams${reset}`,
+      ];
 
       // Render a frame and return the avatar lines
       const renderFrame = (frame: number): string[] => {
@@ -1954,11 +1963,11 @@ Options:
       const frames = [0, 1, 2, 3];
       const avatarLines = renderFrame(frames[0]!);
       const avatarHeight = avatarLines.length;
-      const avatarWidth = Math.max(...avatarLines.map(getVisibleWidth));
 
-      // Calculate layout: center avatars and prompt vertically
+      // Calculate layout: title + avatars + prompt
       const promptText = "Create .termlings and initialize first agent? (y/n) ";
-      const totalHeight = avatarHeight + 3; // avatars + spacing + prompt
+      const titleHeight = titleLines.length + 1; // title + spacing
+      const totalHeight = titleHeight + avatarHeight + 3; // title + avatars + spacing + prompt
       const startRow = Math.max(0, Math.floor((rows - totalHeight) / 2));
 
       // Helper to position and render full screen
@@ -1971,13 +1980,22 @@ Options:
           process.stdout.write("\n");
         }
 
+        // Title centered horizontally
+        for (const title of titleLines) {
+          const padding = Math.max(0, Math.floor((cols - getVisibleWidth(title)) / 2));
+          process.stdout.write(" ".repeat(padding) + title + "\n");
+        }
+
+        // Spacing after title
+        process.stdout.write("\n");
+
         // Avatars centered horizontally
         for (const line of frameLines) {
           const padding = Math.max(0, Math.floor((cols - getVisibleWidth(line)) / 2));
           process.stdout.write(" ".repeat(padding) + line + "\n");
         }
 
-        // Spacing
+        // Spacing before prompt
         process.stdout.write("\n");
 
         // Prompt centered horizontally
