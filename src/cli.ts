@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { dirname } from "path";
+import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import {
   renderTerminal,
