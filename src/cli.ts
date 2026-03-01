@@ -1914,53 +1914,54 @@ Options:
     console.log("This project doesn't have a .termlings directory yet.");
     console.log("Let's set up your first agent.\n");
 
-    // Show 3 random termlings avatars BEFORE prompting with animations
+    // Show 3 random termlings avatars BEFORE prompting
     try {
-      const { renderTerminal } = await import("./index.js");
+      const { renderTerminalSmall } = await import("./index.js");
       const dna1 = generateRandomDNA();
       const dna2 = generateRandomDNA();
       const dna3 = generateRandomDNA();
 
-      // Render with wave animation (frame 1 has arms up)
-      const avatar1 = renderTerminal(dna1, 1);
-      const avatar2 = renderTerminal(dna2, 1);
-      const avatar3 = renderTerminal(dna3, 1);
+      // Use small render for better spacing
+      const avatar1 = renderTerminalSmall(dna1);
+      const avatar2 = renderTerminalSmall(dna2);
+      const avatar3 = renderTerminalSmall(dna3);
 
-      // Split each avatar into lines
-      const lines1 = avatar1.split('\n');
-      const lines2 = avatar2.split('\n');
-      const lines3 = avatar3.split('\n');
+      // Split into lines
+      const lines1 = avatar1.split('\n').filter(l => l.trim());
+      const lines2 = avatar2.split('\n').filter(l => l.trim());
+      const lines3 = avatar3.split('\n').filter(l => l.trim());
+
+      // Calculate actual widths (count visible characters, not ANSI codes)
+      const getVisibleWidth = (str: string) => {
+        return str.replace(/\x1b\[[0-9;]*m/g, '').length;
+      };
+
+      const maxWidth1 = Math.max(...lines1.map(getVisibleWidth), 0);
+      const maxWidth2 = Math.max(...lines2.map(getVisibleWidth), 0);
+      const maxWidth3 = Math.max(...lines3.map(getVisibleWidth), 0);
 
       const maxLines = Math.max(lines1.length, lines2.length, lines3.length);
-      const colWidth = 20;  // Fixed width per column to handle size differences
 
-      // Render avatars, maintaining alignment
+      // Render with calculated padding
       console.log();
       for (let i = 0; i < maxLines; i++) {
         let row = "";
-        // Get line from each avatar, or empty if beyond its height
-        const line1 = i < lines1.length ? lines1[i] : "";
-        const line2 = i < lines2.length ? lines2[i] : "";
-        const line3 = i < lines3.length ? lines3[i] : "";
+        const line1 = lines1[i] || "";
+        const line2 = lines2[i] || "";
+        const line3 = lines3[i] || "";
 
-        row += line1.padEnd(colWidth);
-        row += line2.padEnd(colWidth);
-        row += line3.padEnd(colWidth);
+        row += line1 + " ".repeat(Math.max(2, maxWidth1 - getVisibleWidth(line1) + 2));
+        row += line2 + " ".repeat(Math.max(2, maxWidth2 - getVisibleWidth(line2) + 2));
+        row += line3;
         console.log(row);
       }
 
-      // Random speech bubbles
-      const phrases = [
-        "Hi there!",
-        "Let's build!",
-        "Ready to go",
-        "I'm ready",
-        "👋 Welcome!",
-      ];
+      // Random greeting
+      const phrases = ["Hi!", "Ready?", "Let's go!", "Welcome!", "👋"];
       const phrase = phrases[Math.floor(Math.random() * phrases.length)];
       console.log(`\n${cyan}${phrase}${reset}\n`);
     } catch (e) {
-      // Skip if avatar rendering fails
+      // Skip if rendering fails
     }
 
     const rl = createInterface({ input: process.stdin, output: process.stdout });
