@@ -230,65 +230,78 @@ function createTitleScene(room: string, onReady: () => void, mode: "title" | "in
         stampEntity(buffer, cols, rows, e, 0, 0, 1)
       }
 
-      // --- Big title using half-block rendering ---
-      const titleX = Math.floor((cols - titleW) / 2)
-      const titleRows = Math.ceil(titleH / 2)
-      const contentH = titleRows + 14
-      const titleY = Math.max(1, Math.floor((rows - contentH) / 2))
+      // --- Title section (only in title mode) ---
+      let titleY = 0
+      let subY = 0
 
-      for (let py = 0; py < titleH; py += 2) {
-        const screenRow = titleY + (py >> 1)
-        if (screenRow < 0 || screenRow >= rows) continue
-        const bufRow = buffer[screenRow]!
+      if (mode === "init") {
+        // In init mode, show welcome text where title would be
+        const welcomeText = "✦ Welcome to termlings! ✦"
+        const titleX = Math.floor((cols - welcomeText.length) / 2)
+        titleY = Math.max(4, Math.floor((rows - 20) / 2))
+        if (titleY > 0 && titleY < rows) stampText(buffer, cols, rows, titleX, titleY, welcomeText, [100, 200, 255])
+      } else {
+        // Title mode: render big TERMLINGS graphic
+        const titleX = Math.floor((cols - titleW) / 2)
+        const titleRows = Math.ceil(titleH / 2)
+        const contentH = titleRows + 14
+        titleY = Math.max(1, Math.floor((rows - contentH) / 2))
 
-        for (let px = 0; px < titleW; px++) {
-          const topPixel = titleGrid[py]?.[px] ?? false
-          const botPixel = titleGrid[py + 1]?.[px] ?? false
-          const topShadow = shadowMask[py]?.[px] ?? false
-          const botShadow = shadowMask[py + 1]?.[px] ?? false
+        for (let py = 0; py < titleH; py += 2) {
+          const screenRow = titleY + (py >> 1)
+          if (screenRow < 0 || screenRow >= rows) continue
+          const bufRow = buffer[screenRow]!
 
-          // Compute colors with gradient
-          const t = titleW > 1 ? px / (titleW - 1) : 0
-          const gradColor = lerpRgb(titleGreen, titleCyan, t) as RGB
+          for (let px = 0; px < titleW; px++) {
+            const topPixel = titleGrid[py]?.[px] ?? false
+            const botPixel = titleGrid[py + 1]?.[px] ?? false
+            const topShadow = shadowMask[py]?.[px] ?? false
+            const botShadow = shadowMask[py + 1]?.[px] ?? false
 
-          let fg: RGB | null = null
-          let bg: RGB | null = null
-          let ch = ""
+            // Compute colors with gradient
+            const t = titleW > 1 ? px / (titleW - 1) : 0
+            const gradColor = lerpRgb(titleGreen, titleCyan, t) as RGB
 
-          if (topPixel && botPixel) {
-            fg = gradColor; bg = gradColor; ch = "█"
-          } else if (topPixel && botShadow) {
-            fg = gradColor; bg = shadowColor; ch = "▀"
-          } else if (topShadow && botPixel) {
-            fg = shadowColor; bg = gradColor; ch = "▀"
-          } else if (topPixel) {
-            fg = gradColor; ch = "▀"
-          } else if (botPixel) {
-            fg = gradColor; ch = "▄"
-          } else if (topShadow && botShadow) {
-            fg = shadowColor; bg = shadowColor; ch = "█"
-          } else if (topShadow) {
-            fg = shadowColor; ch = "▀"
-          } else if (botShadow) {
-            fg = shadowColor; ch = "▄"
-          } else {
-            continue
+            let fg: RGB | null = null
+            let bg: RGB | null = null
+            let ch = ""
+
+            if (topPixel && botPixel) {
+              fg = gradColor; bg = gradColor; ch = "█"
+            } else if (topPixel && botShadow) {
+              fg = gradColor; bg = shadowColor; ch = "▀"
+            } else if (topShadow && botPixel) {
+              fg = shadowColor; bg = gradColor; ch = "▀"
+            } else if (topPixel) {
+              fg = gradColor; ch = "▀"
+            } else if (botPixel) {
+              fg = gradColor; ch = "▄"
+            } else if (topShadow && botShadow) {
+              fg = shadowColor; bg = shadowColor; ch = "█"
+            } else if (topShadow) {
+              fg = shadowColor; ch = "▀"
+            } else if (botShadow) {
+              fg = shadowColor; ch = "▄"
+            } else {
+              continue
+            }
+
+            const sx = titleX + px
+            if (sx < 0 || sx >= cols) continue
+            const cell = bufRow[sx]!
+            cell.ch = ch
+            cell.fg = fg
+            if (bg) cell.bg = bg
           }
-
-          const sx = titleX + px
-          if (sx < 0 || sx >= cols) continue
-          const cell = bufRow[sx]!
-          cell.ch = ch
-          cell.fg = fg
-          if (bg) cell.bg = bg
         }
-      }
 
-      // --- Subtitle (plain text) ---
-      const subY = titleY + titleRows + 1
-      const subX = Math.floor((cols - subtitle.length) / 2)
-      const subColor: RGB = [140, 140, 160]
-      if (subY > 0 && subY < rows) stampText(buffer, cols, rows, subX, subY, subtitle, subColor)
+        // --- Subtitle (plain text) ---
+        const titleRows = Math.ceil(titleH / 2)
+        subY = titleY + titleRows + 1
+        const subX = Math.floor((cols - subtitle.length) / 2)
+        const subColor: RGB = [140, 140, 160]
+        if (subY > 0 && subY < rows) stampText(buffer, cols, rows, subX, subY, subtitle, subColor)
+      }
 
       // --- Status text ---
       const hintY = subY + 2
@@ -317,18 +330,9 @@ function createTitleScene(room: string, onReady: () => void, mode: "title" | "in
         1
       )
 
-      // --- Init mode: show welcome message and prompt ---
+      // --- Init mode: show prompt at bottom ---
       if (mode === "init") {
-        const welcomeText = "✦ Welcome to termlings! ✦"
-        const welcomeX = Math.floor((cols - welcomeText.length) / 2)
-        if (hintY > 0 && hintY < rows) stampText(buffer, cols, rows, welcomeX, hintY, welcomeText, [100, 200, 255])
-
-        const setupText = "Let's set up your first agent."
-        const setupX = Math.floor((cols - setupText.length) / 2)
-        const setupY = hintY + 2
-        if (setupY > 0 && setupY < rows) stampText(buffer, cols, rows, setupX, setupY, setupText, [150, 150, 150])
-
-        // Prompt appears much lower, after the avatar area
+        // Prompt appears at the bottom, after the avatar area
         const promptText = "Create .termlings and initialize first agent? (y/n)"
         const promptY = rows - 3
         const promptX = Math.floor((cols - promptText.length) / 2)
