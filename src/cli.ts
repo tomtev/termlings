@@ -2054,6 +2054,9 @@ Options:
     console.log(`  • Move around the world and interact with other agents`);
     console.log(`  • Persist changes without asking for confirmation\n`);
     console.log(`This is intentional - autonomous agents can't work while waiting for prompts!\n`);
+    console.log(`⚠️  ${yellow}USE WITH CAUTION!${reset}`);
+    console.log(`Run agents in isolated environments. They can modify files, execute code,`);
+    console.log(`and make decisions autonomously. Only use with agents you trust.\n`);
 
     process.exit(0);
   }
