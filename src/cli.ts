@@ -1950,6 +1950,9 @@ Options:
     process.stdout.write("\x1b[2J\x1b[H");
 
     // Show simple termlings text
+    const cyan = "\x1b[36m";
+    const yellow = "\x1b[33m";
+    const reset = "\x1b[0m";
     console.log();
     console.log(`${cyan}termlings${reset}`);
     console.log(`${yellow}Build autonomous AI agents & teams${reset}`);
