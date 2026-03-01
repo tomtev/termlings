@@ -1914,6 +1914,8 @@ Options:
     console.log("This project doesn't have a .termlings directory yet.");
     console.log("Let's set up your first agent.\n");
 
+    let confirmed: boolean;
+
     // Show 5 random termlings avatars with animation
     try {
       const { renderTerminalSmall } = await import("./index.js");
@@ -1924,7 +1926,7 @@ Options:
       };
 
       // Render a frame and return the number of lines
-      const renderFrame = async (frame: number, isFirstFrame: boolean) => {
+      const renderFrame = (frame: number, isFirstFrame: boolean): number => {
         const avatars = dnas.map(dna => renderTerminalSmall(dna, frame));
         const allLines = avatars.map(a => a.split('\n').filter(l => l.trim()));
         const maxWidths = allLines.map(lines => Math.max(...lines.map(getVisibleWidth), 0));
@@ -1955,32 +1957,49 @@ Options:
         return maxLines + 1;
       };
 
-      // Animate with multiple cycles (3 cycles = 2.4 seconds, enough for user to read question)
+      // Show initial frame
       const frames = [0, 1, 2, 3];
-      let lineCount = 0;
-      for (let cycle = 0; cycle < 3; cycle++) {
-        for (let frameIdx = 0; frameIdx < frames.length; frameIdx++) {
-          lineCount = await renderFrame(frames[frameIdx]!, cycle === 0 && frameIdx === 0);
-          await new Promise(r => setTimeout(r, 200));
-        }
-      }
+      const avatarLineCount = renderFrame(frames[0]!, true);
 
       // Random greeting after animation
       const phrases = ["Hi!", "Ready?", "Let's go!", "Welcome!", "👋"];
       const phrase = phrases[Math.floor(Math.random() * phrases.length)];
       console.log(`${cyan}${phrase}${reset}\n`);
-    } catch (e) {
-      // Skip if rendering fails
-    }
 
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
 
-    const confirmed = await new Promise<boolean>((resolve) => {
-      rl.question("Create .termlings and initialize first agent? (y/n) ", (answer) => {
-        rl.close();
-        resolve(answer.toLowerCase() === "y");
+      // Start animation loop while waiting for input
+      let currentFrameIdx = 0;
+      let isAnswered = false;
+
+      const animInterval = setInterval(() => {
+        if (!isAnswered) {
+          currentFrameIdx = (currentFrameIdx + 1) % 4;
+          // Move cursor up past avatar + greeting lines to redraw
+          process.stdout.write(`\x1b[${avatarLineCount + 2}A\x1b[J`);
+          renderFrame(frames[currentFrameIdx]!, false);
+        }
+      }, 200);
+
+      confirmed = await new Promise<boolean>((resolve) => {
+        rl.question("Create .termlings and initialize first agent? (y/n) ", (answer) => {
+          isAnswered = true;
+          clearInterval(animInterval);
+          rl.close();
+          resolve(answer.toLowerCase() === "y");
+        });
       });
-    });
+    } catch (e) {
+      // Skip if rendering fails - show prompt without animation
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+      confirmed = await new Promise<boolean>((resolve) => {
+        rl.question("Create .termlings and initialize first agent? (y/n) ", (answer) => {
+          rl.close();
+          resolve(answer.toLowerCase() === "y");
+        });
+      });
+    }
 
     if (!confirmed) {
       console.log("\nRun 'termlings --help' to see all commands.");
