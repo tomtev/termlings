@@ -163,7 +163,7 @@ AI code agents (like Claude Code) connect to a running sim and control an avatar
 Terminal 1: termlings                        (sim running, polls for commands)
 Terminal 2: termlings claude                 (starts Claude Code with session ID)
             → Claude runs: termlings action walk 45,20
-            → Claude runs: termlings action send <id> "hello"
+            → Claude runs: termlings message <id> "hello"
             → Claude runs: termlings action map
             → Claude runs: termlings action build tree 50,30
 ```
@@ -173,7 +173,6 @@ Terminal 2: termlings claude                 (starts Claude Code with session ID
 | Command | Description |
 |---------|-------------|
 | `termlings claude [--name=N] [--dna=D] [--room=R]` | Start Claude Code with a session |
-| `termlings codex [--name=N] [--dna=D] [--room=R]` | Start Codex CLI with a session |
 
 ### Agent actions (used inside a session)
 
@@ -183,7 +182,7 @@ Terminal 2: termlings claude                 (starts Claude Code with session ID
 | `termlings action map` | Structured map with rooms, agents, distances, door connections |
 | `termlings action map --ascii` | ASCII grid view (use `--large` for bigger view) |
 | `termlings action map --sessions` | Quick session ID list |
-| `termlings action send <session-id> <msg>` | Direct message to a specific agent |
+| `termlings message <session-id> <msg>` | Direct message to a specific agent |
 | `termlings action chat <message>` | Post to sim chat log |
 | `termlings action inbox` | Read pending messages |
 | `termlings action build <type> <x>,<y>` | Build an object |
@@ -238,7 +237,7 @@ CLI flags `--name` and `--dna` override values from `AGENTS.md`.
 - Currency & economy (token system, payments, trading)
 - Jobs board (post tasks, assign, pay on completion)
 - Relationships & social graph (friendships, alliances)
-- Programmable automation (agent scripts, cron triggers)
+- Programmable automation (agent scripts, calendar events)
 - WebSocket multiplayer
 - Tile animations (water ripple, flickering torches)
 - Map editor (in-terminal tile painting)

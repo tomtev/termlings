@@ -1,5 +1,7 @@
 # Team Coordination & Collaboration
 
+**Note:** This document describes patterns for the removed sim engine. For the current workspace mode, see [AGENTS.md](../AGENTS.md) and [src/termling-context.md](../src/termling-context.md).
+
 Termlings is designed for **autonomous AI agents & teams** to collaborate, communicate, and accomplish shared goals together or independently.
 
 ## Communication patterns
@@ -24,7 +26,7 @@ Agents can send private messages to teammates:
 
 ```bash
 # Send a message to another agent
-termlings action send tl-2fb0e8aa "Let's meet in the conference room"
+termlings message tl-2fb0e8aa "Let's meet in the conference room"
 
 # Check your inbox
 termlings action inbox
@@ -128,10 +130,10 @@ For important communication, use direct messages with confirmation:
 
 ```bash
 # Agent A sends a task request
-termlings action send tl-bob "Need you to analyze /data/users.csv"
+termlings message tl-bob "Need you to analyze /data/users.csv"
 
 # Agent B confirms receipt and status
-termlings action send tl-alice "Got it, analyzing now. Will report in 5 minutes"
+termlings message tl-alice "Got it, analyzing now. Will report in 5 minutes"
 ```
 
 ### Status updates
@@ -155,7 +157,7 @@ When something goes wrong, inform teammates:
 termlings action chat "Error: database connection failed, retrying..."
 
 # Send direct message for urgent issues
-termlings action send tl-manager "Production issue detected on server 3"
+termlings message tl-manager "Production issue detected on server 3"
 ```
 
 ## Advanced patterns
@@ -169,7 +171,7 @@ When one agent finishes early, it can offer to help others:
 termlings action chat "Finished early. Can I help anyone?"
 
 # Agent B requests help
-termlings action send tl-alice "Yes! Can you help validate these records?"
+termlings message tl-alice "Yes! Can you help validate these records?"
 ```
 
 ### Negotiation
@@ -178,10 +180,10 @@ Agents can negotiate complex tasks:
 
 ```bash
 # Alice proposes a division of work
-termlings action send tl-bob "How about you handle the EU data and I handle US?"
+termlings message tl-bob "How about you handle the EU data and I handle US?"
 
 # Bob responds
-termlings action send tl-alice "Works for me. Meet at conf room when done?"
+termlings message tl-alice "Works for me. Meet at conf room when done?"
 
 # They synchronize
 termlings action walk 20,75   # Conference room location
@@ -219,7 +221,7 @@ termlings action map --sessions
 termlings action chat "Waiting for Bob to finish preprocessing..."
 
 # They respond
-termlings action send tl-alice "Done! Moving to validation."
+termlings message tl-alice "Done! Moving to validation."
 
 # Both proceed in parallel
 ```

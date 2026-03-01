@@ -3,8 +3,13 @@ import { randomBytes } from "crypto"
 import { readFileSync, existsSync, unlinkSync } from "fs"
 import { resolve as resolvePath, dirname as dirName, join as joinPath } from "path"
 import { fileURLToPath } from "url"
-import { homedir } from "os"
-import { writeCommand, readMessages, getIpcDir } from "../engine/ipc.js"
+import { readMessages, getIpcDir } from "../engine/ipc.js"
+import {
+  appendWorkspaceMessage,
+  ensureWorkspaceDirs,
+  removeSession,
+  upsertSession,
+} from "../workspace/state.js"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirName(__filename)
@@ -83,14 +88,10 @@ export async function launchLocalAgent(
   localAgent: any,
   passthroughArgs: string[],
   termlingOpts: Record<string, string>,
-  commandName?: string,
 ): Promise<never> {
   const { agents } = await import("./index.js")
-
-  // Use soul's command if specified, otherwise use provided command or default to claude
-  const finalCommandName = localAgent.soul?.command || commandName || "claude"
-  const adapter = agents[finalCommandName]
-  if (!adapter) throw new Error(`Agent command not found: ${finalCommandName}`)
+  const adapter = agents.claude
+  if (!adapter) throw new Error("Claude adapter is not available")
 
   // Override name and dna from local soul
   termlingOpts = { ...termlingOpts }
@@ -115,7 +116,7 @@ export async function launchAgent(
   adapter: AgentAdapter,
   passthroughArgs: string[],
   termlingOpts: Record<string, string>,
-  soulData?: { name: string; description: string; dna: string; command?: string },
+  soulData?: { name: string; description: string; dna: string },
 ): Promise<never> {
   const sessionId = `tl-${randomBytes(4).toString("hex")}`
   const context = loadContext()
@@ -195,34 +196,55 @@ export async function launchAgent(
     console.log()
   }
 
+  const ipcDir = getIpcDir()
+
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
     TERMLINGS_SESSION_ID: sessionId,
     TERMLINGS_AGENT_NAME: agentName,
     TERMLINGS_AGENT_DNA: agentDna,
-    TERMLINGS_IPC_DIR: getIpcDir(),
+    TERMLINGS_IPC_DIR: ipcDir,
   }
+  const typingPath = joinPath(ipcDir, `${sessionId}.typing.json`)
 
   // Add context to environment (already substituted above)
   if (context) {
     let envContext = finalContext
 
     if (process.env.TERMLINGS_SIMPLE === "1") {
-      envContext += `\n\n## Simple Mode
+      envContext += `\n\n## Workspace Mode
 
-This room is running in SIMPLE MODE:
-- There is NO map. Walking is disabled.
-- \`termlings action walk\` will fail.
-- \`termlings action place\` and \`termlings action destroy\` will fail.
-- Use \`termlings action map\` to see connected agents and their session IDs.
-- Use \`termlings action send <session-id> <message>\` to communicate.
-- Gestures (talk, wave) and stop still work.`
+- Map/pathfinding actions are removed.
+- Use \`termlings list-agents\` to discover teammates.
+- Use \`termlings message <target> <message>\` to communicate.
+- Use \`termlings message human:<id> <message>\` to DM human operators.
+- Use \`termlings task\` and \`termlings calendar\` for task/calendar management.`
     }
     env.TERMLINGS_CONTEXT = envContext
   }
 
-  // Announce to the sim so the agent entity spawns immediately
-  writeCommand(sessionId, { action: "join", name: agentName, dna: agentDna, ts: Date.now() })
+  // Register as an online workspace session.
+  ensureWorkspaceDirs()
+  upsertSession(sessionId, {
+    name: agentName,
+    dna: agentDna,
+  })
+  appendWorkspaceMessage({
+    kind: "system",
+    from: "system",
+    fromName: "Workspace",
+    text: `${agentName} joined`,
+    target: sessionId,
+  })
+  const heartbeatTimer = setInterval(() => {
+    try {
+      upsertSession(sessionId, {
+        name: agentName,
+        dna: agentDna,
+        lastSeenAt: Date.now(),
+      })
+    } catch {}
+  }, 5000)
 
   const cols = process.stdout.columns || 80
   const rows = process.stdout.rows || 24
@@ -282,15 +304,25 @@ This room is running in SIMPLE MODE:
   }, 2000)
 
   // Handle cleanup on exit
+  let cleanedUp = false
   const cleanup = () => {
+    if (cleanedUp) return
+    cleanedUp = true
+
+    clearInterval(heartbeatTimer)
     clearInterval(pollTimer)
     process.stdin.off("data", onStdinData)
     process.stdout.off("resize", onResize)
     process.stdin.setRawMode?.(false)
-
-    // Send leave command to announce departure
-    // The sim will process this command and pollCommands() will delete the queue file
-    writeCommand(sessionId, { action: "leave" as any, name: agentName, ts: Date.now() })
+    removeSession(sessionId)
+    try { unlinkSync(typingPath) } catch {}
+    appendWorkspaceMessage({
+      kind: "system",
+      from: "system",
+      fromName: "Workspace",
+      text: `${agentName} left`,
+      target: sessionId,
+    })
   }
 
   // Forward signals to child and cleanup

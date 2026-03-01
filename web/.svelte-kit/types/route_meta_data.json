@@ -1,0 +1,56 @@
+{
+	"/": [
+		"src/routes/+page.server.ts"
+	],
+	"/api/hub/health": [
+		"src/routes/api/hub/health/+server.ts"
+	],
+	"/api/v1/messages": [
+		"src/routes/api/v1/messages/+server.ts"
+	],
+	"/api/v1/projects": [
+		"src/routes/api/v1/projects/+server.ts"
+	],
+	"/api/v1/sessions": [
+		"src/routes/api/v1/sessions/+server.ts"
+	],
+	"/api/v1/sessions/leave": [
+		"src/routes/api/v1/sessions/leave/+server.ts"
+	],
+	"/api/v1/state": [
+		"src/routes/api/v1/state/+server.ts"
+	],
+	"/api/workspace": [
+		"src/routes/api/workspace/+server.ts"
+	],
+	"/api/workspace/join": [
+		"src/routes/api/workspace/join/+server.ts"
+	],
+	"/api/workspace/leave": [
+		"src/routes/api/workspace/leave/+server.ts"
+	],
+	"/api/workspace/message": [
+		"src/routes/api/workspace/message/+server.ts"
+	],
+	"/api/workspace/stream": [
+		"src/routes/api/workspace/stream/+server.ts"
+	],
+	"/[project]": [
+		"src/routes/[project]/+page.server.ts"
+	],
+	"/[project]/agents/[dna]": [
+		"src/routes/[project]/agents/[dna]/+page.server.ts"
+	],
+	"/[project]/calendar": [
+		"src/routes/[project]/calendar/+page.server.ts"
+	],
+	"/[project]/channel": [
+		"src/routes/[project]/channel/+page.server.ts"
+	],
+	"/[project]/channel/[channel]": [
+		"src/routes/[project]/channel/[channel]/+page.server.ts"
+	],
+	"/[project]/tasks": [
+		"src/routes/[project]/tasks/+page.server.ts"
+	]
+}

@@ -7,10 +7,21 @@ import type { Cookie, BrowserScreenshot, HealthCheckResponse } from "./browser-t
 export class BrowserClient {
   private baseUrl: string
   private timeout: number
+  private agentContext: {
+    sessionId?: string
+    agentName?: string
+    agentDna?: string
+  }
 
   constructor(port: number, timeout: number = 30000) {
     this.baseUrl = `http://127.0.0.1:${port}`
     this.timeout = timeout
+    // Read agent context from environment
+    this.agentContext = {
+      sessionId: process.env.TERMLINGS_SESSION_ID,
+      agentName: process.env.TERMLINGS_AGENT_NAME,
+      agentDna: process.env.TERMLINGS_AGENT_DNA,
+    }
   }
 
   /**
@@ -100,6 +111,48 @@ export class BrowserClient {
   }
 
   /**
+   * Get list of all tabs
+   */
+  async getTabs(): Promise<Array<{ id: string; title?: string; url?: string }>> {
+    const response = await this.fetch("/tabs", { method: "GET" })
+    const data = (await response.json()) as {
+      tabs?: Array<{ id: string; title?: string; url?: string }>
+    }
+    return data.tabs || []
+  }
+
+  /**
+   * Create a new tab
+   */
+  async createTab(url?: string): Promise<string> {
+    const response = await this.fetch("/tabs", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    })
+    const data = (await response.json()) as { id?: string; tabId?: string }
+    return data.id || data.tabId || ""
+  }
+
+  /**
+   * Lock a tab with agent owner
+   */
+  async lockTab(tabId: string, owner: string, ttl: number = 3600): Promise<void> {
+    await this.fetch(`/tabs/${tabId}/lock`, {
+      method: "POST",
+      body: JSON.stringify({ owner, ttl }),
+    })
+  }
+
+  /**
+   * Unlock a tab
+   */
+  async unlockTab(tabId: string): Promise<void> {
+    await this.fetch(`/tabs/${tabId}/lock`, {
+      method: "DELETE",
+    })
+  }
+
+  /**
    * Internal fetch wrapper with error handling
    */
   private async fetch(
@@ -110,14 +163,28 @@ export class BrowserClient {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), this.timeout)
 
+    // Build headers with agent context
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
+    }
+
+    // Add agent context headers if available
+    if (this.agentContext.sessionId) {
+      headers["X-Termlings-Session-Id"] = this.agentContext.sessionId
+    }
+    if (this.agentContext.agentName) {
+      headers["X-Termlings-Agent-Name"] = this.agentContext.agentName
+    }
+    if (this.agentContext.agentDna) {
+      headers["X-Termlings-Agent-Dna"] = this.agentContext.agentDna
+    }
+
     try {
       const response = await fetch(url, {
         ...options,
         signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          ...(options.headers || {}),
-        },
+        headers,
       })
 
       if (!response.ok) {

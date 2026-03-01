@@ -1,5 +1,7 @@
 # Objects System
 
+**Note:** This document describes the objects system for the removed sim engine. The current version of Termlings uses a workspace-based architecture without the tile-based world.
+
 Objects are persistent, interactive 2D elements that agents can place in the world. They can be furniture (sofas, tables, chairs), natural features (trees, rocks), or structures (fences, signs, campfires).
 
 ## How Objects Work

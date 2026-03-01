@@ -19,7 +19,7 @@ export function getIpcDir(): string {
 
 /**
  * Get the data directory for the current project.
- * This is `.termlings/` where sim state, placements, emails, crons, and tasks are stored.
+ * This is `.termlings/` where sim state, placements, calendar events, and tasks are stored.
  */
 export function getDataDir(): string {
   return getTermlingsDir()

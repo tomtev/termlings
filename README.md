@@ -30,7 +30,7 @@ Build **autonomous worker teams** where agents can:
 - **Shared terminal world** — Tile-based sim with buildings, doors, desks, and furniture — all rendered with ANSI escape codes
 - **A* pathfinding** — Agents navigate intelligently with room-aware pathfinding, auto-opening doors, and obstacle avoidance
 - **Persistent objects** — Agents can create, place, and interact with objects that survive across sessions
-- **Works with any AI CLI** — Claude Code, Codex, Pi, or any tool that can run shell commands
+- **Claude-first agent runtime** — optimized for Claude Code hooks and local file-based orchestration
 
 ## The vision
 
@@ -56,58 +56,113 @@ The terminal is the perfect medium: it's where code agents already live, it's li
 ## Quick start
 
 ```bash
-# Terminal 1: Start the sim
+# Terminal 1: Start the web workspace
 termlings
 
-# Terminal 2: Launch an agent (choose one)
+# Terminal 2: Launch an agent
 termlings claude              # Claude Code
-termlings pi                  # Pi coding agent
-termlings codex               # Codex CLI
 ```
+
+On first run in a project, `termlings` will ask to initialize a local `.termlings/` workspace and select a template (currently `office`).
+
+If a Termlings web server is already running, running `termlings` in another project will register that project and add it as a project tab in the existing UI.
 
 See [AGENTS.md](AGENTS.md) for detailed agent setup, commands, and examples.
 
-## Sim controls
+## Workspace controls
 
-| Key | Action |
-|-----|--------|
-| `1-9` | Select agent by number |
-| `Left/Right` | Cycle selection |
-| `C` | Open chat (message selected agent) |
-| `Z` | Toggle zoom level |
-| `D` | Toggle debug overlay |
-| `S` | Toggle sound |
-| `Q` | Quit |
+The workspace is web-first (SvelteKit + Oat UI). Agent coordination happens via simple CLI commands:
 
-## Game management
+### Agent commands
+
+- **`termlings list-agents`** — discover active teammates and their session IDs
+- **`termlings message <target> <message>`** — send direct messages
+  - `<session-id>` — message a specific agent session
+  - `agent:<dna>` — message agent by stable identity (works across restarts)
+  - `human:<id>` — message human operator (use `human:default` for owner)
+- **`termlings task <cmd>`** — manage work
+  - `task list` — see all tasks
+  - `task claim <id>` — claim a task
+  - `task status <id> <status>` — update task status
+  - `task note <id> <note>` — add progress notes
+- **`termlings calendar <cmd>`** — view schedule
+  - `calendar list` — see your events
+  - `calendar show <id>` — view event details
+
+### Example workflow
 
 ```bash
-# Clear all game state for a room
-termlings --clear
-termlings --clear --room village
+# 1. See who's online
+termlings list-agents
 
-# Use a different room
-termlings --room village
-termlings claude --room village
+# 2. Check your tasks
+termlings task list
 
-# Simple mode (no map, just agent grid with chat)
-termlings --simple
+# 3. Claim work
+termlings task claim task-42
+termlings task status task-42 in-progress
+
+# 4. Coordinate with teammates
+termlings message agent:alice-dna "Starting task-42, will finish in 30min"
+
+# 5. Update progress
+termlings task note task-42 "50% complete, hit issue with API rate limits"
+
+# 6. Ask for help if blocked
+termlings message human:default "Need AWS credentials to proceed with task-42"
+
+# 7. Complete work
+termlings task status task-42 completed "Results in /tmp/analysis.json"
+termlings message agent:bob-dna "task-42 done, ready for review"
 ```
+
+## Workspace management
+
+```bash
+# Start on default local host/port
+termlings
+
+# Expose server outside localhost
+termlings --host 0.0.0.0 --port 4173
+
+# Clear runtime state (sessions + IPC queues/messages)
+termlings --clear
+
+# Initialize workspace explicitly
+termlings init
+```
+
+## Shared API
+
+The workspace exposes a shared HTTP API for web UI and external apps:
+
+- `GET /api/v1/projects` — list known projects in the local hub
+- `GET /api/v1/state` — full snapshot (sessions, messages, tasks, crons) for a project
+- `GET /api/v1/sessions` — active sessions
+- `POST /api/v1/sessions` — upsert session `{ sessionId, name, dna }`
+- `POST /api/v1/sessions/leave` — remove session `{ sessionId }`
+- `POST /api/v1/messages` — send chat/DM `{ kind, text, target?, from?, fromName? }`
+
+Project scoping:
+- Use `?project=<projectId>` on API endpoints, or pass `projectId` in POST body for write endpoints.
+- In the web UI, project tabs switch this automatically.
+
+Auth:
+- Set `TERMLINGS_API_TOKEN` to require auth.
+- Clients then send either `Authorization: Bearer <token>` or `x-termlings-token: <token>`.
 
 ## Agent context
 
 When an agent joins, termlings automatically injects **termling-context.md** — a context file that tells the agent:
 
 - **Who it is** — Name, DNA, session ID, purpose
-- **How to interact** — Available commands (`walk`, `send`, `chat`, `build`, `map`, etc.)
+- **How to interact** — Available commands (`sessions`, `send`, `chat`, tasks, etc.)
 - **Communication rules** — How agents discover and message each other
-- **World mechanics** — Build types, room layout, pathfinding basics
+- **Workspace mechanics** — Threads, direct messages, and shared task coordination
 
-This context is injected automatically by each agent's adapter:
+This context is injected automatically by the Claude adapter:
 
 - **Claude** (`termlings claude`) — Uses `--append-system-prompt`
-- **Pi** (`termlings pi`) — Receives via `@termling-context.md` file reference
-- **Codex** (`termlings codex`) — Custom adapter injection
 
 The context file is **lightweight** (~2.5KB) so agents can understand the world with minimal token overhead. Agents receive environment variables for identity:
 
@@ -182,11 +237,7 @@ termlings
 **Terminal 2+: Join as an agent**
 ```bash
 termlings claude              # Launch Claude Code as an agent
-termlings pi                  # Launch Pi coding agent
-termlings codex               # Launch Codex CLI as an agent
 termlings rusty               # Launch local soul "rusty" with Claude
-termlings --with pi rusty     # Launch local soul "rusty" with Pi
-termlings --with codex rusty  # Launch local soul "rusty" with Codex
 ```
 
 Each agent gets a unique session ID and can see other agents on the map, send messages, move around, and interact with the world.

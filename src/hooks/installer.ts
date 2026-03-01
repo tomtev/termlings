@@ -5,16 +5,12 @@ const HOOK_SCRIPT_NAME = "termlings-hooks.sh";
 const HOOK_SCRIPT_PATH = join(homedir(), ".claude", "hooks", HOOK_SCRIPT_NAME);
 const CLAUDE_SETTINGS_PATH = join(homedir(), ".claude", "settings.json");
 
-// Hook into the same Claude events that touchgrass uses
-const HOOK_EVENTS = ["UserPromptSubmit", "Stop", "PermissionRequest"] as const;
+const HOOK_EVENTS = ["UserPromptSubmit", "Stop"] as const;
 
-function buildHookEntry(event: string): { matcher?: string; hooks: { type: string; command: string; async: boolean; timeout: number }[] } {
+function buildHookEntry(): { matcher?: string; hooks: { type: string; command: string; async: boolean; timeout: number }[] } {
   const entry: { matcher?: string; hooks: { type: string; command: string; async: boolean; timeout: number }[] } = {
     hooks: [{ type: "command", command: HOOK_SCRIPT_PATH, async: true, timeout: 2 }],
   };
-  if (event === "PermissionRequest") {
-    entry.matcher = "*";
-  }
   return entry;
 }
 
@@ -50,6 +46,22 @@ export async function installTermlingsHooks(): Promise<{ scriptInstalled: boolea
     const hooks = (settings.hooks || {}) as Record<string, unknown[]>;
     let needsWrite = false;
 
+    // Remove stale termlings hook registration from PermissionRequest.
+    const permissionEntries = hooks.PermissionRequest as Array<{ hooks?: Array<{ command?: string }> }> | undefined;
+    if (permissionEntries && permissionEntries.length > 0) {
+      const filtered = permissionEntries.filter(
+        (entry) => !entry.hooks?.some((h) => h.command === HOOK_SCRIPT_PATH)
+      );
+      if (filtered.length !== permissionEntries.length) {
+        if (filtered.length > 0) {
+          hooks.PermissionRequest = filtered as unknown[];
+        } else {
+          delete hooks.PermissionRequest;
+        }
+        needsWrite = true;
+      }
+    }
+
     for (const event of HOOK_EVENTS) {
       const existing = hooks[event] as Array<{ hooks?: Array<{ command?: string }> }> | undefined;
       const alreadyInstalled = existing?.some(
@@ -57,7 +69,7 @@ export async function installTermlingsHooks(): Promise<{ scriptInstalled: boolea
       );
       if (!alreadyInstalled) {
         if (!hooks[event]) hooks[event] = [];
-        (hooks[event] as unknown[]).push(buildHookEntry(event));
+        (hooks[event] as unknown[]).push(buildHookEntry());
         needsWrite = true;
       }
     }

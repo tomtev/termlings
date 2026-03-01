@@ -152,24 +152,129 @@ if (agentAdapter) {
   }
 }
 
-// 2. Agent IPC subcommands: termlings action <verb>
+// Helper function to send messages
+async function sendMessage(
+  target: string,
+  text: string,
+  sessionId: string,
+  agentName: string,
+  agentDna: string
+) {
+  const { writeMessages } = await import("./engine/ipc.js");
+  const { appendWorkspaceMessage, readSession, upsertSession, listSessions } = await import("./workspace/state.js");
+
+  const rawTarget = target;
+  const resolvedTarget =
+    rawTarget === "owner" || rawTarget === "operator"
+      ? "human:default"
+      : rawTarget;
+  const fromName = agentName || "agent";
+  const fromDna = agentDna || "0000000";
+  const isHumanTarget = resolvedTarget.startsWith("human:");
+  let targetSession = isHumanTarget ? null : readSession(resolvedTarget);
+  let targetDna = targetSession?.dna;
+  let finalTarget = resolvedTarget;
+
+  if (!isHumanTarget && resolvedTarget.startsWith("agent:")) {
+    const dna = resolvedTarget.slice("agent:".length);
+    if (dna.length > 0) {
+      const candidates = listSessions()
+        .filter((session) => session.dna === dna)
+        .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+      targetSession = candidates[0] ?? null;
+      targetDna = dna;
+      finalTarget = targetSession?.sessionId ?? resolvedTarget;
+    }
+  }
+
+  if (!isHumanTarget && !targetSession) {
+    console.error(`Unknown target: ${resolvedTarget}`);
+    console.error("Use `termlings list-agents` to discover agent IDs, `agent:<dna>` for stable threads, or `human:<id>` for a human operator.");
+    process.exit(1);
+  }
+
+  // Keep sender fresh in session listing while chatting.
+  upsertSession(sessionId, {
+    name: fromName,
+    dna: fromDna,
+  });
+
+  if (targetSession) {
+    writeMessages(finalTarget, [{
+      from: sessionId,
+      fromName,
+      text,
+      ts: Date.now(),
+    }]);
+  }
+
+  appendWorkspaceMessage({
+    kind: "dm",
+    from: sessionId,
+    fromName,
+    fromDna,
+    target: finalTarget,
+    targetName: targetSession?.name ?? (isHumanTarget ? "Human Operator" : undefined),
+    targetDna,
+    text,
+  });
+
+  console.log(`Sent to ${resolvedTarget}: "${text}"`);
+}
+
+// 2. Agent session discovery: termlings list-agents
+if (positional[0] === "list-agents") {
+  if (flags.has("help")) {
+    console.log(`
+👥 List Agents - See who's online
+
+Shows all active agent sessions in the workspace.
+
+USAGE:
+  termlings list-agents
+
+OUTPUT:
+  Session ID (16 chars)  Agent Name  [DNA]  Last Seen
+  tl-abc123def456    Alice         [2c5f423] last-seen 5s ago (you)
+  tl-xyz789pqr012    Bob           [1b4e312] last-seen 120s ago
+
+NOTES:
+  • (you) = Current session
+  • Last seen: Time since last activity
+  • DNA: Stable agent identity (persists across restarts)
+
+USE WHEN:
+  • Starting work (check who's active)
+  • Coordinating with teammates
+  • Finding agent DNAs to message
+`);
+    process.exit(0);
+  }
+
+  const { listSessions } = await import("./workspace/state.js");
+  const sessions = listSessions();
+  if (sessions.length === 0) {
+    console.log("No active sessions");
+    process.exit(0);
+  }
+
+  const sessionId = process.env.TERMLINGS_SESSION_ID;
+  for (const s of sessions) {
+    const ageSeconds = Math.max(0, Math.floor((Date.now() - s.lastSeenAt) / 1000));
+    const you = s.sessionId === sessionId ? " (you)" : "";
+    console.log(`${s.sessionId.padEnd(16)} ${s.name.padEnd(14)} [${s.dna}] last-seen ${ageSeconds}s ago${you}`);
+  }
+  process.exit(0);
+}
+
+// 2. Deprecated: termlings action (kept for backward compat, just show error)
 if (positional[0] === "action") {
-  // IPC reads/writes go to the current project's .termlings directory
-
   const verb = positional[1];
-  const helpText = `Usage: termlings action <command>
-
-Commands:
-  sessions                    List active agent sessions
-  send <target> <msg>        Direct message to an agent or human operator
-                            Targets: <session-id> | agent:<dna> | human:<id>
-  calendar list              See your scheduled calendar events
-  calendar show <id>         See calendar event details
-  task list                  See all project tasks
-  task show <id>             See task details
-  task claim <id>            Claim a task to work on
-  task status <id> <status>  Update task (in-progress|completed|blocked)
-  task note <id> <note>      Add a note to a task`;
+  const helpText = `'action' command is deprecated. Use top-level commands instead:
+  termlings list-agents              List active agent sessions
+  termlings message <target> <text>  Send direct message
+  termlings task <cmd>               Task management
+  termlings calendar <cmd>           Calendar management`;
 
   if (!verb || verb === "--help" || verb === "-h") {
     console.error(helpText);
@@ -197,7 +302,7 @@ Commands:
   if (removedVerbs.has(verb)) {
     if (verb === "chat") {
       console.error(`'chat' is no longer available. Use direct messages only.`);
-      console.error(`Use: termlings action send human:<id> "<message>"`);
+      console.error(`Use: termlings message human:<id> "<message>"`);
     } else {
       console.error(`'${verb}' is no longer available. The terminal sim/map engine has been removed.`);
       console.error(`Use the web workspace and messaging/task commands instead.`);
@@ -205,219 +310,162 @@ Commands:
     process.exit(1);
   }
 
-  if (verb === "sessions") {
-    const { listSessions } = await import("./workspace/state.js");
-    const sessions = listSessions();
-    if (sessions.length === 0) {
-      console.log("No active sessions");
-      process.exit(0);
-    }
-
-    for (const s of sessions) {
-      const ageSeconds = Math.max(0, Math.floor((Date.now() - s.lastSeenAt) / 1000));
-      const you = s.sessionId === sessionId ? " (you)" : "";
-      console.log(`${s.sessionId.padEnd(16)} ${s.name.padEnd(14)} [${s.dna}] last-seen ${ageSeconds}s ago${you}`);
-    }
-    process.exit(0);
-  }
-
-  if (verb === "send") {
-    const { writeMessages } = await import("./engine/ipc.js");
-    const { appendWorkspaceMessage, readSession, upsertSession } = await import("./workspace/state.js");
-    if (!sessionId) {
-      console.error("Error: TERMLINGS_SESSION_ID env var not set");
-      process.exit(1);
-    }
-    const rawTarget = positional[2];
-    const text = positional.slice(3).join(" ");
-    if (!rawTarget || !text) {
-      console.error("Usage: termlings action send <target> <message>");
-      console.error("Targets: <session-id> | agent:<dna> | human:<id> (aliases: operator, owner)");
-      process.exit(1);
-    }
-    const target =
-      rawTarget === "owner" || rawTarget === "operator"
-        ? "human:default"
-        : rawTarget;
-    const fromName = _agentName || "agent";
-    const fromDna = _agentDna || "0000000";
-    const isHumanTarget = target.startsWith("human:");
-    let targetSession = isHumanTarget ? null : readSession(target);
-    let targetDna = targetSession?.dna;
-    let resolvedTarget = target;
-
-    if (!isHumanTarget && target.startsWith("agent:")) {
-      const { listSessions } = await import("./workspace/state.js");
-      const dna = target.slice("agent:".length);
-      if (dna.length > 0) {
-        const candidates = listSessions()
-          .filter((session) => session.dna === dna)
-          .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
-        targetSession = candidates[0] ?? null;
-        targetDna = dna;
-        resolvedTarget = targetSession?.sessionId ?? target;
-      }
-    }
-
-    if (!isHumanTarget && !targetSession) {
-      console.error(`Unknown target: ${target}`);
-      console.error("Use `termlings action sessions` to discover agent IDs, `agent:<dna>` for stable threads, or `human:<id>` for a human operator.");
-      process.exit(1);
-    }
-
-    // Keep sender fresh in session listing while chatting.
-    upsertSession(sessionId, {
-      name: fromName,
-      dna: fromDna,
-    });
-
-    if (targetSession) {
-      writeMessages(resolvedTarget, [{
-        from: sessionId,
-        fromName,
-        text,
-        ts: Date.now(),
-      }]);
-    }
-
-    appendWorkspaceMessage({
-      kind: "dm",
-      from: sessionId,
-      fromName,
-      fromDna,
-      target: resolvedTarget,
-      targetName: targetSession?.name ?? (isHumanTarget ? "Human Operator" : undefined),
-      targetDna,
-      text,
-    });
-
-    console.log(`Sent to ${target}: "${text}"`);
-    process.exit(0);
-  }
-
-  if (verb === "calendar") {
-    const { getAgentCalendarEvents, getCalendarEvent, formatCalendarEvent, formatAgentCalendarEventList } = await import("./engine/calendar.js");
-    const sessionId = process.env.TERMLINGS_SESSION_ID;
-
-    if (!sessionId) {
-      console.error("Error: TERMLINGS_SESSION_ID env var not set");
-      process.exit(1);
-    }
-
-    const subcommand = positional[2];
-    const eventId = positional[3];
-
-    if (subcommand === "list") {
-      const events = getAgentCalendarEvents(sessionId);
-      console.log(formatAgentCalendarEventList(events));
-      process.exit(0);
-    }
-
-    if (subcommand === "show") {
-      if (!eventId) {
-        console.error("Usage: termlings action calendar show <event-id>");
-        process.exit(1);
-      }
-      const event = getCalendarEvent(eventId);
-      if (!event) {
-        console.error(`Calendar event not found: ${eventId}`);
-        process.exit(1);
-      }
-      console.log(formatCalendarEvent(event));
-      process.exit(0);
-    }
-
-    console.error("Usage: termlings action calendar <list|show>");
-    process.exit(1);
-  }
-
-  if (verb === "task") {
-    const { getTask, getAllTasks, claimTask, updateTaskStatus, addTaskNote, formatTask, formatAgentTaskList } = await import("./engine/tasks.js");
-    const sessionId = process.env.TERMLINGS_SESSION_ID;
-    const agentName = process.env.TERMLINGS_AGENT_NAME || "Agent";
-
-    if (!sessionId) {
-      console.error("Error: TERMLINGS_SESSION_ID env var not set");
-      process.exit(1);
-    }
-
-    const subcommand = positional[2];
-    const taskId = positional[3];
-
-    if (subcommand === "list") {
-      const tasks = getAllTasks();
-      console.log(formatAgentTaskList(tasks, sessionId));
-      process.exit(0);
-    }
-
-    if (subcommand === "show") {
-      if (!taskId) {
-        console.error("Usage: termlings action task show <task-id>");
-        process.exit(1);
-      }
-      const task = getTask(taskId);
-      if (!task) {
-        console.error(`Task not found: ${taskId}`);
-        process.exit(1);
-      }
-      console.log(formatTask(task));
-      process.exit(0);
-    }
-
-    if (subcommand === "claim") {
-      if (!taskId) {
-        console.error("Usage: termlings action task claim <task-id>");
-        process.exit(1);
-      }
-      const task = claimTask(taskId, sessionId, agentName, "default");
-      if (!task) {
-        console.error(`Cannot claim task: ${taskId} (not found or already claimed)`);
-        process.exit(1);
-      }
-      console.log(`✓ Task claimed: ${task.title}`);
-      process.exit(0);
-    }
-
-    if (subcommand === "status") {
-      const newStatus = positional[4];
-      const note = positional.slice(5).join(" ");
-      if (!taskId || !newStatus) {
-        console.error("Usage: termlings action task status <task-id> <open|claimed|in-progress|completed|blocked> [note]");
-        process.exit(1);
-      }
-      const task = updateTaskStatus(taskId, newStatus as any, sessionId, agentName, note || undefined, "default");
-      if (!task) {
-        console.error(`Task not found: ${taskId}`);
-        process.exit(1);
-      }
-      console.log(`✓ Status updated: ${newStatus}`);
-      process.exit(0);
-    }
-
-    if (subcommand === "note") {
-      const text = positional.slice(4).join(" ");
-      if (!taskId || !text) {
-        console.error("Usage: termlings action task note <task-id> <note...>");
-        process.exit(1);
-      }
-      const task = addTaskNote(taskId, text, sessionId, agentName, "default");
-      if (!task) {
-        console.error(`Task not found: ${taskId}`);
-        process.exit(1);
-      }
-      console.log(`✓ Note added`);
-      process.exit(0);
-    }
-
-    console.error("Usage: termlings action task <list|show|claim|status|note>");
-    process.exit(1);
-  }
-
-  console.error(`Unknown action: ${verb}`);
+  console.error(helpText);
+  console.error("\nNote: Use 'termlings list-agents' instead for agent discovery.");
   process.exit(1);
 }
 
-// 2a. Owner calendar management: termlings calendar <create|list|show|edit|delete|enable|disable>
+// 2a. Direct messaging: termlings message <target> <text>
+if (positional[0] === "message") {
+  if (flags.has("help")) {
+    console.log(`
+💬 Message - Send DMs to agents & operators
+
+Send direct messages to other agents, operators, or back to human handlers.
+
+USAGE:
+  termlings message <target> <text>
+
+TARGETS:
+  <session-id>          A specific live session (from termlings list-agents)
+  agent:<dna>           Stable agent identity (works across restarts) ← PREFERRED
+  human:<id>            Human operator inbox
+    human:default       Owner/operator shortcut
+    human:operator      Alias for operator
+    human:owner         Alias for owner
+
+EXAMPLES:
+  # Message another agent
+  termlings message agent:2c5f423 "I'm starting the data validation task"
+
+  # Message the operator (high priority)
+  termlings message human:default "Task completed, results in /tmp/output.json"
+
+  # Message a specific live session
+  termlings message tl-abc123def456 "Quick question about the API key"
+
+BEST PRACTICES:
+  ✓ Use agent:<dna> for persistent threads (survives restarts)
+  ✓ Message human:default for blockers or status updates
+  ✓ Keep messages concise (timestamps auto-added)
+  ✓ Include concrete next steps
+  ✓ Use for coordination, not logging
+
+OPERATOR EXPECTATIONS:
+  1. Acknowledge quickly
+  2. Give next step + ETA
+  3. State blockers clearly if stuck
+  4. High priority: human messages get immediate attention
+`);
+    process.exit(0);
+  }
+
+  const sessionId = process.env.TERMLINGS_SESSION_ID;
+  const _agentName = process.env.TERMLINGS_AGENT_NAME || undefined;
+  const _agentDna = process.env.TERMLINGS_AGENT_DNA || undefined;
+
+  if (!sessionId) {
+    console.error("Error: TERMLINGS_SESSION_ID env var not set");
+    process.exit(1);
+  }
+
+  const target = positional[1];
+  const text = positional.slice(2).join(" ");
+
+  if (!target || !text) {
+    console.error("Usage: termlings message <target> <text>");
+    console.error("Targets: <session-id> | agent:<dna> | human:<id> (aliases: operator, owner)");
+    process.exit(1);
+  }
+
+  await sendMessage(target, text, sessionId, _agentName || "agent", _agentDna || "0000000");
+  process.exit(0);
+}
+
+// 2a. Agent task management: termlings task <list|show|claim|status|note>
+if (positional[0] === "task") {
+  const { getTask, getAllTasks, claimTask, updateTaskStatus, addTaskNote, formatTask, formatAgentTaskList } = await import("./engine/tasks.js");
+  const sessionId = process.env.TERMLINGS_SESSION_ID;
+  const agentName = process.env.TERMLINGS_AGENT_NAME || "Agent";
+
+  if (!sessionId) {
+    console.error("Error: TERMLINGS_SESSION_ID env var not set");
+    process.exit(1);
+  }
+
+  const subcommand = positional[1];
+  const taskId = positional[2];
+
+  if (subcommand === "list") {
+    const tasks = getAllTasks();
+    console.log(formatAgentTaskList(tasks, sessionId));
+    process.exit(0);
+  }
+
+  if (subcommand === "show") {
+    if (!taskId) {
+      console.error("Usage: termlings task show <task-id>");
+      process.exit(1);
+    }
+    const task = getTask(taskId);
+    if (!task) {
+      console.error(`Task not found: ${taskId}`);
+      process.exit(1);
+    }
+    console.log(formatTask(task));
+    process.exit(0);
+  }
+
+  if (subcommand === "claim") {
+    if (!taskId) {
+      console.error("Usage: termlings task claim <task-id>");
+      process.exit(1);
+    }
+    const task = claimTask(taskId, sessionId, agentName, "default");
+    if (!task) {
+      console.error(`Cannot claim task: ${taskId} (not found or already claimed)`);
+      process.exit(1);
+    }
+    console.log(`✓ Task claimed: ${task.title}`);
+    process.exit(0);
+  }
+
+  if (subcommand === "status") {
+    const newStatus = positional[3];
+    const note = positional.slice(4).join(" ");
+    if (!taskId || !newStatus) {
+      console.error("Usage: termlings task status <task-id> <open|claimed|in-progress|completed|blocked> [note]");
+      process.exit(1);
+    }
+    const task = updateTaskStatus(taskId, newStatus as any, sessionId, agentName, note || undefined, "default");
+    if (!task) {
+      console.error(`Task not found: ${taskId}`);
+      process.exit(1);
+    }
+    console.log(`✓ Status updated: ${newStatus}`);
+    process.exit(0);
+  }
+
+  if (subcommand === "note") {
+    const text = positional.slice(3).join(" ");
+    if (!taskId || !text) {
+      console.error("Usage: termlings task note <task-id> <note...>");
+      process.exit(1);
+    }
+    const task = addTaskNote(taskId, text, sessionId, agentName, "default");
+    if (!task) {
+      console.error(`Task not found: ${taskId}`);
+      process.exit(1);
+    }
+    console.log(`✓ Note added`);
+    process.exit(0);
+  }
+
+  console.error("Usage: termlings task <list|show|claim|status|note>");
+  process.exit(1);
+}
+
+// 2b. Agent calendar view + Owner calendar management: termlings calendar <list|show|create|...>
 if (positional[0] === "calendar") {
   const { createCalendarEvent, getAllCalendarEvents, getCalendarEvent, updateCalendarEvent, deleteCalendarEvent, toggleCalendarEvent, formatCalendarEvent, formatCalendarEventList, formatRecurrence } = await import("./engine/calendar.js");
 
@@ -483,7 +531,17 @@ if (positional[0] === "calendar") {
   }
 
   if (subcommand === "list") {
-    const agentId = positional[2] === "--agent" ? positional[3] : null;
+    const sessionId = process.env.TERMLINGS_SESSION_ID;
+    const agentIdArg = positional[2];
+
+    // If agent has a session ID and no explicit agent arg, show their calendar
+    let agentId: string | null = null;
+    if (agentIdArg === "--agent" && positional[3]) {
+      agentId = positional[3];
+    } else if (sessionId && !agentIdArg) {
+      agentId = sessionId;
+    }
+
     const events = agentId
       ? (await import("./engine/calendar.js")).getAgentCalendarEvents(agentId)
       : getAllCalendarEvents();
@@ -725,11 +783,55 @@ if (positional[0] === "browser") {
 
   const subcommand = positional[1];
 
-  if (!subcommand) {
-    console.error(
-      "Usage: termlings browser <init|start|stop|status|navigate|screenshot|type|click|extract|cookies>"
-    );
-    process.exit(1);
+  // Show help
+  if (!subcommand || subcommand === "--help" || subcommand === "help") {
+    console.log(`
+🌐 Browser Service - Web Automation & Human-in-Loop
+
+SETUP:
+  termlings browser init              Initialize profile (creates .termlings/browser/)
+
+SERVER CONTROL:
+  termlings browser start             Launch browser instance
+  termlings browser stop              Stop browser gracefully
+  termlings browser status            Show running status & uptime
+
+NAVIGATION:
+  termlings browser navigate <url>    Go to URL
+  termlings browser screenshot        Capture page (returns base64)
+  termlings browser extract           Get visible page text
+
+INTERACTION:
+  termlings browser type <text>       Type into focused element
+  termlings browser click <selector>  Click element by CSS selector
+  termlings browser cookies list      List all cookies
+
+HUMAN-IN-LOOP:
+  termlings browser check-login       Exit 1 if login required
+  termlings browser request-help <msg> Notify operator via DM
+
+QUERY PATTERNS (reusable automation):
+  termlings browser patterns list     List available patterns
+  termlings browser patterns view <id> Show pattern details
+  termlings browser patterns execute <id> Run pattern with args
+
+EXAMPLES:
+  termlings browser navigate "https://example.com"
+  termlings browser type "hello world"
+  termlings browser click "button.submit"
+  termlings browser extract | jq '.text'
+
+ENVIRONMENT:
+  TERMLINGS_AGENT_NAME               Your name (auto-logged)
+  TERMLINGS_AGENT_DNA                Your stable ID (auto-logged)
+  BRIDGE_HEADLESS=false              Run with visible UI
+
+PROFILES:
+  Per-project profiles auto-created in ~/.pinchtab/profiles/
+  Activity logged to .termlings/browser/history.jsonl
+  Dashboard: http://localhost:9867/dashboard
+`);
+    process.exit(0);
   }
 
   // Control subcommands (no server needed)
@@ -913,9 +1015,63 @@ if (positional[0] === "browser") {
 
       const action = positional[2];
 
-      if (!action) {
-        console.error("Usage: termlings browser patterns <list|view|execute|save>");
-        process.exit(1);
+      // Show help
+      if (!action || action === "--help" || action === "help") {
+        console.log(`
+📋 Query Patterns - Reusable Automation (90%+ token reduction)
+
+Patterns capture: navigate URL, wait time, CSS selectors, jq filters
+Save once, execute many times with different arguments.
+
+COMMANDS:
+  termlings browser patterns list                List all saved patterns
+  termlings browser patterns view <pattern-id>  Show pattern details (JSON)
+  termlings browser patterns execute <id> ...   Run pattern with args
+  termlings browser patterns save <name>        Create new pattern
+
+PATTERN FORMAT:
+  {
+    "id": "github-issues",
+    "name": "GitHub Issues Search",
+    "sites": ["github.com"],
+    "navigate": "https://github.com/search?q=:query",
+    "wait_ms": 2000,
+    "filters": [".issue-title | text"],
+    "added_by": "alice",
+    "created_at": 1234567890
+  }
+
+EXAMPLES:
+
+  List patterns:
+    $ termlings browser patterns list
+
+  View pattern details:
+    $ termlings browser patterns view github-issues
+
+  Execute pattern (navigates URL, waits, extracts via jq):
+    $ termlings browser patterns execute github-issues
+
+  Create pattern interactively:
+    $ termlings browser patterns save search-github
+    Name: GitHub Issues Search
+    Sites (comma-separated): github.com, github.dev
+    Navigate URL: https://github.com/search?q=:query
+    Wait (ms): 2000
+    Filters (jq expressions): .issue-title | text
+
+WHY USE PATTERNS?
+  • Save tokens: Navigate + wait + extract once, reuse forever
+  • Share knowledge: Save patterns other agents discover
+  • Consistency: Same selectors & timing across team
+  • Quick reference: Common workflows at fingertips
+
+YOUR AGENT CONTEXT IS SAVED:
+  • Pattern includes your name (\$TERMLINGS_AGENT_NAME)
+  • Created timestamp recorded
+  • Reusable across projects & sessions
+`);
+        process.exit(0);
       }
 
       if (action === "list") {
@@ -1406,9 +1562,11 @@ Render:
   render --fps=<n>         MP4 frame rate (default: 4)
   render --duration=<n>    MP4 duration in seconds (default: 3)
 
-Actions:
-  action sessions          List active sessions
-  action send <target> <msg>  Direct message (target: <session-id>|agent:<dna>|human:<id>)
+Commands:
+  list-agents              List active agent sessions
+  message <target> <text>  Direct message (target: <session-id>|agent:<dna>|human:<id>)
+  task <cmd> [args]        Task management (list, show, claim, status, note)
+  calendar <cmd> [args]    Calendar management (list, show, create, ...)
 
 Options:
   --host <host>            Workspace host (default: 127.0.0.1)

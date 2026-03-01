@@ -230,7 +230,7 @@ termlings browser extract
 termlings browser request-help "Please log in to example.com"
 ```
 
-Sends a notification to the operator via `termlings action send`. The operator receives a DM with the request:
+Sends a notification to the operator via `termlings message`. The operator receives a DM with the request:
 
 ```
 🔔 **Browser needs your help** (AgentName)

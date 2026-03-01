@@ -43,7 +43,7 @@ Shows:
 
 ### Assign task to an agent
 ```bash
-# Get session IDs from: termlings action map --sessions
+# Get session IDs from: termlings list-agents
 termlings task assign task_123_abc tl-alice Alice
 ```
 
@@ -58,7 +58,7 @@ termlings task delete <task-id>
 
 ### List all tasks
 ```bash
-termlings action task list
+termlings task list
 ```
 
 Shows:
@@ -67,7 +67,7 @@ Shows:
 
 ### View task details
 ```bash
-termlings action task show <task-id>
+termlings task show <task-id>
 ```
 
 Full task details including:
@@ -77,7 +77,7 @@ Full task details including:
 
 ### Claim a task
 ```bash
-termlings action task claim <task-id>
+termlings task claim <task-id>
 ```
 
 Claims the task and marks it as "claimed". You can now start working on it.
@@ -85,13 +85,13 @@ Claims the task and marks it as "claimed". You can now start working on it.
 ### Update task status
 ```bash
 # Start working
-termlings action task status <task-id> in-progress
+termlings task status <task-id> in-progress
 
 # Finished
-termlings action task status <task-id> completed
+termlings task status <task-id> completed
 
 # Hit a blocker
-termlings action task status <task-id> blocked "Waiting for database credentials"
+termlings task status <task-id> blocked "Waiting for database credentials"
 ```
 
 Status options: `open`, `claimed`, `in-progress`, `completed`, `blocked`
@@ -100,11 +100,11 @@ When blocking, include the reason.
 
 ### Add notes
 ```bash
-termlings action task note <task-id> "Processed 5000 records so far"
+termlings task note <task-id> "Processed 5000 records so far"
 
-termlings action task note <task-id> "Found 156 anomalies (3.1%) - investigating patterns"
+termlings task note <task-id> "Found 156 anomalies (3.1%) - investigating patterns"
 
-termlings action task note <task-id> "Analysis complete, saving results to /tmp/output.json"
+termlings task note <task-id> "Analysis complete, saving results to /tmp/output.json"
 ```
 
 Notes are visible to the owner and other agents.
@@ -120,7 +120,7 @@ termlings task create "Performance Audit" "Profile systems and identify bottlene
 
 ### Agents see tasks available
 ```bash
-termlings action task list
+termlings task list
 
 # Output:
 # 📋 Your Tasks:
@@ -135,26 +135,26 @@ termlings action task list
 ### Agents claim tasks
 ```bash
 # Alice claims the pipeline task
-termlings action task claim task_123_abc
+termlings task claim task_123_abc
 # → "✓ Task claimed: Q1 Data Pipeline"
 
 # Bob claims the compliance task
-termlings action task claim task_456_def
+termlings task claim task_456_def
 ```
 
 ### Agents work and provide updates
 ```bash
 # Alice starts working
-termlings action task status task_123_abc in-progress
+termlings task status task_123_abc in-progress
 
 # Alice adds progress notes
-termlings action task note task_123_abc "Setting up data sources - 30% complete"
+termlings task note task_123_abc "Setting up data sources - 30% complete"
 
 # After 10 minutes
-termlings action task note task_123_abc "Sources configured, testing connections - 50% complete"
+termlings task note task_123_abc "Sources configured, testing connections - 50% complete"
 
 # Alice hits a blocker
-termlings action task status task_123_abc blocked "Waiting for production database access keys"
+termlings task status task_123_abc blocked "Waiting for production database access keys"
 
 # Alice emails you about the blocker
 termlings action email send owner "Blocked: Need DB Credentials" \
@@ -206,12 +206,12 @@ termlings action email send tl-alice "RE: Blocked - Need DB Credentials" \
 ### Agents continue and complete
 ```bash
 # Alice now has credentials
-termlings action task status task_123_abc in-progress
-termlings action task note task_123_abc "Received staging DB creds, resuming work"
+termlings task status task_123_abc in-progress
+termlings task note task_123_abc "Received staging DB creds, resuming work"
 
 # Alice finishes
-termlings action task status task_123_abc completed
-termlings action task note task_123_abc "Pipeline complete! Results in /data/q1_processed.json"
+termlings task status task_123_abc completed
+termlings task note task_123_abc "Pipeline complete! Results in /data/q1_processed.json"
 ```
 
 ### Owner sees completion
@@ -244,7 +244,7 @@ The task system works best with:
 **Email for blockers and questions:**
 ```bash
 # Agent hits a problem
-termlings action task status task_123 blocked "Need clarification on data format"
+termlings task status task_123 blocked "Need clarification on data format"
 
 # Agent also emails the owner
 termlings action email send owner "Task Blocker: Data Format" \

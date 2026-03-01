@@ -14,7 +14,7 @@ import {
 } from "fs"
 import { join } from "path"
 import { getTermlingsDir } from "./ipc.js"
-import type { BrowserConfig, ProcessState, ActivityLogEntry } from "./browser-types.js"
+import type { BrowserConfig, ProcessState, ActivityLogEntry, ProfileReference } from "./browser-types.js"
 
 /**
  * Get the browser directory (.termlings/browser)
@@ -24,10 +24,59 @@ export function getTermlingsBrowserDir(): string {
 }
 
 /**
- * Get the browser profile directory (.termlings/browser/profile)
+ * Get the profile reference file path (.termlings/browser/profile.json)
+ */
+export function getProfileReferencePath(): string {
+  return join(getTermlingsBrowserDir(), "profile.json")
+}
+
+/**
+ * Get the actual browser profile directory (~/.pinchtab/profiles/<profile-name>)
+ * Each project's profile is stored in PinchTab's default profile location
  */
 export function getBrowserProfileDir(): string {
-  return join(getTermlingsBrowserDir(), "profile")
+  const profileName = getProjectProfileName()
+  const pinchtabDir = join(process.env.HOME || "/tmp", ".pinchtab", "profiles", profileName)
+  return pinchtabDir
+}
+
+/**
+ * Get or create profile reference
+ */
+export function getOrCreateProfileReference(): ProfileReference {
+  const refPath = getProfileReferencePath()
+  const profileName = getProjectProfileName()
+  const projectDir = join(getTermlingsDir(), "..")
+  const projectName = projectDir.split("/").pop() || "project"
+
+  if (existsSync(refPath)) {
+    try {
+      const content = readFileSync(refPath, "utf8")
+      return JSON.parse(content)
+    } catch {
+      // Fall through to create new
+    }
+  }
+
+  // Create new reference
+  const ref: ProfileReference = {
+    name: profileName,
+    location: getBrowserProfileDir(),
+    projectName,
+    createdAt: Date.now(),
+  }
+
+  writeFileSync(refPath, JSON.stringify(ref, null, 2) + "\n")
+  return ref
+}
+
+/**
+ * Update profile reference with last used timestamp
+ */
+export function updateProfileReference(): void {
+  const ref = getOrCreateProfileReference()
+  ref.lastUsed = Date.now()
+  writeFileSync(getProfileReferencePath(), JSON.stringify(ref, null, 2) + "\n")
 }
 
 /**
@@ -164,17 +213,79 @@ function getProjectProfileName(): string {
 }
 
 /**
+ * Get current agent name from environment
+ */
+function getAgentName(): string {
+  return process.env.TERMLINGS_AGENT_NAME || "anonymous"
+}
+
+/**
+ * Create profile in PinchTab orchestrator via API
+ * The orchestrator listens on http://localhost:9867 by default
+ * This is non-blocking - if it fails, the browser still works locally
+ */
+export async function createProfileInOrchestrator(): Promise<void> {
+  const profileName = getProjectProfileName()
+  const projectDir = join(getTermlingsDir(), "..")
+  const projectName = projectDir.split("/").pop() || "project"
+
+  try {
+    // Try to reach the orchestrator on port 9867
+    const response = await Promise.race([
+      fetch("http://localhost:9867/profiles/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profileName,
+          useWhen: `Profile for ${projectName} project`,
+        }),
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 3000)
+      ),
+    ]) as Response
+
+    if (response.ok) {
+      // Profile created successfully - silent success
+      return
+    }
+  } catch {
+    // Orchestrator not running or not accessible
+    // This is expected if the orchestrator hasn't been started yet
+    // The browser instance will still work locally
+    // User can manually start orchestrator and create profiles via dashboard
+  }
+}
+
+/**
+ * Get or create a tab locked to the current agent
+ * Note: Tab locking requires PinchTab's /tabs endpoints
+ * Currently kept simple to avoid hangs - full implementation pending
+ */
+export async function getOrCreateAgentTab(client: any): Promise<string> {
+  const agentName = getAgentName()
+  // TODO: Implement proper tab locking when PinchTab API is stable
+  // For now, return empty string - agent context is logged in activity.jsonl
+  return ""
+}
+
+/**
  * Initialize browser directories and configuration
  */
-export function initializeBrowserDirs(): void {
+export async function initializeBrowserDirs(): Promise<void> {
   const baseDir = getTermlingsBrowserDir()
   mkdirSync(baseDir, { recursive: true })
-  mkdirSync(getBrowserProfileDir(), { recursive: true })
 
   // Create config if it doesn't exist
   if (!existsSync(getBrowserConfigPath())) {
     updateBrowserConfig({})
   }
+
+  // Create or update profile reference
+  getOrCreateProfileReference()
+
+  // Create profile in orchestrator if not already there
+  await createProfileInOrchestrator()
 }
 
 /**
@@ -182,6 +293,9 @@ export function initializeBrowserDirs(): void {
  * The orchestrator manages instances and profiles via REST API
  */
 export async function startBrowser(): Promise<{ pid: number; port: number }> {
+  // Ensure directories exist
+  await initializeBrowserDirs()
+
   const config = getBrowserConfig()
 
   // Check if already running
@@ -213,7 +327,7 @@ export async function startBrowser(): Promise<{ pid: number; port: number }> {
       BRIDGE_HEADLESS: headless,
       BRIDGE_PORT: String(availablePort),
       BRIDGE_PROFILE: profileName,
-      BRIDGE_MODE: "dashboard", // Enable orchestrator dashboard for profile management
+      BRIDGE_USER_DATA_DIR: getTermlingsBrowserDir(),
     },
   })
 
@@ -253,6 +367,9 @@ export async function startBrowser(): Promise<{ pid: number; port: number }> {
     startedAt: Date.now(),
     url: `http://127.0.0.1:${availablePort}`,
   })
+
+  // Update profile reference with last used timestamp
+  updateProfileReference()
 
   return { pid, port: availablePort }
 }
@@ -336,7 +453,7 @@ export function logBrowserActivity(
 }
 
 /**
- * Request human operator intervention via action send
+ * Request human operator intervention via message command
  * Sends message to operator through IPC
  */
 export async function requestOperatorIntervention(message: string): Promise<void> {
@@ -345,13 +462,13 @@ export async function requestOperatorIntervention(message: string): Promise<void
   // Log the request
   logBrowserActivity("request-help", [message], "success")
 
-  // Send message to operator via termlings action send
+  // Send message to operator via termlings message
   const formattedMessage = `🔔 **Browser needs your help** (${agentName})\n\n${message}\n\nRun: \`termlings browser\` commands to interact`
 
   const { spawn } = await import("bun")
 
   try {
-    const proc = spawn(["termlings", "action", "send", "human:default", formattedMessage], {
+    const proc = spawn(["termlings", "message", "human:default", formattedMessage], {
       cwd: process.cwd(),
       stdio: ["ignore", "ignore", "ignore"],
     })

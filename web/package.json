@@ -1,0 +1,25 @@
+{
+  "name": "termlings-web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json"
+  },
+  "dependencies": {
+    "@knadh/oat": "^0.4.1",
+    "@sveltejs/adapter-node": "^5.2.12",
+    "@sveltejs/kit": "^2.12.1",
+    "svelte": "^5.16.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "@types/node": "^22.13.10",
+    "svelte-check": "^4.1.1",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0"
+  }
+}

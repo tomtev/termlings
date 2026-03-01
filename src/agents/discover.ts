@@ -5,7 +5,7 @@ import { createInterface } from "readline";
 export interface LocalAgent {
   name: string;
   path: string;
-  soul?: { name: string; title?: string; dna: string; command?: string; description: string };
+  soul?: { name: string; title?: string; dna: string; description: string };
 }
 
 /**
@@ -35,44 +35,19 @@ export function discoverLocalAgents(): LocalAgent[] {
       try {
         const content = readFileSync(soulPath, "utf-8");
 
-        // Try parsing YAML front-matter first
         const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)/);
-        let name: string | undefined;
-        let title: string | undefined;
-        let dna: string | undefined;
-        let description: string = "";
-        let command: string | undefined;
-
-        if (frontmatterMatch) {
-          // Parse YAML front-matter
-          const yaml = frontmatterMatch[1];
-          name = yaml.match(/^name:\s*(.+)$/m)?.[1];
-          title = yaml.match(/^title:\s*(.+)$/m)?.[1];
-          dna = yaml.match(/^dna:\s*(.+)$/m)?.[1];
-          command = yaml.match(/^command:\s*(.+)$/m)?.[1];
-
-          // Get markdown content (everything after front-matter)
-          description = (frontmatterMatch[2] || "").trim();
-        } else {
-          // Fallback to legacy markdown format
-          const nameMatch = content.match(/^# (.+)$/m);
-          const titleMatch = content.match(/\*\*Title\*\*:\s*(.+)$/m);
-          const dnaMatch = content.match(/\*\*DNA\*\*:\s*(.+)$/m);
-          const commandMatch = content.match(/\*\*Command\*\*:\s*(.+)$/m);
-
-          name = nameMatch ? nameMatch[1] : undefined;
-          title = titleMatch ? titleMatch[1] : undefined;
-          dna = dnaMatch ? dnaMatch[1] : undefined;
-          command = commandMatch ? commandMatch[1] : undefined;
-          description = content;
-        }
+        if (!frontmatterMatch) continue;
+        const yaml = frontmatterMatch[1];
+        const name = yaml.match(/^name:\s*(.+)$/m)?.[1];
+        const title = yaml.match(/^title:\s*(.+)$/m)?.[1];
+        const dna = yaml.match(/^dna:\s*(.+)$/m)?.[1];
+        const description = (frontmatterMatch[2] || "").trim();
 
         if (name && dna) {
           soul = {
             name,
             title,
             dna,
-            command,
             description,
           };
 
@@ -167,7 +142,7 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
  * Marks agents already active in the room as taken
  */
 export async function selectAgent(): Promise<{ type: "builtin" | "local"; name: string; agent?: LocalAgent }> {
-  const builtins = ["claude", "codex"];
+  const builtins = ["claude"];
   const localAgents = discoverLocalAgents();
 
   // Get active agents in this room
@@ -193,7 +168,7 @@ export async function selectAgent(): Promise<{ type: "builtin" | "local"; name: 
   const { selectMenu } = await import("../interactive-menu.js");
   const menuItems = allOptions.map((opt) => {
     if (opt.type === "builtin") {
-      const label = opt.name === "claude" ? "Claude Code" : "Codex CLI";
+      const label = "Claude Code";
       const status = opt.taken ? " (in room)" : "";
       return {
         value: JSON.stringify(opt),

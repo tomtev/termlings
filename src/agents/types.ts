@@ -1,12 +1,12 @@
 /**
- * Each supported coding agent (claude, codex, etc.) provides an adapter
+ * Each supported coding agent provides an adapter
  * that tells the launcher how to spawn it and inject the termling context.
  *
  * All CLI flags after the agent name are passed through directly to the
  * agent binary — the adapter only handles context injection.
  */
 export interface AgentAdapter {
-  /** Binary / command name to spawn (e.g. "claude", "codex") */
+  /** Binary / command name to spawn (currently "claude") */
   bin: string
 
   /** Fallback display name when no --name or AGENTS.md name is found */

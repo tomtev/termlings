@@ -1,6 +1,6 @@
 #!/bin/bash
 # termlings hook for Claude Code lifecycle events.
-# Reads hook JSON from stdin and writes to IPC files for the sim to read.
+# Reads hook JSON from stdin and writes hook-only typing state for the workspace.
 # Installed by termlings into ~/.claude/hooks/ and referenced in ~/.claude/settings.json.
 
 INPUT=$(cat)
@@ -10,8 +10,14 @@ if [ -z "$TERMLINGS_SESSION_ID" ]; then
   exit 0
 fi
 
-# Extract event type from input JSON
-EVENT=$(printf '%s' "$INPUT" | grep -o '"event":"[^"]*"' | cut -d'"' -f4)
+JSON_ONE_LINE=$(printf '%s' "$INPUT" | tr -d '\n')
+
+# Extract event type from input JSON (tolerates whitespace around :)
+EVENT=$(printf '%s' "$JSON_ONE_LINE" | sed -n 's/.*"event"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+
+if [ -z "$EVENT" ]; then
+  exit 0
+fi
 
 # Get the IPC directory from environment or use default
 if [ -z "$TERMLINGS_IPC_DIR" ]; then
@@ -24,24 +30,18 @@ fi
 # Ensure IPC directory exists
 mkdir -p "$IPC_DIR" 2>/dev/null || exit 0
 
-# Write hook events to a hook file that the sim can poll
-HOOK_FILE="$IPC_DIR/${TERMLINGS_SESSION_ID}.hook.json"
+TYPING_FILE="$IPC_DIR/${TERMLINGS_SESSION_ID}.typing.json"
 
 # Run in background so we don't block Claude
 (
   case "$EVENT" in
     "UserPromptSubmit")
-      # Claude is starting to process/type
-      printf '{"event":"typing_start","ts":%s}\n' "$(date +%s000)" >> "$HOOK_FILE"
+      TS="$(date +%s000)"
+      printf '{"typing":true,"source":"hook","updatedAt":%s}\n' "$TS" > "$TYPING_FILE"
       ;;
     "Stop")
-      # Claude stopped typing
-      printf '{"event":"typing_stop","ts":%s}\n' "$(date +%s000)" >> "$HOOK_FILE"
-      ;;
-    "PermissionRequest")
-      # Tool/permission request — extract the request details
-      TOOL=$(printf '%s' "$INPUT" | grep -o '"tool":"[^"]*"' | head -1 | cut -d'"' -f4)
-      printf '{"event":"permission_request","tool":"%s","ts":%s}\n' "$TOOL" "$(date +%s000)" >> "$HOOK_FILE"
+      TS="$(date +%s000)"
+      printf '{"typing":false,"source":"hook","updatedAt":%s}\n' "$TS" > "$TYPING_FILE"
       ;;
   esac
 ) &

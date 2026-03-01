@@ -49,3 +49,11 @@ export interface HealthCheckResponse {
   status: string
   version?: string
 }
+
+export interface ProfileReference {
+  name: string
+  location: string
+  projectName: string
+  createdAt: number
+  lastUsed?: number
+}
