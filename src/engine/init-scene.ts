@@ -1,6 +1,10 @@
-import type { Scene, Cell, TileDef, RGB } from "./types.js"
+import type { Scene, Cell, TileDef, RGB, Entity, RoomRegion } from "./types.js"
 import { DEFAULT_TILE_DEFS, stampTiles } from "./tilemap-core.js"
+import { DEFAULT_CONFIG } from "./types.js"
 import { renderTerminalSmall, generateRandomDNA } from "../index.js"
+import { makeEntity, updateAnimations } from "./entity.js"
+import { buildWalkGrid, createNpcAIState, stepNpc, createPathfinderState, type NpcAIState, type WalkGrid } from "./npc-ai.js"
+import { stampEntity } from "./renderer.js"
 
 export interface InitSceneOptions {
   onConfirm: (confirmed: boolean) => void
@@ -93,6 +97,13 @@ export class InitScene implements Scene {
   private avatarLines: string[] = []
   private avatarStartRow = 0
 
+  // Walking entities
+  private entities: Entity[] = []
+  private entityAI: NpcAIState[] = []
+  private walkGrid: WalkGrid | null = null
+  private room: RoomRegion = { name: "init", x: 0, y: 0, w: 80, h: 24 }
+  private pf = createPathfinderState()
+
   constructor(private options: InitSceneOptions) {
     this.dnas = Array(5)
       .fill(0)
@@ -105,6 +116,28 @@ export class InitScene implements Scene {
     this.tiles = generateInitTiles(cols, rows)
     this.avatarLines = this.renderFrame(0)
     this.calculateLayout()
+    this.initEntities()
+  }
+
+  private initEntities(): void {
+    // Create walking entities in the grass area
+    this.walkGrid = buildWalkGrid(this.cols, this.rows, [])
+    const grassStart = Math.floor(this.rows * 0.5)
+    this.room = { name: "init", x: 0, y: grassStart, w: this.cols, h: this.rows - grassStart }
+
+    // Create 2-3 walking avatars
+    const count = Math.min(3, Math.max(2, Math.floor(this.cols / 30)))
+    for (let i = 0; i < count; i++) {
+      const x = Math.floor((this.cols / (count + 1)) * (i + 1)) - 4
+      const y = this.rows - 8 - Math.floor(Math.random() * 3)
+      const dna = generateRandomDNA()
+      const entity = makeEntity(dna, x, y, 2, { walking: false, idle: true })
+      this.entities.push(entity)
+
+      const ai = createNpcAIState()
+      ai.idleRemaining = 10 + Math.floor(Math.random() * 20)
+      this.entityAI.push(ai)
+    }
   }
 
   private getVisibleWidth(str: string): number {
@@ -146,6 +179,27 @@ export class InitScene implements Scene {
   update(_tick: number, _cols: number, _rows: number, buffer: Cell[][]): void {
     // Render background tiles
     stampTiles(buffer, this.cols, this.rows, this.tiles, initTileDefs, this.cols, this.rows, 0, 0, 1)
+
+    // Step walking entities (every 3rd tick for moderate speed)
+    if (this.walkGrid && this.tick % 3 === 0) {
+      for (let i = 0; i < this.entities.length; i++) {
+        const canMove = (x: number, y: number, h: number) => {
+          const footY = y + h - 1
+          if (x < 0 || footY < 0 || x + 8 >= this.cols || footY >= this.rows) return false
+          return this.walkGrid!.data[footY * this.walkGrid!.width + x] === 1
+        }
+        stepNpc(this.entities[i]!, this.entityAI[i]!, this.walkGrid, [this.room], this.pf, canMove)
+      }
+    }
+
+    // Update animations for walking entities
+    updateAnimations(this.entities, this.tick, DEFAULT_CONFIG)
+
+    // Render walking entities (z-sorted by foot Y)
+    const sorted = this.entities.slice().sort((a, b) => (a.y + a.height) - (b.y + b.height))
+    for (const e of sorted) {
+      stampEntity(buffer, this.cols, this.rows, e, 0, 0, 1)
+    }
 
     // Update animation frame every 5 ticks
     if (this.tick % 5 === 0) {
@@ -246,6 +300,7 @@ export class InitScene implements Scene {
     this.rows = rows
     this.tiles = generateInitTiles(cols, rows)
     this.calculateLayout()
+    this.initEntities()
   }
 
   input(): { onArrow: (dir: string) => void; onKey: (char: string) => void } {
