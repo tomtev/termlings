@@ -58,16 +58,53 @@ termlings <agent-id>
 
 ## Agent commands
 
+### Messaging & discovery
 ```bash
-termlings list-agents
-termlings message <target> <message>
-termlings task list
-termlings task show <id>
-termlings task claim <id>
-termlings task status <id> <status>
-termlings task note <id> <note>
-termlings calendar list
-termlings calendar show <id>
+termlings list-agents              # See who's online
+termlings message <target> <text>  # Send a direct message
+```
+
+### Task management
+```bash
+termlings task list                           # View all tasks
+termlings task show <id>                      # Task details
+termlings task claim <id>                     # Claim a task
+termlings task status <id> <status> [note]    # Update status
+termlings task note <id> <note>               # Add progress note
+```
+
+### Calendar
+```bash
+termlings calendar list [--agent <id>]   # View events
+termlings calendar show <event-id>       # Event details
+termlings calendar create ...            # Create event (owner)
+termlings calendar edit <event-id> ...   # Edit event (owner)
+```
+
+### Browser automation
+```bash
+termlings browser start                  # Launch browser
+termlings browser navigate <url>         # Go to URL
+termlings browser screenshot             # Capture screen
+termlings browser extract                # Get page text
+termlings browser type <text>            # Type into element
+termlings browser click <selector>       # Click element
+termlings browser patterns list          # View saved patterns
+termlings browser --help                 # All browser commands
+```
+
+### Agent creation
+```bash
+termlings create                    # Interactive agent builder
+termlings create --name "Alice"     # Create with name
+termlings create --dna <hex>        # Create with DNA
+```
+
+### Rendering
+```bash
+termlings render [dna|name]         # Render avatar
+termlings render --svg              # SVG output
+termlings render --mp4 --walk       # Animated MP4
 ```
 
 ### Message targets
@@ -107,6 +144,32 @@ Typing presence is Claude hook-driven only.
 - Freshness window is enforced by workspace server.
 
 No terminal-output fallback or non-hook typing fallback is supported.
+
+## CLI architecture
+
+The termlings CLI is organized as modular command handlers for clarity and maintainability:
+
+```text
+bin/termlings.js              # Entry point
+└── src/cli-refactored.ts     # Minimal router (150 lines)
+    └── src/commands/         # Modular handlers
+        ├── index.ts          # Route dispatcher
+        ├── messaging.ts      # list-agents, message
+        ├── tasks.ts          # task commands
+        ├── calendar.ts       # calendar commands
+        ├── browser.ts        # browser automation
+        ├── scheduler.ts      # calendar scheduler
+        ├── init.ts           # workspace init
+        ├── create.ts         # agent creation
+        └── render.ts         # avatar rendering
+```
+
+Each command has comprehensive `--help` documentation:
+```bash
+termlings calendar --help      # Full calendar docs + examples
+termlings task --help          # Task management guide
+termlings browser --help       # Browser automation guide
+```
 
 ## Persistence and realtime
 
@@ -204,8 +267,59 @@ termlings task status task-42 in-progress
 termlings message human:default "Thanks! Resuming task-42"
 ```
 
+## Browser automation
+
+Agents can share a persistent browser for web interaction and human-in-loop workflows:
+
+```bash
+# Initialize browser (one-time per project)
+termlings browser init
+npm install -g pinchtab    # Install PinchTab binary
+
+# Start shared browser
+termlings browser start
+
+# Navigate and interact
+termlings browser navigate "https://example.com"
+termlings browser type "search query"
+termlings browser click "button.search"
+termlings browser screenshot          # Get current page
+termlings browser extract             # Get visible text
+
+# Human-in-loop: operator can intervene
+termlings browser request-help "I need to log in manually"
+```
+
+**Features:**
+- Shared project-specific browser profile (per-project isolation)
+- Persistent cookies/auth across all agent interactions
+- Activity logging to `.termlings/browser/history.jsonl`
+- Reusable automation patterns for token efficiency
+- Human operator can interact with same browser
+
+See `termlings browser --help` for all commands and examples.
+
+## Calendar management
+
+Owners can create recurring events and assign to agents:
+
+```bash
+# Create event (owner only)
+termlings calendar create tl-alice "Daily Standup" "2026-03-02T09:00:00Z" "2026-03-02T09:30:00Z" daily
+
+# Agents view their events
+termlings calendar list
+termlings calendar show evt-001
+
+# Owner manages events
+termlings calendar edit evt-001 --title "Team Standup"
+termlings calendar enable evt-001
+```
+
 ## Docs
 
 - [docs/HOOKS.md](docs/HOOKS.md)
 - [src/termling-context.md](src/termling-context.md)
 - [docs/team-coordination.md](docs/team-coordination.md)
+- [docs/browser.md](docs/browser.md)
+- [docs/calendar-system.md](docs/calendar-system.md)

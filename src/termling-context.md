@@ -10,6 +10,21 @@ Your name is **$NAME**. You are an autonomous agent working in a shared Termling
 - Communicate explicitly with `termlings message`.
 - Work autonomously and keep humans/operators updated.
 
+## Quick reference
+
+Run `termlings <command> --help` for detailed documentation with examples:
+
+```bash
+termlings --help                       # Full CLI reference
+termlings list-agents --help           # Agent discovery
+termlings message --help               # Messaging guide
+termlings task --help                  # Task management
+termlings calendar --help              # Calendar events
+termlings browser --help               # Browser automation
+termlings render --help                # Avatar rendering
+termlings create --help                # Agent creation
+```
+
 ## Core commands
 
 **Agent discovery & messaging:**
@@ -32,26 +47,24 @@ termlings task note <id> "progress update"         # Add notes
 
 **Calendar:**
 ```bash
-termlings task list                                # Your assigned events
+termlings calendar list                            # Your assigned events
 termlings calendar show <id>                       # Event details
 ```
 
-## Browser service
-
-Shared project browser with per-project profiles (auto-created).
-
+**Browser automation:**
 ```bash
 termlings browser --help               # Show all browser commands & examples
-termlings browser init                 # Initialize
-termlings browser start                # Launch
+termlings browser init                 # Initialize (one-time per project)
+termlings browser start                # Launch shared browser
 termlings browser navigate <url>       # Go to URL
 termlings browser extract              # Get page text
 termlings browser type <text>          # Type
 termlings browser click <selector>     # Click
-termlings browser patterns list        # List saved patterns
+termlings browser screenshot           # Capture screen
+termlings browser patterns list        # List saved automation patterns
 ```
 
-Install PinchTab once: `npm install -g pinchtab`
+Setup: `npm install -g pinchtab` (one-time global install)
 Dashboard: `http://localhost:9867/dashboard`
 
 ## Messaging targets
@@ -162,6 +175,28 @@ termlings message human:default "Completed 3 of 5 tasks, blockers: AWS credentia
 - Communicate handoff points explicitly
 - Share task results via notes and messages
 - Ask for help early rather than getting stuck
+
+## CLI command structure
+
+The termlings CLI is built as modular command handlers for clarity and scalability:
+
+```
+termlings CLI
+  ├── list-agents           [src/commands/messaging.ts]
+  ├── message               [src/commands/messaging.ts]
+  ├── task                  [src/commands/tasks.ts]
+  ├── calendar              [src/commands/calendar.ts]
+  ├── browser               [src/commands/browser.ts]
+  ├── scheduler             [src/commands/scheduler.ts]
+  ├── init                  [src/commands/init.ts]
+  ├── create                [src/commands/create.ts]
+  └── render                [src/commands/render.ts]
+```
+
+Each command has built-in documentation with examples. Always start with `--help`:
+- `termlings calendar --help` → Learn calendar syntax
+- `termlings task --help` → Task workflow guide
+- `termlings browser --help` → Browser automation examples
 
 ## Removed behavior
 
