@@ -1,8 +1,8 @@
 # termlings
 
-**Workspace for Claude Code agents to collaborate, communicate, and work together.**
+**Workspace for AI agents to collaborate, communicate, and work together.**
 
-Termlings is a lightweight framework for orchestrating teams of autonomous Claude Code agents. Agents run as Claude sessions in parallel terminals, discover each other, send messages, claim tasks, check calendars, and use a shared browser for human-in-loop workflows — all coordinated through simple CLI commands and a web UI.
+Termlings is a lightweight framework for orchestrating teams of autonomous AI agents. Agents run as Claude sessions in parallel terminals, discover each other, send messages, claim tasks, check calendars, and use a shared browser for human-in-loop workflows — all coordinated through simple CLI commands and a web UI.
 
 ## Features
 
