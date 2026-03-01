@@ -1914,52 +1914,50 @@ Options:
     console.log("This project doesn't have a .termlings directory yet.");
     console.log("Let's set up your first agent.\n");
 
-    // Show 3 random termlings avatars BEFORE prompting
+    // Show 5 random termlings avatars with animation
     try {
       const { renderTerminalSmall } = await import("./index.js");
-      const dna1 = generateRandomDNA();
-      const dna2 = generateRandomDNA();
-      const dna3 = generateRandomDNA();
+      const dnas = [generateRandomDNA(), generateRandomDNA(), generateRandomDNA(), generateRandomDNA(), generateRandomDNA()];
 
-      // Use small render for better spacing
-      const avatar1 = renderTerminalSmall(dna1);
-      const avatar2 = renderTerminalSmall(dna2);
-      const avatar3 = renderTerminalSmall(dna3);
+      // Animate by cycling through frames
+      const frames = [0, 1, 2, 3];
+      for (const frame of frames) {
+        // Render all 5 avatars with current frame
+        const avatars = dnas.map(dna => renderTerminalSmall(dna, frame));
+        const allLines = avatars.map(a => a.split('\n').filter(l => l.trim()));
 
-      // Split into lines
-      const lines1 = avatar1.split('\n').filter(l => l.trim());
-      const lines2 = avatar2.split('\n').filter(l => l.trim());
-      const lines3 = avatar3.split('\n').filter(l => l.trim());
+        const getVisibleWidth = (str: string) => {
+          return str.replace(/\x1b\[[0-9;]*m/g, '').length;
+        };
 
-      // Calculate actual widths (count visible characters, not ANSI codes)
-      const getVisibleWidth = (str: string) => {
-        return str.replace(/\x1b\[[0-9;]*m/g, '').length;
-      };
+        const maxWidths = allLines.map(lines => Math.max(...lines.map(getVisibleWidth), 0));
+        const maxLines = Math.max(...allLines.map(l => l.length));
 
-      const maxWidth1 = Math.max(...lines1.map(getVisibleWidth), 0);
-      const maxWidth2 = Math.max(...lines2.map(getVisibleWidth), 0);
-      const maxWidth3 = Math.max(...lines3.map(getVisibleWidth), 0);
+        // Clear screen and show frame
+        if (frame > 0) {
+          // Move cursor up to overwrite previous frame
+          process.stdout.write(`\x1b[${maxLines + 1}A\x1b[J`);
+        }
 
-      const maxLines = Math.max(lines1.length, lines2.length, lines3.length);
+        console.log();
+        for (let i = 0; i < maxLines; i++) {
+          let row = "";
+          for (let j = 0; j < allLines.length; j++) {
+            const line = allLines[j]![i] || "";
+            const width = maxWidths[j]!;
+            row += line + " ".repeat(Math.max(2, width - getVisibleWidth(line) + 2));
+          }
+          console.log(row);
+        }
 
-      // Render with calculated padding
-      console.log();
-      for (let i = 0; i < maxLines; i++) {
-        let row = "";
-        const line1 = lines1[i] || "";
-        const line2 = lines2[i] || "";
-        const line3 = lines3[i] || "";
-
-        row += line1 + " ".repeat(Math.max(2, maxWidth1 - getVisibleWidth(line1) + 2));
-        row += line2 + " ".repeat(Math.max(2, maxWidth2 - getVisibleWidth(line2) + 2));
-        row += line3;
-        console.log(row);
+        // Small delay for animation
+        await new Promise(r => setTimeout(r, 200));
       }
 
-      // Random greeting
+      // Random greeting after animation
       const phrases = ["Hi!", "Ready?", "Let's go!", "Welcome!", "👋"];
       const phrase = phrases[Math.floor(Math.random() * phrases.length)];
-      console.log(`\n${cyan}${phrase}${reset}\n`);
+      console.log(`${cyan}${phrase}${reset}\n`);
     } catch (e) {
       // Skip if rendering fails
     }
