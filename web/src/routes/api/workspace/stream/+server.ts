@@ -2,6 +2,7 @@ import type { RequestHandler } from "@sveltejs/kit"
 import { loadWorkspaceSnapshot } from "$lib/server/workspace"
 import { resolveProjectContext } from "$lib/server/hub"
 import { subscribeHubChanges, subscribeProjectChanges } from "$lib/server/watchers"
+import { subscribeMessageChanges } from "$lib/server/message-watcher"
 
 export const GET: RequestHandler = ({ request, url }) => {
   const requestedProject = url.searchParams.get("project") ?? undefined
@@ -14,6 +15,7 @@ export const GET: RequestHandler = ({ request, url }) => {
       let watchedProjectRoot = ""
       let unsubscribeProject: (() => void) | null = null
       let unsubscribeHub: (() => void) | null = null
+      let unsubscribeMessages: (() => void) | null = null
       let sendScheduled = false
 
       const scheduleSend = () => {
@@ -31,7 +33,10 @@ export const GET: RequestHandler = ({ request, url }) => {
         if (context.projectRoot !== watchedProjectRoot) {
           watchedProjectRoot = context.projectRoot
           if (unsubscribeProject) unsubscribeProject()
+          if (unsubscribeMessages) unsubscribeMessages()
           unsubscribeProject = subscribeProjectChanges(context.projectRoot, scheduleSend)
+          // Subscribe to smart message watcher for only changed channels/DMs
+          unsubscribeMessages = subscribeMessageChanges(context.projectRoot, scheduleSend)
         }
 
         const snapshot = loadWorkspaceSnapshot(context.projectRoot)
@@ -46,13 +51,14 @@ export const GET: RequestHandler = ({ request, url }) => {
       unsubscribeHub = subscribeHubChanges(scheduleSend)
       sendUpdate()
       // Keep UI fresh even if a file watcher event is missed.
-      heartbeat = setInterval(sendUpdate, 1_000)
+      heartbeat = setInterval(sendUpdate, 2_000)
 
       const onAbort = () => {
         closed = true
         if (heartbeat) clearInterval(heartbeat)
         if (unsubscribeProject) unsubscribeProject()
         if (unsubscribeHub) unsubscribeHub()
+        if (unsubscribeMessages) unsubscribeMessages()
         try {
           controller.close()
         } catch {}

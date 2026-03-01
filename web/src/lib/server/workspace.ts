@@ -123,7 +123,7 @@ function messageStorageDir(root?: string): string {
   return join(storeDir(root), "messages")
 }
 
-function messageIndexPath(root?: string): string {
+export function messageIndexPath(root?: string): string {
   return join(messageStorageDir(root), "index.json")
 }
 
@@ -143,7 +143,7 @@ function typingPath(sessionId: string, root?: string): string {
   return join(termlingsDir(root), `${sessionId}.typing.json`)
 }
 
-function safeReadJson<T>(filePath: string, fallback: T): T {
+export function safeReadJson<T>(filePath: string, fallback: T): T {
   if (!existsSync(filePath)) return fallback
   try {
     return JSON.parse(readFileSync(filePath, "utf8")) as T
@@ -152,7 +152,7 @@ function safeReadJson<T>(filePath: string, fallback: T): T {
   }
 }
 
-function safeReadJsonLines<T>(filePath: string): T[] {
+export function safeReadJsonLines<T>(filePath: string): T[] {
   if (!existsSync(filePath)) return []
   try {
     return readFileSync(filePath, "utf8")
@@ -165,7 +165,7 @@ function safeReadJsonLines<T>(filePath: string): T[] {
   }
 }
 
-function loadRecentMessages(limit: number = 300, root?: string): WorkspaceMessage[] {
+export function loadRecentMessages(limit: number = 300, root?: string): WorkspaceMessage[] {
   const storageDir = messageStorageDir(root)
   const messages: WorkspaceMessage[] = []
 
