@@ -108,7 +108,7 @@ if (flags.has("clear")) {
     console.log(`✓ Cleared agent data and IPC state`);
     console.log(`✓ Kept: saved agents and persistent data in .termlings/`);
   } catch (e) {
-    console.error(`Failed to clear game state: ${e}`);
+    console.error(`Failed to clear sim state: ${e}`);
     process.exit(1);
   }
   process.exit(0);
@@ -1811,8 +1811,8 @@ if (flags.has("help") || flags.has("h")) {
 Sim (default):
   termlings                Start the sim
 
-Game management:
-  --clear                  Clear game state (all agents, objects)
+Sim management:
+  --clear                  Clear sim state (all agents, objects)
 
 Scheduler:
   scheduler                Run cron scheduler (check for due jobs)
@@ -1873,7 +1873,7 @@ Render:
   render --fps=<n>         MP4 frame rate (default: 4)
   render --duration=<n>    MP4 duration in seconds (default: 3)
 
-Actions (in-game):
+Actions (in-sim):
   action walk <x>,<y>      Walk avatar to coordinates
   action map [--ascii|--agents]  See the world
   action send <id> <msg>   Direct message to agent
@@ -1914,6 +1914,55 @@ Options:
     console.log("This project doesn't have a .termlings directory yet.");
     console.log("Let's set up your first agent.\n");
 
+    // Show 3 random termlings avatars BEFORE prompting with animations
+    try {
+      const { renderTerminal } = await import("./index.js");
+      const dna1 = generateRandomDNA();
+      const dna2 = generateRandomDNA();
+      const dna3 = generateRandomDNA();
+
+      // Render with wave animation (frame 1 has arms up)
+      const avatar1 = renderTerminal(dna1, 1);
+      const avatar2 = renderTerminal(dna2, 1);
+      const avatar3 = renderTerminal(dna3, 1);
+
+      // Split each avatar into lines
+      const lines1 = avatar1.split('\n');
+      const lines2 = avatar2.split('\n');
+      const lines3 = avatar3.split('\n');
+
+      const maxLines = Math.max(lines1.length, lines2.length, lines3.length);
+      const colWidth = 20;  // Fixed width per column to handle size differences
+
+      // Render avatars, maintaining alignment
+      console.log();
+      for (let i = 0; i < maxLines; i++) {
+        let row = "";
+        // Get line from each avatar, or empty if beyond its height
+        const line1 = i < lines1.length ? lines1[i] : "";
+        const line2 = i < lines2.length ? lines2[i] : "";
+        const line3 = i < lines3.length ? lines3[i] : "";
+
+        row += line1.padEnd(colWidth);
+        row += line2.padEnd(colWidth);
+        row += line3.padEnd(colWidth);
+        console.log(row);
+      }
+
+      // Random speech bubbles
+      const phrases = [
+        "Hi there!",
+        "Let's build!",
+        "Ready to go",
+        "I'm ready",
+        "👋 Welcome!",
+      ];
+      const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+      console.log(`\n${cyan}${phrase}${reset}\n`);
+    } catch (e) {
+      // Skip if avatar rendering fails
+    }
+
     const rl = createInterface({ input: process.stdin, output: process.stdout });
 
     const confirmed = await new Promise<boolean>((resolve) => {
@@ -1928,107 +1977,10 @@ Options:
       process.exit(0);
     }
 
-    // Show fancy logo with termfont
+    // Show simple termlings text
     console.log();
-    console.log(`${yellow}    ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦${reset}`);
-    console.log();
-
-    try {
-      const { composeText, applyPadding, applyShadow, lerpRgb } = await import("termfont");
-
-      // Compose and style the title
-      const grid = composeText("termlings", { font: "block" });
-      const padded = applyPadding(grid, 1, 1);
-      const { grid: styledGrid, shadowMask } = applyShadow(padded, 1, 1);
-
-      // Render with gradient colors and shadow
-      const titleGreen: [number, number, number] = [40, 200, 80];
-      const titleCyan: [number, number, number] = [40, 200, 220];
-      const shadowColor: [number, number, number] = [20, 40, 20];
-
-      const titleW = styledGrid[0]?.length ?? 0;
-
-      for (let py = 0; py < styledGrid.length; py += 2) {
-        let line = "    ";  // Indent for centering effect
-
-        for (let px = 0; px < titleW; px++) {
-          const topPixel = styledGrid[py]?.[px] ?? false;
-          const botPixel = styledGrid[py + 1]?.[px] ?? false;
-          const topShadow = shadowMask[py]?.[px] ?? false;
-          const botShadow = shadowMask[py + 1]?.[px] ?? false;
-
-          // Compute gradient color across the title
-          const t = titleW > 1 ? px / (titleW - 1) : 0;
-          const [r, g, b] = lerpRgb(titleGreen, titleCyan, t);
-          const color = `\x1b[38;2;${Math.round(r)};${Math.round(g)};${Math.round(b)}m`;
-          const [sr, sg, sb] = shadowColor;
-          const shadowFg = `\x1b[38;2;${sr};${sg};${sb}m`;
-
-          if (topPixel && botPixel) {
-            line += color + "█" + reset;
-          } else if (topPixel && botShadow) {
-            line += color + "▀" + reset;
-          } else if (topShadow && botPixel) {
-            line += shadowFg + "▄" + reset;
-          } else if (topPixel) {
-            line += color + "▀" + reset;
-          } else if (botPixel) {
-            line += color + "▄" + reset;
-          } else if (topShadow && botShadow) {
-            line += shadowFg + "█" + reset;
-          } else if (topShadow) {
-            line += shadowFg + "▀" + reset;
-          } else if (botShadow) {
-            line += shadowFg + "▄" + reset;
-          } else {
-            line += "  ";
-          }
-        }
-
-        console.log(line);
-      }
-    } catch (e) {
-      // Fallback to simple text if termfont fails
-      console.log(`${cyan}    termlings${reset}`);
-    }
-
-    console.log();
-    console.log(`${yellow}         Build autonomous AI agents & teams${reset}`);
-    console.log();
-
-    // Show 3 random termlings avatars
-    try {
-      const { renderTerminal } = await import("./index.js");
-      const dna1 = generateRandomDNA();
-      const dna2 = generateRandomDNA();
-      const dna3 = generateRandomDNA();
-
-      const avatar1 = renderTerminal(dna1);
-      const avatar2 = renderTerminal(dna2);
-      const avatar3 = renderTerminal(dna3);
-
-      // Split each avatar into lines and render side-by-side
-      const lines1 = avatar1.split('\n');
-      const lines2 = avatar2.split('\n');
-      const lines3 = avatar3.split('\n');
-
-      const maxLines = Math.max(lines1.length, lines2.length, lines3.length);
-
-      console.log();
-      for (let i = 0; i < maxLines; i++) {
-        let row = "        ";  // Padding
-        row += (lines1[i] ?? "").padEnd(14);
-        row += (lines2[i] ?? "").padEnd(14);
-        row += (lines3[i] ?? "").padEnd(14);
-        console.log(row);
-      }
-      console.log();
-    } catch (e) {
-      // Skip if avatar rendering fails
-      console.log();
-    }
-
-    console.log(`${yellow}    ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦${reset}`);
+    console.log(`${cyan}termlings${reset}`);
+    console.log(`${yellow}Build autonomous AI agents & teams${reset}`);
     console.log();
 
     // Load template (default to office)
