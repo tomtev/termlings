@@ -1928,11 +1928,71 @@ Options:
       process.exit(0);
     }
 
-    // Show logo
+    // Show fancy logo with termfont
     console.log();
     console.log(`${yellow}    ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦${reset}`);
     console.log();
-    console.log(`${cyan}    termlings${reset}`);
+
+    try {
+      const { composeText, applyPadding, applyShadow, lerpRgb } = await import("termfont");
+
+      // Compose and style the title
+      const grid = composeText("termlings", { font: "block" });
+      const padded = applyPadding(grid, 1, 1);
+      const { grid: styledGrid, shadowMask } = applyShadow(padded, 1, 1);
+
+      // Render with gradient colors and shadow
+      const titleGreen: [number, number, number] = [40, 200, 80];
+      const titleCyan: [number, number, number] = [40, 200, 220];
+      const shadowColor: [number, number, number] = [20, 40, 20];
+
+      const titleW = styledGrid[0]?.length ?? 0;
+
+      for (let py = 0; py < styledGrid.length; py += 2) {
+        let line = "    ";  // Indent for centering effect
+
+        for (let px = 0; px < titleW; px++) {
+          const topPixel = styledGrid[py]?.[px] ?? false;
+          const botPixel = styledGrid[py + 1]?.[px] ?? false;
+          const topShadow = shadowMask[py]?.[px] ?? false;
+          const botShadow = shadowMask[py + 1]?.[px] ?? false;
+
+          // Compute gradient color across the title
+          const t = titleW > 1 ? px / (titleW - 1) : 0;
+          const [r, g, b] = lerpRgb(titleGreen, titleCyan, t);
+          const color = `\x1b[38;2;${Math.round(r)};${Math.round(g)};${Math.round(b)}m`;
+          const [sr, sg, sb] = shadowColor;
+          const shadowFg = `\x1b[38;2;${sr};${sg};${sb}m`;
+
+          if (topPixel && botPixel) {
+            line += color + "█" + reset;
+          } else if (topPixel && botShadow) {
+            line += color + "▀" + reset;
+          } else if (topShadow && botPixel) {
+            line += shadowFg + "▄" + reset;
+          } else if (topPixel) {
+            line += color + "▀" + reset;
+          } else if (botPixel) {
+            line += color + "▄" + reset;
+          } else if (topShadow && botShadow) {
+            line += shadowFg + "█" + reset;
+          } else if (topShadow) {
+            line += shadowFg + "▀" + reset;
+          } else if (botShadow) {
+            line += shadowFg + "▄" + reset;
+          } else {
+            line += "  ";
+          }
+        }
+
+        console.log(line);
+      }
+    } catch (e) {
+      // Fallback to simple text if termfont fails
+      console.log(`${cyan}    termlings${reset}`);
+    }
+
+    console.log();
     console.log(`${yellow}         Build autonomous AI agents & teams${reset}`);
     console.log();
     console.log(`${yellow}    ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦${reset}`);
