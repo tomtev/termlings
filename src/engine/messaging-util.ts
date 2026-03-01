@@ -19,7 +19,39 @@ export async function sendMessage(
       : rawTarget;
   const fromName = agentName || "agent";
   const fromDna = agentDna || "0000000";
+
+  // Check if this is a channel message
+  const isChannelTarget = resolvedTarget.startsWith("channel:");
   const isHumanTarget = resolvedTarget.startsWith("human:");
+
+  if (isChannelTarget) {
+    // Channel message - no target session needed
+    const channel = resolvedTarget.slice("channel:".length);
+    if (!channel) {
+      console.error("Channel name cannot be empty");
+      console.error("Usage: termlings message channel:<name> <text>");
+      process.exit(1);
+    }
+
+    // Keep sender fresh in session listing while chatting.
+    upsertSession(sessionId, {
+      name: fromName,
+      dna: fromDna,
+    });
+
+    appendWorkspaceMessage({
+      kind: "chat",
+      channel,
+      from: sessionId,
+      fromName,
+      fromDna,
+      text,
+    });
+
+    console.log(`Posted to #${channel}: "${text}"`);
+    return;
+  }
+
   let targetSession = isHumanTarget ? null : readSession(resolvedTarget);
   let targetDna = targetSession?.dna;
   let finalTarget = resolvedTarget;
@@ -38,7 +70,7 @@ export async function sendMessage(
 
   if (!isHumanTarget && !targetSession) {
     console.error(`Unknown target: ${resolvedTarget}`);
-    console.error("Use `termlings list-agents` to discover agent IDs, `agent:<dna>` for stable threads, or `human:<id>` for a human operator.");
+    console.error("Use `termlings list-agents` to discover agent IDs, `agent:<dna>` for stable threads, `channel:<name>` for channels, or `human:<id>` for a human operator.");
     process.exit(1);
   }
 

@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from "fs"
 import { basename, join } from "path"
+import * as msgStorage from "./message-storage.js"
 
 export type WorkspaceMessageKind = "chat" | "dm" | "system"
 
@@ -23,6 +24,7 @@ export interface WorkspaceSession {
 export interface WorkspaceMessage {
   id: string
   kind: WorkspaceMessageKind
+  channel?: string          // NEW: for channel messages
   from: string
   fromName: string
   fromDna?: string
@@ -134,6 +136,7 @@ export function ensureWorkspaceDirs(root = process.cwd()): void {
   mkdirSync(storeDir(root), { recursive: true })
   mkdirSync(join(storeDir(root), "browser"), { recursive: true })
   mkdirSync(join(base, "browser", "profile"), { recursive: true })
+  msgStorage.initializeMessageDirs(root)
   touchWorkspace(root)
 }
 
@@ -239,19 +242,7 @@ export function appendWorkspaceMessage(
   root = process.cwd(),
 ): WorkspaceMessage {
   ensureWorkspaceDirs(root)
-  const record: WorkspaceMessage = {
-    id: message.id ?? `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
-    ts: message.ts ?? Date.now(),
-    kind: message.kind,
-    from: message.from,
-    fromName: message.fromName,
-    fromDna: message.fromDna,
-    target: message.target,
-    targetName: message.targetName,
-    targetDna: message.targetDna,
-    text: message.text,
-  }
-  appendFileSync(messagesPath(root), JSON.stringify(record) + "\n")
+  const record = msgStorage.appendMessage(message, root)
   touchWorkspace(root)
   return record
 }
@@ -260,9 +251,15 @@ export function readWorkspaceMessages(
   opts: { limit?: number } = {},
   root = process.cwd(),
 ): WorkspaceMessage[] {
-  const items = parseJsonLines<WorkspaceMessage>(messagesPath(root))
-  if (opts.limit && opts.limit > 0 && items.length > opts.limit) {
-    return items.slice(items.length - opts.limit)
-  }
-  return items
+  ensureWorkspaceDirs(root)
+  const limit = opts.limit ?? 300
+  return msgStorage.getRecentMessages(limit, root)
 }
+
+// Re-export message storage functions for convenience
+export const getChannelMessages = msgStorage.getChannelMessages
+export const getDmMessages = msgStorage.getDmMessages
+export const getSystemMessages = msgStorage.getSystemMessages
+export const getChannels = msgStorage.getChannels
+export const getDmThreads = msgStorage.getDmThreads
+export const getMessageIndex = msgStorage.getMessageIndex

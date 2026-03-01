@@ -19,6 +19,7 @@ export interface WorkspaceSession {
 export interface WorkspaceMessage {
   id: string
   kind: "chat" | "dm" | "system"
+  channel?: string       // NEW: for channel messages
   from: string
   fromName: string
   fromDna?: string
@@ -118,6 +119,14 @@ function messagesPath(root?: string): string {
   return join(storeDir(root), "messages.jsonl")
 }
 
+function messageStorageDir(root?: string): string {
+  return join(storeDir(root), "messages")
+}
+
+function messageIndexPath(root?: string): string {
+  return join(messageStorageDir(root), "index.json")
+}
+
 function inboxPath(sessionId: string, root?: string): string {
   return join(termlingsDir(root), `${sessionId}.msg.json`)
 }
@@ -154,6 +163,58 @@ function safeReadJsonLines<T>(filePath: string): T[] {
   } catch {
     return []
   }
+}
+
+function loadRecentMessages(limit: number = 300, root?: string): WorkspaceMessage[] {
+  const storageDir = messageStorageDir(root)
+  const messages: WorkspaceMessage[] = []
+
+  // Try to load from new structure first
+  if (existsSync(storageDir)) {
+    const indexPath = messageIndexPath(root)
+    const index = safeReadJson<{ channels?: any[]; dms?: any[] }>(indexPath, {})
+
+    // Load recent from each channel
+    const channelsDir = join(storageDir, "channels")
+    if (existsSync(channelsDir)) {
+      const channelLimit = Math.ceil((limit * 0.6) / Math.max((index.channels?.length || 1)))
+      for (const file of readdirSync(channelsDir)) {
+        if (!file.endsWith(".jsonl")) continue
+        const channelMsgs = safeReadJsonLines<WorkspaceMessage>(join(channelsDir, file))
+        if (channelMsgs.length > channelLimit) {
+          messages.push(...channelMsgs.slice(-channelLimit))
+        } else {
+          messages.push(...channelMsgs)
+        }
+      }
+    }
+
+    // Load recent from DMs
+    const dmsDir = join(storageDir, "dms")
+    if (existsSync(dmsDir)) {
+      const dmLimit = Math.ceil((limit * 0.4) / Math.max((index.dms?.length || 1)))
+      for (const file of readdirSync(dmsDir)) {
+        if (!file.endsWith(".jsonl")) continue
+        const dmMsgs = safeReadJsonLines<WorkspaceMessage>(join(dmsDir, file))
+        if (dmMsgs.length > dmLimit) {
+          messages.push(...dmMsgs.slice(-dmLimit))
+        } else {
+          messages.push(...dmMsgs)
+        }
+      }
+    }
+
+    // Load system messages
+    const systemPath = join(storageDir, "system.jsonl")
+    if (existsSync(systemPath)) {
+      const sysMsgs = safeReadJsonLines<WorkspaceMessage>(systemPath)
+      messages.push(...sysMsgs.slice(-Math.ceil(limit * 0.1)))
+    }
+  }
+
+  // Sort by timestamp and return recent
+  messages.sort((a, b) => a.ts - b.ts)
+  return messages.slice(-limit)
 }
 
 function normalizeSession(raw: any, fallbackSessionId: string): WorkspaceSession | null {
@@ -405,6 +466,8 @@ export function loadWorkspaceSnapshot(root?: string): {
   sessions: WorkspaceSession[]
   agents: WorkspaceAgent[]
   messages: WorkspaceMessage[]
+  channels: Array<{ name: string; count: number; lastTs: number }>
+  dmThreads: Array<{ target: string; count: number; lastTs: number }>
   tasks: Task[]
   calendarEvents: CalendarEvent[]
   activityUpdatedAt: number
@@ -418,7 +481,11 @@ export function loadWorkspaceSnapshot(root?: string): {
   const activity = collectSessionActivity(sessions, currentRoot)
   const agents = mergeAgentPresence(listSavedAgents(currentRoot), sessions, activity.bySessionId)
 
-  const messages = safeReadJsonLines<WorkspaceMessage>(messagesPath(currentRoot))
+  const messages = loadRecentMessages(300, currentRoot)
+  const indexPath = messageIndexPath(currentRoot)
+  const index = safeReadJson<{ channels?: any[]; dms?: any[] }>(indexPath, { channels: [], dms: [] })
+  const channels = index.channels ?? []
+  const dmThreads = index.dms ?? []
   const tasks = safeReadJson<Task[]>(tasksPath(currentRoot), [])
   const calendarEvents = safeReadJson<CalendarEvent[]>(calendarPath(currentRoot), [])
 
@@ -426,7 +493,9 @@ export function loadWorkspaceSnapshot(root?: string): {
     meta,
     sessions,
     agents,
-    messages: messages.slice(-300),
+    messages,
+    channels,
+    dmThreads,
     tasks: tasks.slice(-200),
     calendarEvents,
     activityUpdatedAt: activity.updatedAt,
@@ -436,6 +505,7 @@ export function loadWorkspaceSnapshot(root?: string): {
 
 export function postWorkspaceMessage(input: {
   kind: "chat" | "dm" | "system"
+  channel?: string
   text: string
   from: string
   fromName: string
@@ -450,6 +520,7 @@ export function postWorkspaceMessage(input: {
     id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
     ts: Date.now(),
     kind: input.kind,
+    channel: input.channel,
     from: input.from,
     fromName: input.fromName,
     fromDna: input.fromDna,
@@ -459,8 +530,67 @@ export function postWorkspaceMessage(input: {
     text: input.text,
   }
 
-  const existing = existsSync(messagesPath(currentRoot)) ? readFileSync(messagesPath(currentRoot), "utf8") : ""
-  writeFileSync(messagesPath(currentRoot), `${existing}${JSON.stringify(record)}\n`)
+  // Write to new message storage structure
+  const storageDir = messageStorageDir(currentRoot)
+  mkdirSync(storageDir, { recursive: true })
+
+  let filePath: string
+  if (input.channel) {
+    // Channel message
+    const channelsDir = join(storageDir, "channels")
+    mkdirSync(channelsDir, { recursive: true })
+    filePath = join(channelsDir, `${input.channel}.jsonl`)
+  } else if (input.target) {
+    // DM message
+    const dmsDir = join(storageDir, "dms")
+    mkdirSync(dmsDir, { recursive: true })
+    filePath = join(dmsDir, `${input.target}.jsonl`)
+  } else {
+    // System message
+    filePath = join(storageDir, "system.jsonl")
+  }
+
+  // Append message to file
+  const existing = existsSync(filePath) ? readFileSync(filePath, "utf8") : ""
+  writeFileSync(filePath, `${existing}${JSON.stringify(record)}\n`)
+
+  // Update index
+  if (input.channel || input.target) {
+    const indexPath = messageIndexPath(currentRoot)
+    const index = safeReadJson<{ channels: any[]; dms: any[]; updatedAt: number }>(
+      indexPath,
+      { channels: [], dms: [], updatedAt: Date.now() }
+    )
+
+    if (input.channel) {
+      const existing = index.channels.find((c: any) => c.name === input.channel)
+      if (existing) {
+        existing.count++
+        existing.lastTs = record.ts
+      } else {
+        index.channels.push({
+          name: input.channel,
+          count: 1,
+          lastTs: record.ts,
+        })
+      }
+    } else if (input.target) {
+      const existing = index.dms.find((d: any) => d.target === input.target)
+      if (existing) {
+        existing.count++
+        existing.lastTs = record.ts
+      } else {
+        index.dms.push({
+          target: input.target,
+          count: 1,
+          lastTs: record.ts,
+        })
+      }
+    }
+
+    index.updatedAt = Date.now()
+    writeFileSync(indexPath, JSON.stringify(index, null, 2))
+  }
 
   if (record.kind === "dm" && record.target) {
     const inboxFile = inboxPath(record.target, currentRoot)

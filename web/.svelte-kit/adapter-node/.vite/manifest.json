@@ -1,0 +1,402 @@
+{
+  ".svelte-kit/generated/server/internal.js": {
+    "file": "internal.js",
+    "name": "internal",
+    "src": ".svelte-kit/generated/server/internal.js",
+    "isEntry": true,
+    "imports": [
+      "_root.js",
+      "_environment.js",
+      "_internal.js"
+    ]
+  },
+  "_WorkspaceView.M9zxpHNa.css": {
+    "file": "_app/immutable/assets/WorkspaceView.M9zxpHNa.css",
+    "src": "_WorkspaceView.M9zxpHNa.css"
+  },
+  "_WorkspaceView.js": {
+    "file": "chunks/WorkspaceView.js",
+    "name": "WorkspaceView",
+    "imports": [
+      "_index2.js",
+      "_exports.js",
+      "_utils.js",
+      "_root.js",
+      "_state.svelte.js"
+    ],
+    "css": [
+      "_app/immutable/assets/WorkspaceView.M9zxpHNa.css"
+    ]
+  },
+  "_environment.js": {
+    "file": "chunks/environment.js",
+    "name": "environment"
+  },
+  "_exports.js": {
+    "file": "chunks/exports.js",
+    "name": "exports"
+  },
+  "_false.js": {
+    "file": "chunks/false.js",
+    "name": "false"
+  },
+  "_hub.js": {
+    "file": "chunks/hub.js",
+    "name": "hub"
+  },
+  "_index.js": {
+    "file": "chunks/index.js",
+    "name": "index",
+    "imports": [
+      "_index2.js",
+      "_root.js"
+    ]
+  },
+  "_index2.js": {
+    "file": "chunks/index2.js",
+    "name": "index"
+  },
+  "_internal.js": {
+    "file": "chunks/internal.js",
+    "name": "internal",
+    "imports": [
+      "_root.js",
+      "_environment.js"
+    ]
+  },
+  "_public-api.js": {
+    "file": "chunks/public-api.js",
+    "name": "public-api"
+  },
+  "_root.js": {
+    "file": "chunks/root.js",
+    "name": "root",
+    "imports": [
+      "_index2.js",
+      "_false.js"
+    ]
+  },
+  "_shared.js": {
+    "file": "chunks/shared.js",
+    "name": "shared",
+    "imports": [
+      "_utils.js"
+    ]
+  },
+  "_state.svelte.js": {
+    "file": "chunks/state.svelte.js",
+    "name": "state.svelte",
+    "imports": [
+      "_index2.js",
+      "_exports.js",
+      "_root.js"
+    ]
+  },
+  "_utils.js": {
+    "file": "chunks/utils.js",
+    "name": "utils"
+  },
+  "_workspace-route.js": {
+    "file": "chunks/workspace-route.js",
+    "name": "workspace-route",
+    "imports": [
+      "_workspace.js",
+      "_hub.js"
+    ]
+  },
+  "_workspace.js": {
+    "file": "chunks/workspace.js",
+    "name": "workspace"
+  },
+  "node_modules/@sveltejs/kit/src/runtime/app/server/remote/index.js": {
+    "file": "remote-entry.js",
+    "name": "remote-entry",
+    "src": "node_modules/@sveltejs/kit/src/runtime/app/server/remote/index.js",
+    "isEntry": true,
+    "imports": [
+      "_shared.js",
+      "_false.js",
+      "_environment.js"
+    ]
+  },
+  "node_modules/@sveltejs/kit/src/runtime/components/svelte-5/error.svelte": {
+    "file": "entries/fallbacks/error.svelte.js",
+    "name": "entries/fallbacks/error.svelte",
+    "src": "node_modules/@sveltejs/kit/src/runtime/components/svelte-5/error.svelte",
+    "isEntry": true,
+    "imports": [
+      "_index2.js",
+      "_state.svelte.js",
+      "_exports.js",
+      "_utils.js",
+      "_index.js",
+      "_root.js"
+    ]
+  },
+  "node_modules/@sveltejs/kit/src/runtime/server/index.js": {
+    "file": "index.js",
+    "name": "index",
+    "src": "node_modules/@sveltejs/kit/src/runtime/server/index.js",
+    "isEntry": true,
+    "imports": [
+      "_false.js",
+      "_environment.js",
+      "_shared.js",
+      "_exports.js",
+      "_utils.js",
+      "_index.js",
+      "_internal.js"
+    ]
+  },
+  "src/routes/+layout.svelte": {
+    "file": "entries/pages/_layout.svelte.js",
+    "name": "entries/pages/_layout.svelte",
+    "src": "src/routes/+layout.svelte",
+    "isEntry": true,
+    "imports": [
+      "_index2.js"
+    ],
+    "css": [
+      "_app/immutable/assets/_layout.DwWtdOsy.css"
+    ]
+  },
+  "src/routes/+page.server.ts": {
+    "file": "entries/pages/_page.server.ts.js",
+    "name": "entries/pages/_page.server.ts",
+    "src": "src/routes/+page.server.ts",
+    "isEntry": true,
+    "imports": [
+      "_hub.js"
+    ]
+  },
+  "src/routes/+page.svelte": {
+    "file": "entries/pages/_page.svelte.js",
+    "name": "entries/pages/_page.svelte",
+    "src": "src/routes/+page.svelte",
+    "isEntry": true
+  },
+  "src/routes/[project]/+page.server.ts": {
+    "file": "entries/pages/_project_/_page.server.ts.js",
+    "name": "entries/pages/_project_/_page.server.ts",
+    "src": "src/routes/[project]/+page.server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace-route.js"
+    ]
+  },
+  "src/routes/[project]/+page.svelte": {
+    "file": "entries/pages/_project_/_page.svelte.js",
+    "name": "entries/pages/_project_/_page.svelte",
+    "src": "src/routes/[project]/+page.svelte",
+    "isEntry": true,
+    "imports": [
+      "_index2.js",
+      "_WorkspaceView.js"
+    ]
+  },
+  "src/routes/[project]/agents/[dna]/+page.server.ts": {
+    "file": "entries/pages/_project_/agents/_dna_/_page.server.ts.js",
+    "name": "entries/pages/_project_/agents/_dna_/_page.server.ts",
+    "src": "src/routes/[project]/agents/[dna]/+page.server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace-route.js"
+    ]
+  },
+  "src/routes/[project]/agents/[dna]/+page.svelte": {
+    "file": "entries/pages/_project_/agents/_dna_/_page.svelte.js",
+    "name": "entries/pages/_project_/agents/_dna_/_page.svelte",
+    "src": "src/routes/[project]/agents/[dna]/+page.svelte",
+    "isEntry": true,
+    "imports": [
+      "_index2.js",
+      "_WorkspaceView.js"
+    ]
+  },
+  "src/routes/[project]/calendar/+page.server.ts": {
+    "file": "entries/pages/_project_/calendar/_page.server.ts.js",
+    "name": "entries/pages/_project_/calendar/_page.server.ts",
+    "src": "src/routes/[project]/calendar/+page.server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace-route.js"
+    ]
+  },
+  "src/routes/[project]/calendar/+page.svelte": {
+    "file": "entries/pages/_project_/calendar/_page.svelte.js",
+    "name": "entries/pages/_project_/calendar/_page.svelte",
+    "src": "src/routes/[project]/calendar/+page.svelte",
+    "isEntry": true,
+    "imports": [
+      "_index2.js",
+      "_WorkspaceView.js"
+    ]
+  },
+  "src/routes/[project]/channel/+page.server.ts": {
+    "file": "entries/pages/_project_/channel/_page.server.ts.js",
+    "name": "entries/pages/_project_/channel/_page.server.ts",
+    "src": "src/routes/[project]/channel/+page.server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace-route.js"
+    ]
+  },
+  "src/routes/[project]/channel/+page.svelte": {
+    "file": "entries/pages/_project_/channel/_page.svelte.js",
+    "name": "entries/pages/_project_/channel/_page.svelte",
+    "src": "src/routes/[project]/channel/+page.svelte",
+    "isEntry": true,
+    "imports": [
+      "_index2.js",
+      "_WorkspaceView.js"
+    ]
+  },
+  "src/routes/[project]/channel/[channel]/+page.server.ts": {
+    "file": "entries/pages/_project_/channel/_channel_/_page.server.ts.js",
+    "name": "entries/pages/_project_/channel/_channel_/_page.server.ts",
+    "src": "src/routes/[project]/channel/[channel]/+page.server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace-route.js"
+    ]
+  },
+  "src/routes/[project]/channel/[channel]/+page.svelte": {
+    "file": "entries/pages/_project_/channel/_channel_/_page.svelte.js",
+    "name": "entries/pages/_project_/channel/_channel_/_page.svelte",
+    "src": "src/routes/[project]/channel/[channel]/+page.svelte",
+    "isEntry": true,
+    "imports": [
+      "_index2.js",
+      "_WorkspaceView.js"
+    ]
+  },
+  "src/routes/[project]/tasks/+page.server.ts": {
+    "file": "entries/pages/_project_/tasks/_page.server.ts.js",
+    "name": "entries/pages/_project_/tasks/_page.server.ts",
+    "src": "src/routes/[project]/tasks/+page.server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace-route.js"
+    ]
+  },
+  "src/routes/[project]/tasks/+page.svelte": {
+    "file": "entries/pages/_project_/tasks/_page.svelte.js",
+    "name": "entries/pages/_project_/tasks/_page.svelte",
+    "src": "src/routes/[project]/tasks/+page.svelte",
+    "isEntry": true,
+    "imports": [
+      "_index2.js",
+      "_WorkspaceView.js"
+    ]
+  },
+  "src/routes/api/hub/health/+server.ts": {
+    "file": "entries/endpoints/api/hub/health/_server.ts.js",
+    "name": "entries/endpoints/api/hub/health/_server.ts",
+    "src": "src/routes/api/hub/health/+server.ts",
+    "isEntry": true
+  },
+  "src/routes/api/v1/messages/+server.ts": {
+    "file": "entries/endpoints/api/v1/messages/_server.ts.js",
+    "name": "entries/endpoints/api/v1/messages/_server.ts",
+    "src": "src/routes/api/v1/messages/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace.js",
+      "_public-api.js",
+      "_hub.js"
+    ]
+  },
+  "src/routes/api/v1/projects/+server.ts": {
+    "file": "entries/endpoints/api/v1/projects/_server.ts.js",
+    "name": "entries/endpoints/api/v1/projects/_server.ts",
+    "src": "src/routes/api/v1/projects/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_public-api.js",
+      "_hub.js"
+    ]
+  },
+  "src/routes/api/v1/sessions/+server.ts": {
+    "file": "entries/endpoints/api/v1/sessions/_server.ts.js",
+    "name": "entries/endpoints/api/v1/sessions/_server.ts",
+    "src": "src/routes/api/v1/sessions/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace.js",
+      "_public-api.js",
+      "_hub.js"
+    ]
+  },
+  "src/routes/api/v1/sessions/leave/+server.ts": {
+    "file": "entries/endpoints/api/v1/sessions/leave/_server.ts.js",
+    "name": "entries/endpoints/api/v1/sessions/leave/_server.ts",
+    "src": "src/routes/api/v1/sessions/leave/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace.js",
+      "_public-api.js",
+      "_hub.js"
+    ]
+  },
+  "src/routes/api/v1/state/+server.ts": {
+    "file": "entries/endpoints/api/v1/state/_server.ts.js",
+    "name": "entries/endpoints/api/v1/state/_server.ts",
+    "src": "src/routes/api/v1/state/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace.js",
+      "_public-api.js",
+      "_hub.js"
+    ]
+  },
+  "src/routes/api/workspace/+server.ts": {
+    "file": "entries/endpoints/api/workspace/_server.ts.js",
+    "name": "entries/endpoints/api/workspace/_server.ts",
+    "src": "src/routes/api/workspace/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace.js",
+      "_hub.js"
+    ]
+  },
+  "src/routes/api/workspace/join/+server.ts": {
+    "file": "entries/endpoints/api/workspace/join/_server.ts.js",
+    "name": "entries/endpoints/api/workspace/join/_server.ts",
+    "src": "src/routes/api/workspace/join/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace.js",
+      "_hub.js"
+    ]
+  },
+  "src/routes/api/workspace/leave/+server.ts": {
+    "file": "entries/endpoints/api/workspace/leave/_server.ts.js",
+    "name": "entries/endpoints/api/workspace/leave/_server.ts",
+    "src": "src/routes/api/workspace/leave/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace.js",
+      "_hub.js"
+    ]
+  },
+  "src/routes/api/workspace/message/+server.ts": {
+    "file": "entries/endpoints/api/workspace/message/_server.ts.js",
+    "name": "entries/endpoints/api/workspace/message/_server.ts",
+    "src": "src/routes/api/workspace/message/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace.js",
+      "_hub.js"
+    ]
+  },
+  "src/routes/api/workspace/stream/+server.ts": {
+    "file": "entries/endpoints/api/workspace/stream/_server.ts.js",
+    "name": "entries/endpoints/api/workspace/stream/_server.ts",
+    "src": "src/routes/api/workspace/stream/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace.js",
+      "_hub.js"
+    ]
+  }
+}

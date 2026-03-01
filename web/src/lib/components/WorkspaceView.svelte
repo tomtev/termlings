@@ -14,6 +14,7 @@
   type Message = {
     id: string
     kind: "chat" | "dm" | "system"
+    channel?: string
     from: string
     fromName: string
     fromDna?: string
@@ -63,6 +64,8 @@
     sessions: Session[]
     agents: Agent[]
     messages: Message[]
+    channels: Array<{ name: string; count: number; lastTs: number }>
+    dmThreads: Array<{ target: string; count: number; lastTs: number }>
     tasks: Task[]
     calendarEvents: CalendarEvent[]
     activityUpdatedAt?: number
@@ -541,7 +544,11 @@
 
   $: channelThreads = [
     { id: "activity", label: "# all-activity", kind: "channel" as const },
-    { id: "workspace", label: "# workspace", kind: "channel" as const },
+    ...snapshot.channels.map((ch) => ({
+      id: `channel:${ch.name}`,
+      label: `# ${ch.name}`,
+      kind: "channel" as const,
+    })),
   ]
 
   $: threads = [...topThreads, ...channelThreads, ...dmThreads]
@@ -565,6 +572,11 @@
       ? []
       : activeThreadId === "tasks" || activeThreadId === "calendar"
       ? []
+      : activeThreadId.startsWith("channel:")
+      ? snapshot.messages.filter((message) => {
+          const channelName = activeThreadId.slice("channel:".length)
+          return message.channel === channelName
+        })
       : activeThreadId.startsWith("agent:")
       ? snapshot.messages.filter((message) => {
           const threadDna = activeThreadId.slice("agent:".length)

@@ -52,14 +52,15 @@ USE WHEN:
 export async function handleMessage(flags: Set<string>, positional: string[]) {
   if (flags.has("help")) {
     console.log(`
-💬 Message - Send DMs to agents & operators
+💬 Message - Send messages to channels, agents & operators
 
-Send direct messages to other agents, operators, or back to human handlers.
+Send direct messages, post to channels, or notify human handlers.
 
 USAGE:
   termlings message <target> <text>
 
 TARGETS:
+  channel:<name>        Post to a channel (e.g., #general)
   <session-id>          A specific live session (from termlings list-agents)
   agent:<dna>           Stable agent identity (works across restarts) ← PREFERRED
   human:<id>            Human operator inbox
@@ -68,6 +69,10 @@ TARGETS:
     human:owner         Alias for owner
 
 EXAMPLES:
+  # Post to a channel
+  termlings message channel:general "Team standup in 5 mins"
+  termlings message channel:engineering "Deploy ready for review"
+
   # Message another agent
   termlings message agent:2c5f423 "I'm starting the data validation task"
 
@@ -78,7 +83,8 @@ EXAMPLES:
   termlings message tl-abc123def456 "Quick question about the API key"
 
 BEST PRACTICES:
-  ✓ Use agent:<dna> for persistent threads (survives restarts)
+  ✓ Use channel:name for team-wide announcements
+  ✓ Use agent:<dna> for persistent 1-to-1 threads (survives restarts)
   ✓ Message human:default for blockers or status updates
   ✓ Keep messages concise (timestamps auto-added)
   ✓ Include concrete next steps
