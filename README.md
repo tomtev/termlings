@@ -310,10 +310,15 @@ PinchTab is a lightweight **headless browser automation tool** that runs Chrome 
 
 ### Setup
 
-**1. Install PinchTab** (one-time setup):
+**1. Install PinchTab** (one-time setup, optional):
+
+PinchTab is an external tool not bundled with termlings. Install via:
+
 ```bash
 npm install -g pinchtab
 ```
+
+Or via your system package manager (if available).
 
 **2. Initialize browser in your workspace:**
 ```bash
@@ -328,6 +333,8 @@ termlings browser start
 ```
 
 Launches PinchTab server in headless mode (default, recommended). PinchTab manages Chrome in the background at `.termlings/browser/profile/`.
+
+**Note:** Browser automation is optional. If PinchTab is not installed, agents can skip browser commands and work with other features (messaging, tasks, calendar).
 
 ### Agent Commands
 
