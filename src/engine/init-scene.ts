@@ -1,8 +1,78 @@
-import type { Scene, Cell } from "./types.js"
+import type { Scene, Cell, TileDef, RGB } from "./types.js"
+import { DEFAULT_TILE_DEFS, stampTiles } from "./tilemap-core.js"
 import { renderTerminalSmall, generateRandomDNA } from "../index.js"
 
 export interface InitSceneOptions {
   onConfirm: (confirmed: boolean) => void
+}
+
+// Seeded random for consistent background
+function seededRandom(seed: number): () => number {
+  let s = seed | 0
+  return () => {
+    s = Math.imul(s ^ (s >>> 16), 0x45d9f3b)
+    s = Math.imul(s ^ (s >>> 16), 0x45d9f3b)
+    s = s ^ (s >>> 16)
+    return (s >>> 0) / 0xffffffff
+  }
+}
+
+// Generate decorative background tiles (grass + sky)
+function generateInitTiles(cols: number, rows: number): string[][] {
+  const rand = seededRandom(42)
+  const flowers = ["f", "c", "r", "v", "o", "w"]
+  const stars = ["1", "2", "3"]
+  const horizon = Math.floor(rows * 0.5)
+
+  const tiles: string[][] = []
+  for (let y = 0; y < rows; y++) {
+    tiles[y] = []
+    for (let x = 0; x < cols; x++) {
+      if (y < horizon) {
+        // Sky with stars
+        if (rand() < 0.03) {
+          tiles[y]![x] = stars[Math.floor(rand() * stars.length)]!
+        } else {
+          tiles[y]![x] = " "
+        }
+      } else {
+        // Grass with flowers
+        if (rand() < 0.05) {
+          tiles[y]![x] = flowers[Math.floor(rand() * flowers.length)]!
+        } else {
+          tiles[y]![x] = ","
+        }
+      }
+    }
+  }
+  return tiles
+}
+
+// Tile definitions (matching title screen)
+const flowerDefs: Record<string, Partial<TileDef>> = {
+  f: { ch: "✿", fg: [255, 100, 120], walkable: true },
+  c: { ch: "❀", fg: [180, 100, 255], walkable: true },
+  r: { ch: "✻", fg: [255, 180, 60], walkable: true },
+  v: { ch: "♠", fg: [100, 180, 80], walkable: true },
+  o: { ch: "✶", fg: [100, 200, 255], walkable: true },
+  w: { ch: "✿", fg: [255, 255, 180], walkable: true },
+}
+
+const skyDefs: Record<string, Partial<TileDef>> = {
+  " ": { ch: " ", fg: null, bg: null, walkable: false },
+  "1": { ch: "·", fg: [200, 200, 255], bg: null, walkable: false },
+  "2": { ch: "✦", fg: [255, 255, 200], bg: null, walkable: false },
+  "3": { ch: "*", fg: [160, 180, 255], bg: null, walkable: false },
+}
+
+const initTileDefs: Record<string, TileDef> = { ...DEFAULT_TILE_DEFS }
+for (const [key, partial] of Object.entries(flowerDefs)) {
+  const base = initTileDefs[key] ?? { ch: key, fg: null, bg: null, walkable: true }
+  initTileDefs[key] = { ...base, ...partial }
+}
+for (const [key, partial] of Object.entries(skyDefs)) {
+  const base = initTileDefs[key] ?? { ch: key, fg: null, bg: null, walkable: false }
+  initTileDefs[key] = { ...base, ...partial }
 }
 
 export class InitScene implements Scene {
@@ -12,19 +82,18 @@ export class InitScene implements Scene {
   private frames = [0, 1, 2, 3]
   private currentFrame = 0
   private tick = 0
-  private userInput = ""
   private confirmed: boolean | null = null
+  private tiles: string[][] = []
 
   private titleLines = [
-    "\x1b[36mtermlings\x1b[0m",
-    "\x1b[33mBuild autonomous AI agents & teams\x1b[0m",
+    { text: "termlings", fg: [54, 184, 207] as RGB },
+    { text: "Build autonomous AI agents & teams", fg: [215, 192, 64] as RGB },
   ]
   private promptText = "Create .termlings and initialize first agent? (y/n) "
   private avatarLines: string[] = []
-  private startRow = 0
+  private avatarStartRow = 0
 
   constructor(private options: InitSceneOptions) {
-    // Generate 5 random DNAs
     this.dnas = Array(5)
       .fill(0)
       .map(() => generateRandomDNA())
@@ -33,6 +102,7 @@ export class InitScene implements Scene {
   init(cols: number, rows: number): void {
     this.cols = cols
     this.rows = rows
+    this.tiles = generateInitTiles(cols, rows)
     this.avatarLines = this.renderFrame(0)
     this.calculateLayout()
   }
@@ -70,29 +140,32 @@ export class InitScene implements Scene {
     const titleHeight = this.titleLines.length + 1
     const avatarHeight = this.avatarLines.length
     const totalHeight = titleHeight + avatarHeight + 3
-    this.startRow = Math.max(0, Math.floor((this.rows - totalHeight) / 2))
+    this.avatarStartRow = Math.max(0, Math.floor((this.rows - totalHeight) / 2))
   }
 
   update(_tick: number, _cols: number, _rows: number, buffer: Cell[][]): void {
-    // Update animation frame every 5 ticks (~60fps / 12 = ~5fps animation)
+    // Render background tiles
+    stampTiles(buffer, this.cols, this.rows, this.tiles, initTileDefs, this.cols, this.rows, 0, 0, 1)
+
+    // Update animation frame every 5 ticks
     if (this.tick % 5 === 0) {
       this.currentFrame = (this.currentFrame + 1) % 4
       this.avatarLines = this.renderFrame(this.frames[this.currentFrame]!)
     }
     this.tick++
 
-    // Render to buffer
-    this.renderToBuffer(buffer)
+    // Render title, avatars, and prompt
+    this.renderContent(buffer)
   }
 
-  private renderToBuffer(buffer: Cell[][]): void {
-    let row = this.startRow
+  private renderContent(buffer: Cell[][]): void {
+    let row = this.avatarStartRow
 
     // Title
-    for (const title of this.titleLines) {
-      const visibleTitle = title.replace(/\x1b\[[0-9;]*m/g, "")
+    for (const titleLine of this.titleLines) {
+      const visibleTitle = titleLine.text
       const padding = Math.max(0, Math.floor((this.cols - visibleTitle.length) / 2))
-      this.renderTextLine(buffer, row, padding, title)
+      this.stampTextLine(buffer, row, padding, titleLine.text, titleLine.fg)
       row++
     }
 
@@ -103,39 +176,45 @@ export class InitScene implements Scene {
     for (const avatarLine of this.avatarLines) {
       const visibleWidth = this.getVisibleWidth(avatarLine)
       const padding = Math.max(0, Math.floor((this.cols - visibleWidth) / 2))
-      this.renderTextLine(buffer, row, padding, avatarLine)
+      this.stampTextLineWithANSI(buffer, row, padding, avatarLine)
       row++
     }
 
     // Spacing
     row++
 
-    // Prompt with user input
-    const displayText = this.promptText + (this.userInput ? this.userInput : "_")
+    // Prompt
+    const displayText = this.promptText + (this.confirmed === null ? "_" : "")
     const visiblePrompt = displayText.replace(/\x1b\[[0-9;]*m/g, "")
     const promptPadding = Math.max(0, Math.floor((this.cols - visiblePrompt.length) / 2))
-    this.renderTextLine(buffer, row, promptPadding, displayText)
+    this.stampTextLine(buffer, row, promptPadding, displayText, [200, 200, 200])
   }
 
-  private renderTextLine(buffer: Cell[][], row: number, col: number, text: string): void {
+  private stampTextLine(buffer: Cell[][], row: number, col: number, text: string, fg: RGB): void {
+    if (row < 0 || row >= buffer.length) return
+    const bufferRow = buffer[row]!
+    for (let i = 0; i < text.length && col + i < this.cols; i++) {
+      bufferRow[col + i] = { ch: text[i]!, fg, bg: null }
+    }
+  }
+
+  private stampTextLineWithANSI(buffer: Cell[][], row: number, col: number, text: string): void {
     if (row < 0 || row >= buffer.length) return
 
     let currentCol = col
     let i = 0
-    let currentFg: [number, number, number] | null = null
+    let currentFg: RGB | null = null
 
     while (i < text.length && currentCol < this.cols) {
       if (text[i] === "\x1b" && text[i + 1] === "[") {
-        // Parse ANSI escape sequence
-        i += 2 // Skip \x1b[
+        i += 2
         let codeStr = ""
         while (i < text.length && text[i] !== "m") {
           codeStr += text[i]
           i++
         }
-        i++ // Skip 'm'
+        i++
 
-        // Handle color codes: 38;2;R;G;B (foreground RGB)
         if (codeStr.startsWith("38;2;")) {
           const parts = codeStr.split(";")
           if (parts.length >= 5) {
@@ -145,7 +224,6 @@ export class InitScene implements Scene {
             currentFg = [r, g, b]
           }
         } else if (codeStr === "0") {
-          // Reset
           currentFg = null
         }
         continue
@@ -166,16 +244,15 @@ export class InitScene implements Scene {
   resize(cols: number, rows: number): void {
     this.cols = cols
     this.rows = rows
+    this.tiles = generateInitTiles(cols, rows)
     this.calculateLayout()
   }
 
   input(): { onArrow: (dir: string) => void; onKey: (char: string) => void } {
     return {
-      onArrow: (_dir: string) => {
-        // Ignore arrows
-      },
+      onArrow: () => {},
       onKey: (char: string) => {
-        if (this.confirmed !== null) return // Already answered
+        if (this.confirmed !== null) return
 
         if (char === "y" || char === "Y") {
           this.confirmed = true
@@ -184,7 +261,6 @@ export class InitScene implements Scene {
           this.confirmed = false
           this.options.onConfirm(false)
         } else if (char === "\u0003") {
-          // Ctrl+C
           this.confirmed = false
           this.options.onConfirm(false)
         }
@@ -192,7 +268,5 @@ export class InitScene implements Scene {
     }
   }
 
-  cleanup(): void {
-    // No cleanup needed
-  }
+  cleanup(): void {}
 }
