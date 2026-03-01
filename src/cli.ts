@@ -127,10 +127,11 @@ if (agentAdapter) {
   if (!existsSync(mapMetadataPath)) {
     const cyan = "\x1b[36m";
     const reset = "\x1b[0m";
+    const cwd = process.cwd();
     console.error(`\n❌ No active termlings sim found!\n`);
     console.error(`You need to start the sim first in another terminal:\n`);
+    console.error(`  ${cyan}cd ${cwd}${reset}`);
     console.error(`  ${cyan}termlings${reset}\n`);
-    console.error(`(in the same folder as this project)\n`);
     console.error(`Then run this command again to connect your agent.\n`);
     process.exit(1);
   }
