@@ -10,17 +10,17 @@ return {
 	assets: new Set([]),
 	mimeTypes: {},
 	_: {
-		client: {start:"_app/immutable/entry/start.8Evrv1Ef.js",app:"_app/immutable/entry/app.B21zyicy.js",imports:["_app/immutable/entry/start.8Evrv1Ef.js","_app/immutable/chunks/BeYj1-5O.js","_app/immutable/chunks/CufHi2q-.js","_app/immutable/chunks/BTCDswmT.js","_app/immutable/entry/app.B21zyicy.js","_app/immutable/chunks/Dp1pzeXC.js","_app/immutable/chunks/CufHi2q-.js","_app/immutable/chunks/B3FqVsWr.js","_app/immutable/chunks/rLtue24v.js","_app/immutable/chunks/BTCDswmT.js","_app/immutable/chunks/TIaUNzzf.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
+		client: {start:"_app/immutable/entry/start.Ctk0IACU.js",app:"_app/immutable/entry/app.CrUc_reR.js",imports:["_app/immutable/entry/start.Ctk0IACU.js","_app/immutable/chunks/D03MXp9C.js","_app/immutable/chunks/CufHi2q-.js","_app/immutable/chunks/BTCDswmT.js","_app/immutable/entry/app.CrUc_reR.js","_app/immutable/chunks/Dp1pzeXC.js","_app/immutable/chunks/CufHi2q-.js","_app/immutable/chunks/B3FqVsWr.js","_app/immutable/chunks/rLtue24v.js","_app/immutable/chunks/BTCDswmT.js","_app/immutable/chunks/TIaUNzzf.js"],stylesheets:[],fonts:[],uses_env_dynamic_public:false},
 		nodes: [
 			__memo(() => import('./chunks/0-Cve_Me4S.js')),
-			__memo(() => import('./chunks/1-Ca9ayEDW.js')),
+			__memo(() => import('./chunks/1-BXs3fxya.js')),
 			__memo(() => import('./chunks/2-swfWzkts.js')),
-			__memo(() => import('./chunks/3-3pzByDrY.js')),
-			__memo(() => import('./chunks/4-DCx36hB6.js')),
-			__memo(() => import('./chunks/5-cX5fysEe.js')),
-			__memo(() => import('./chunks/6-b9oIi_Cg.js')),
-			__memo(() => import('./chunks/7-Dntiu_yX.js')),
-			__memo(() => import('./chunks/8-DOApn3XZ.js'))
+			__memo(() => import('./chunks/3-BLp_eRx7.js')),
+			__memo(() => import('./chunks/4-awMVEwGn.js')),
+			__memo(() => import('./chunks/5-B6aBWqF0.js')),
+			__memo(() => import('./chunks/6-CzZM4cmk.js')),
+			__memo(() => import('./chunks/7-W9OLF_7e.js')),
+			__memo(() => import('./chunks/8-B_YpaYfj.js'))
 		],
 		remotes: {
 			
@@ -83,6 +83,13 @@ return {
 				endpoint: __memo(() => import('./chunks/_server.ts-DJTLl6DP.js'))
 			},
 			{
+				id: "/api/workspace/delta-stream",
+				pattern: /^\/api\/workspace\/delta-stream\/?$/,
+				params: [],
+				page: null,
+				endpoint: __memo(() => import('./chunks/_server.ts-BG7047W8.js'))
+			},
+			{
 				id: "/api/workspace/join",
 				pattern: /^\/api\/workspace\/join\/?$/,
 				params: [],
@@ -108,7 +115,7 @@ return {
 				pattern: /^\/api\/workspace\/stream\/?$/,
 				params: [],
 				page: null,
-				endpoint: __memo(() => import('./chunks/_server.ts-xNKUHeiF.js'))
+				endpoint: __memo(() => import('./chunks/_server.ts-BbqkChMR.js'))
 			},
 			{
 				id: "/[project]",

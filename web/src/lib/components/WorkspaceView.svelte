@@ -2,6 +2,7 @@
   import { onMount } from "svelte"
   import { goto } from "$app/navigation"
   import { Avatar } from "../../../../src/svelte/index"
+  import { applyDelta, type Delta } from "$lib/workspace-delta-merge"
 
   type Session = {
     sessionId: string
@@ -370,20 +371,35 @@
     clearReconnectTimer()
     stream?.close()
     streamProjectId = projectId
-    const nextStream = new EventSource(withProject("/api/workspace/stream", projectId))
+    // Use delta-stream endpoint for efficient event-driven updates
+    const nextStream = new EventSource(withProject("/api/workspace/delta-stream", projectId))
     stream = nextStream
 
     nextStream.onmessage = (event: MessageEvent<string>) => {
       if (generation !== streamGeneration) return
       try {
-        const payload = JSON.parse(event.data) as WorkspacePayload
-        if (payload.activeProjectId !== projectId) return
-        snapshot = payload.snapshot
-        projects = payload.projects
-        activeProjectId = projectId
-        loadError = null
-      } catch {
-        loadError = "Failed to parse live workspace update"
+        const payload = JSON.parse(event.data)
+
+        // Handle initial snapshot
+        if (payload.type === "snapshot") {
+          if (payload.activeProjectId !== projectId) return
+          snapshot = payload.snapshot
+          projects = payload.projects
+          activeProjectId = projectId
+          loadError = null
+          return
+        }
+
+        // Handle delta updates
+        if (payload.type === "delta") {
+          const delta = payload.delta as Delta
+          // Apply delta to current snapshot
+          snapshot = applyDelta(snapshot, delta)
+          loadError = null
+          return
+        }
+      } catch (err) {
+        loadError = "Failed to parse live workspace update: " + (err instanceof Error ? err.message : String(err))
       }
     }
 

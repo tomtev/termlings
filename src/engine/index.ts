@@ -1,24 +1,26 @@
+// Workspace engine - sim engine removed
+
+// Core types (used by objects.ts)
 export * from "./types.js"
-export * from "./renderer.js"
-export * from "./tilemap.js"
-export * from "./input.js"
-export * from "./camera.js"
-export * from "./entity.js"
-export * from "./objects.js"
-export * from "./object-loader.js"
-export * from "./text-renderer.js"
-export * from "./sound.js"
-export * from "./doors.js"
-export * from "./map-loader.js"
-export * from "./npc-ai.js"
+
+// IPC & Messaging
 export * from "./ipc.js"
-export * from "./scene.js"
-export * from "./room-detect.js"
+export * from "./messaging-util.js"
+
+// Calendar & Tasks
 export * from "./tasks.js"
 export * from "./calendar.js"
-export * from "./chunk-system.js"
-export * from "./init-scene.js"
+export * from "./calendar-scheduler.js"
+
+// Browser Automation
 export * from "./browser-types.js"
 export * from "./browser.js"
 export * from "./browser-client.js"
+
+// Objects & Agent Discovery
+export * from "./objects.js"
+export * from "./object-loader.js"
+export * from "./agent-listing.js"
+
+// Utilities
 export * from "./query-patterns.js"

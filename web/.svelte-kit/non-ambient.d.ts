@@ -27,7 +27,7 @@ export {};
 
 declare module "$app/types" {
 	export interface AppTypes {
-		RouteId(): "/" | "/api" | "/api/hub" | "/api/hub/health" | "/api/v1" | "/api/v1/messages" | "/api/v1/projects" | "/api/v1/sessions" | "/api/v1/sessions/leave" | "/api/v1/state" | "/api/workspace" | "/api/workspace/join" | "/api/workspace/leave" | "/api/workspace/message" | "/api/workspace/stream" | "/[project]" | "/[project]/agents" | "/[project]/agents/[dna]" | "/[project]/calendar" | "/[project]/channel" | "/[project]/channel/[channel]" | "/[project]/tasks";
+		RouteId(): "/" | "/api" | "/api/hub" | "/api/hub/health" | "/api/v1" | "/api/v1/messages" | "/api/v1/projects" | "/api/v1/sessions" | "/api/v1/sessions/leave" | "/api/v1/state" | "/api/workspace" | "/api/workspace/delta-stream" | "/api/workspace/join" | "/api/workspace/leave" | "/api/workspace/message" | "/api/workspace/stream" | "/[project]" | "/[project]/agents" | "/[project]/agents/[dna]" | "/[project]/calendar" | "/[project]/channel" | "/[project]/channel/[channel]" | "/[project]/tasks";
 		RouteParams(): {
 			"/[project]": { project: string };
 			"/[project]/agents": { project: string };
@@ -49,6 +49,7 @@ declare module "$app/types" {
 			"/api/v1/sessions/leave": Record<string, never>;
 			"/api/v1/state": Record<string, never>;
 			"/api/workspace": Record<string, never>;
+			"/api/workspace/delta-stream": Record<string, never>;
 			"/api/workspace/join": Record<string, never>;
 			"/api/workspace/leave": Record<string, never>;
 			"/api/workspace/message": Record<string, never>;
@@ -61,7 +62,7 @@ declare module "$app/types" {
 			"/[project]/channel/[channel]": { project: string; channel: string };
 			"/[project]/tasks": { project: string }
 		};
-		Pathname(): "/" | "/api/hub/health" | "/api/v1/messages" | "/api/v1/projects" | "/api/v1/sessions" | "/api/v1/sessions/leave" | "/api/v1/state" | "/api/workspace" | "/api/workspace/join" | "/api/workspace/leave" | "/api/workspace/message" | "/api/workspace/stream" | `/${string}` & {} | `/${string}/agents/${string}` & {} | `/${string}/calendar` & {} | `/${string}/channel` & {} | `/${string}/channel/${string}` & {} | `/${string}/tasks` & {};
+		Pathname(): "/" | "/api/hub/health" | "/api/v1/messages" | "/api/v1/projects" | "/api/v1/sessions" | "/api/v1/sessions/leave" | "/api/v1/state" | "/api/workspace" | "/api/workspace/delta-stream" | "/api/workspace/join" | "/api/workspace/leave" | "/api/workspace/message" | "/api/workspace/stream" | `/${string}` & {} | `/${string}/agents/${string}` & {} | `/${string}/calendar` & {} | `/${string}/channel` & {} | `/${string}/channel/${string}` & {} | `/${string}/tasks` & {};
 		ResolvedPathname(): `${"" | `/${string}`}${ReturnType<AppTypes['Pathname']>}`;
 		Asset(): string & {};
 	}

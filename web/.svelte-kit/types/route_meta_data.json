@@ -23,6 +23,9 @@
 	"/api/workspace": [
 		"src/routes/api/workspace/+server.ts"
 	],
+	"/api/workspace/delta-stream": [
+		"src/routes/api/workspace/delta-stream/+server.ts"
+	],
 	"/api/workspace/join": [
 		"src/routes/api/workspace/join/+server.ts"
 	],

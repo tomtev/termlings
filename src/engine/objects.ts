@@ -1,5 +1,4 @@
 import { tileKey, type RGB, type Cell, type ObjectOverlay } from "./types.js"
-import type { ParticleEmitter } from "./particles.js"
 
 export interface ObjectCell {
   ch: string
@@ -13,7 +12,6 @@ export interface ObjectDef {
   width: number
   height: number
   cells: (ObjectCell | null)[][] // [row][col], null = transparent/no override
-  emitters?: ParticleEmitter[]    // optional particle emitters for sparkles, flames, etc
   enterAnimationDuration?: number // milliseconds for entrance animation (default: 400ms)
   exitAnimationDuration?: number  // milliseconds for exit animation (default: 400ms)
 }

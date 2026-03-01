@@ -64,6 +64,10 @@
       "_environment.js"
     ]
   },
+  "_message-watcher.js": {
+    "file": "chunks/message-watcher.js",
+    "name": "message-watcher"
+  },
   "_public-api.js": {
     "file": "chunks/public-api.js",
     "name": "public-api"
@@ -359,6 +363,17 @@
       "_hub.js"
     ]
   },
+  "src/routes/api/workspace/delta-stream/+server.ts": {
+    "file": "entries/endpoints/api/workspace/delta-stream/_server.ts.js",
+    "name": "entries/endpoints/api/workspace/delta-stream/_server.ts",
+    "src": "src/routes/api/workspace/delta-stream/+server.ts",
+    "isEntry": true,
+    "imports": [
+      "_workspace.js",
+      "_hub.js",
+      "_message-watcher.js"
+    ]
+  },
   "src/routes/api/workspace/join/+server.ts": {
     "file": "entries/endpoints/api/workspace/join/_server.ts.js",
     "name": "entries/endpoints/api/workspace/join/_server.ts",
@@ -396,7 +411,8 @@
     "isEntry": true,
     "imports": [
       "_workspace.js",
-      "_hub.js"
+      "_hub.js",
+      "_message-watcher.js"
     ]
   }
 }
