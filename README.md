@@ -312,6 +312,7 @@ Each agent:
 
 **Web interface & infrastructure:**
 - [docs/WEB.md](docs/WEB.md) — Web workspace UI and features
+- [docs/API.md](docs/API.md) — HTTP API reference (all endpoints with examples)
 - [docs/INIT.md](docs/INIT.md) — Workspace initialization and reset
 - [docs/HOOKS.md](docs/HOOKS.md) — Claude Code hooks (typing presence)
 
