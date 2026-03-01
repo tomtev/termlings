@@ -119,6 +119,17 @@ if (flags.has("clear")) {
 let agentAdapter = _agentRegistry[positional[0] ?? ""];
 
 if (agentAdapter) {
+  // Check if sim is running
+  const termlingsDir = join(process.cwd(), ".termlings");
+  const mapMetadataPath = join(termlingsDir, "map-metadata.json");
+
+  if (!existsSync(mapMetadataPath)) {
+    console.error(`\n❌ No active termlings sim found!\n`);
+    console.error(`You need to start the sim first in another terminal:\n`);
+    console.error(`  ${cyan}termlings${reset}\n`);
+    console.error(`Then run this command again to connect your agent.\n`);
+    process.exit(1);
+  }
   const { discoverLocalAgents } = await import("./agents/discover.js");
   const localAgents = discoverLocalAgents();
 
