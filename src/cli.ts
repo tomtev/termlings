@@ -2035,16 +2035,13 @@ Options:
     console.log(`Then, launch an agent in another terminal. Agents need autonomous permissions:\n`);
 
     console.log(`${yellow}Claude Code:${reset}`);
-    console.log(`  termlings claude --dangerously-skip-permissions`);
-    console.log(`  (Claude works autonomously on tasks without requesting confirmations)\n`);
+    console.log(`  termlings claude --dangerously-skip-permissions\n`);
 
     console.log(`${yellow}Codex CLI:${reset}`);
-    console.log(`  termlings codex --dangerously-bypass-approvals-and-sandbox`);
-    console.log(`  (Codex executes code and commands autonomously)\n`);
+    console.log(`  termlings codex --dangerously-bypass-approvals-and-sandbox\n`);
 
     console.log(`${yellow}Pi coding agent:${reset}`);
-    console.log(`  termlings pi`);
-    console.log(`  (Pi operates autonomously by default)\n`);
+    console.log(`  termlings pi\n`);
 
     console.log(`${cyan}Why the --dangerous flags?${reset}`);
     console.log(`Agents are autonomous AI workers that make decisions and execute commands`);
