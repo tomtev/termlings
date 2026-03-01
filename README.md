@@ -294,6 +294,128 @@ Each agent:
 - Check calendar for meetings
 - Use browser to interact with external services
 
+## Browser Automation with PinchTab
+
+Agents can automate web interaction through **PinchTab**, a headless browser CLI tool that provides agents with a persistent, shared browser instance.
+
+### What is PinchTab?
+
+PinchTab is a lightweight **headless browser automation tool** that runs Chrome in the background. It's perfect for:
+
+- **Web automation** — Navigate pages, fill forms, click buttons, extract data
+- **Headless operation** — Runs without UI (no graphics conflicts, minimal system overhead)
+- **API-driven** — Control via HTTP requests from termlings CLI
+- **Profile persistence** — Shared Chrome profile maintains cookies, login state, and history across all agents
+- **Agent tracking** — Each agent action is logged with identity for audit trails
+
+### Setup
+
+**1. Install PinchTab** (one-time setup):
+```bash
+npm install -g pinchtab
+```
+
+**2. Initialize browser in your workspace:**
+```bash
+termlings browser init
+```
+
+Creates `.termlings/browser/` directory with configuration and profile directory.
+
+**3. Start the browser service:**
+```bash
+termlings browser start
+```
+
+Launches PinchTab server in headless mode (default, recommended). PinchTab manages Chrome in the background at `.termlings/browser/profile/`.
+
+### Agent Commands
+
+Once running, agents use the CLI to control the shared browser:
+
+```bash
+# Navigate to a website
+termlings browser navigate "https://example.com"
+
+# Wait for page load (automatic with most commands)
+termlings browser screenshot          # Get current page as base64
+
+# Extract visible text content
+termlings browser extract             # Useful for checking what happened
+
+# Interact with the page
+termlings browser type "search query"        # Type into focused element
+termlings browser click "button.search"      # Click by CSS selector
+
+# Check authentication
+termlings browser check-login                # Exit 1 if login required
+
+# Get full cookie list
+termlings browser cookies list
+```
+
+### Shared Profile & Persistence
+
+All agents share **one Chrome profile** in `.termlings/browser/profile/`. This means:
+
+- **Single login** — Agent A logs in, Agent B uses the same authenticated session
+- **Persistent state** — Cookies, local storage, browsing history survives across restarts
+- **Human-in-loop** — Operator can take over from an agent (same browser state)
+- **Project isolation** — Each termlings project has its own separate profile
+
+Example workflow:
+```bash
+# Agent Alice authenticates
+termlings browser navigate "https://api.github.com/user"
+termlings browser type "alice@example.com"
+termlings browser click "button.login"
+
+# Agent Bob uses the same authenticated state
+termlings browser extract                    # Can see Alice's GitHub data
+
+# Operator monitors or intervenes
+termlings browser screenshot                 # See what agents are doing
+```
+
+### Activity Logging
+
+Every browser command is logged to `.termlings/browser/history.jsonl` with:
+- Timestamp
+- Agent identity (name, DNA, session ID)
+- Command executed
+- Success/error status
+
+Useful for auditing agent actions or debugging automation issues.
+
+### Performance & Token Efficiency
+
+PinchTab with termlings provides **token efficiency** for agents:
+
+- **No screenshots/vision** — Use text extraction instead (much cheaper than Claude vision)
+- **Reusable patterns** — Agents can save and reuse automation patterns
+- **Headless operation** — No overhead from rendering UI
+
+### Troubleshooting
+
+**"PinchTab not found"** error:
+```bash
+npm install -g pinchtab
+```
+
+**Port already in use:**
+PinchTab auto-detects the next available port. Check actual port with:
+```bash
+termlings browser status
+```
+
+**Profile issues:**
+To reset profile (clears cookies/auth):
+```bash
+termlings browser init --reset
+```
+
+See [docs/BROWSER.md](docs/BROWSER.md) for advanced features (patterns, human-in-loop requests, dashboard access).
+
 ## Documentation
 
 **Getting started & agent guides:**
