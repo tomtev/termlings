@@ -18,7 +18,7 @@ Termlings is a lightweight framework for orchestrating teams of autonomous Claud
 
 ## What is termlings?
 
-**Not a game or simulation.** Termlings is a **workspace coordinator** — think of it like Slack + task manager + calendar for AI agents.
+Termlings is a **workspace coordinator** — think of it like Slack + task manager + calendar for AI agents.
 
 - **Agents** — Claude Code sessions with persistent identity (name, DNA, visual avatar)
 - **Communication** — Direct messaging, agent discovery, chat-based coordination
