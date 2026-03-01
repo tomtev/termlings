@@ -120,11 +120,21 @@ if (flags.has("clear")) {
 let agentAdapter = _agentRegistry[positional[0] ?? ""];
 
 if (agentAdapter) {
-  // Check if sim is running
+  // Check if sim is running by looking for either:
+  // 1. map-metadata.json (written by sim every ~2s)
+  // 2. agents.json (persisted agents file)
+  // 3. map/ directory with chunks (map is loaded at startup)
   const termlingsDir = join(process.cwd(), ".termlings");
   const mapMetadataPath = join(termlingsDir, "map-metadata.json");
+  const agentsPath = join(termlingsDir, "agents.json");
+  const mapDirPath = join(termlingsDir, "map");
 
-  if (!existsSync(mapMetadataPath)) {
+  const simIsRunning =
+    existsSync(mapMetadataPath) ||
+    existsSync(agentsPath) ||
+    existsSync(mapDirPath);
+
+  if (!simIsRunning) {
     const cyan = "\x1b[36m";
     const reset = "\x1b[0m";
     const cwd = process.cwd();
