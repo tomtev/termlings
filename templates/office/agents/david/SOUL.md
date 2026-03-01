@@ -2,7 +2,6 @@
 name: David
 title: Monetizer - CRO
 dna: 0c2e4a1
-role: Revenue
 ---
 
 ## Purpose

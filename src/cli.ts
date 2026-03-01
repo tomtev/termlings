@@ -1994,9 +1994,30 @@ Options:
 
     let templateLoaded = false;
     if (existsSync(templatePath)) {
-      // Copy entire template to .termlings/
+      // Copy template to .termlings/, filtering out avatar.svg files
       try {
-        await cp(templatePath, termlingsDir, { recursive: true });
+        const { copyFile, mkdir, readdir, stat } = await import("fs/promises");
+
+        async function copyDir(src: string, dst: string) {
+          await mkdir(dst, { recursive: true });
+          const entries = await readdir(src, { withFileTypes: true });
+
+          for (const entry of entries) {
+            // Skip avatar.svg files - they'll be generated from DNA instead
+            if (entry.name === "avatar.svg") continue;
+
+            const srcPath = join(src, entry.name);
+            const dstPath = join(dst, entry.name);
+
+            if (entry.isDirectory()) {
+              await copyDir(srcPath, dstPath);
+            } else {
+              await copyFile(srcPath, dstPath);
+            }
+          }
+        }
+
+        await copyDir(templatePath, termlingsDir);
         console.log(`✓ Loaded template: ${templateName}`);
         templateLoaded = true;
       } catch (e) {
@@ -2030,7 +2051,7 @@ Options:
     // Regenerate agent DNA and fun names from template
     const agentsDir = join(termlingsDir, "agents");
     if (existsSync(agentsDir)) {
-      const { generateRandomDNA } = await import("./index.js");
+      const { generateRandomDNA, renderSVG } = await import("./index.js");
       const { generateFunNames } = await import("./name-generator.js");
       const { readdirSync, readFileSync, writeFileSync } = await import("fs");
 
@@ -2043,7 +2064,8 @@ Options:
 
         for (let i = 0; i < agentFolders.length; i++) {
           const folder = agentFolders[i]!;
-          const soulPath = join(agentsDir, folder.name, "SOUL.md");
+          const agentPath = join(agentsDir, folder.name);
+          const soulPath = join(agentPath, "SOUL.md");
           if (existsSync(soulPath)) {
             const soulContent = readFileSync(soulPath, "utf-8");
             const newDna = generateRandomDNA();
@@ -2055,6 +2077,10 @@ Options:
               .replace(/^dna:\s*[^\n]+$/m, `dna: ${newDna}`);
 
             writeFileSync(soulPath, updatedContent);
+
+            // Generate avatar SVG from DNA
+            const avatarPath = join(agentPath, "avatar.svg");
+            writeFileSync(avatarPath, renderSVG(newDna, 10, 0, null));
           }
         }
       } catch {

@@ -2,7 +2,6 @@
 name: Bob
 title: Builder - CTO
 dna: 0880fdb
-role: Product
 ---
 
 ## Purpose

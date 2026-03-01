@@ -5,7 +5,7 @@ import { createInterface } from "readline";
 export interface LocalAgent {
   name: string;
   path: string;
-  soul?: { name: string; title?: string; purpose: string; dna: string; command?: string };
+  soul?: { name: string; title?: string; dna: string; command?: string; description: string };
 }
 
 /**
@@ -36,11 +36,11 @@ export function discoverLocalAgents(): LocalAgent[] {
         const content = readFileSync(soulPath, "utf-8");
 
         // Try parsing YAML front-matter first
-        const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/);
+        const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)/);
         let name: string | undefined;
         let title: string | undefined;
         let dna: string | undefined;
-        let purpose: string = "";
+        let description: string = "";
         let command: string | undefined;
 
         if (frontmatterMatch) {
@@ -51,9 +51,8 @@ export function discoverLocalAgents(): LocalAgent[] {
           dna = yaml.match(/^dna:\s*(.+)$/m)?.[1];
           command = yaml.match(/^command:\s*(.+)$/m)?.[1];
 
-          // Get purpose from markdown section (after front-matter)
-          const purposeMatch = content.match(/^## Purpose\s*\n+(.+?)(?:\n\n|\n##|$)/m);
-          if (purposeMatch) purpose = purposeMatch[1];
+          // Get markdown content (everything after front-matter)
+          description = (frontmatterMatch[2] || "").trim();
         } else {
           // Fallback to legacy markdown format
           const nameMatch = content.match(/^# (.+)$/m);
@@ -61,25 +60,20 @@ export function discoverLocalAgents(): LocalAgent[] {
           const dnaMatch = content.match(/\*\*DNA\*\*:\s*(.+)$/m);
           const commandMatch = content.match(/\*\*Command\*\*:\s*(.+)$/m);
 
-          // Purpose can be inline or as heading
-          const purposeInlineMatch = content.match(/\*\*Purpose\*\*:\s*(.+)$/m);
-          const purposeHeadingMatch = content.match(/^## Purpose\s*\n+(.+?)(?:\n\n|\n##)/m);
-          const purposeMatch = purposeInlineMatch || purposeHeadingMatch;
-
           name = nameMatch ? nameMatch[1] : undefined;
           title = titleMatch ? titleMatch[1] : undefined;
           dna = dnaMatch ? dnaMatch[1] : undefined;
           command = commandMatch ? commandMatch[1] : undefined;
-          purpose = purposeMatch ? purposeMatch[1] : "";
+          description = content;
         }
 
         if (name && dna) {
           soul = {
             name,
             title,
-            purpose,
             dna,
             command,
+            description,
           };
 
           agents.push({

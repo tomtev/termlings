@@ -2,7 +2,6 @@
 name: Alice
 title: Founder - CEO
 dna: 0a3f201
-role: Direction
 ---
 
 ## Purpose

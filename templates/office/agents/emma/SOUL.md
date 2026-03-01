@@ -2,7 +2,6 @@
 name: Emma
 title: Operator - COO
 dna: 0d9c47a
-role: Scale
 ---
 
 ## Purpose

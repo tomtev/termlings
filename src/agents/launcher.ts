@@ -100,8 +100,8 @@ export async function launchLocalAgent(
   if (!termlingOpts.dna && localAgent.soul?.dna) {
     termlingOpts.dna = localAgent.soul.dna
   }
-  if (!termlingOpts.purpose && localAgent.soul?.purpose) {
-    termlingOpts.purpose = localAgent.soul.purpose
+  if (!termlingOpts.description && localAgent.soul?.description) {
+    termlingOpts.description = localAgent.soul.description
   }
 
   return launchAgent(adapter, passthroughArgs, termlingOpts, localAgent.soul)
@@ -115,7 +115,7 @@ export async function launchAgent(
   adapter: AgentAdapter,
   passthroughArgs: string[],
   termlingOpts: Record<string, string>,
-  soulData?: { name: string; purpose: string; dna: string; command?: string },
+  soulData?: { name: string; description: string; dna: string; command?: string },
 ): Promise<never> {
   const sessionId = `tl-${randomBytes(4).toString("hex")}`
   const context = loadContext()
@@ -137,7 +137,7 @@ export async function launchAgent(
       SESSION_ID: sessionId,
       DNA: agentDna,
       ROOM: "default",
-      PURPOSE: termlingOpts.purpose || soul.purpose || process.env.TERMLINGS_PURPOSE || "explore and interact",
+      DESCRIPTION: termlingOpts.description || soul.description || process.env.TERMLINGS_DESCRIPTION || "You are an autonomous agent exploring and interacting with the world.",
     }
     for (const [field, value] of Object.entries(dynamicFields)) {
       finalContext = finalContext.replace(new RegExp(`\\$${field}\\b`, "g"), value)

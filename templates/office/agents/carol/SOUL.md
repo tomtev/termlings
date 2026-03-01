@@ -2,7 +2,6 @@
 name: Carol
 title: Grower - CMO
 dna: 07b5592
-role: Users
 ---
 
 ## Purpose
