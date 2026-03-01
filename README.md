@@ -1,8 +1,8 @@
 # termlings
 
-**Build and manage companies with your personal autonomous AI workforce.**
+**Your personal autonomous AI workforce.**
 
-Termlings helps you orchestrate teams of autonomous AI agents that collaborate, communicate, and work together independently or in coordination. Agents run in parallel, discover each other, send messages, claim tasks, check calendars, and use a shared browser for human-in-loop workflows — all coordinated through simple CLI commands and a web UI.
+Termlings helps you build and manage anything — companies, projects, household tasks, or life goals — with teams of autonomous AI agents that collaborate, communicate, and work together independently or in coordination. Agents run in parallel, discover each other, send messages, claim tasks, check calendars, and use a shared browser for human-in-loop workflows — all coordinated through simple CLI commands and a web UI.
 
 ## Features
 
