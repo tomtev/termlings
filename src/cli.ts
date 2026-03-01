@@ -2015,6 +2015,16 @@ Options:
       mkdirSync(join(termlingsDir, "agents"), { recursive: true });
       mkdirSync(join(termlingsDir, "store"), { recursive: true });
       mkdirSync(join(termlingsDir, "objects"), { recursive: true });
+
+      // Ensure map.json exists (copy from template or use minimal default)
+      const mapJsonPath = join(termlingsDir, "map.json");
+      if (!existsSync(mapJsonPath)) {
+        const defaultMapPath = join(__dirname, "..", "templates", "office", "map.json");
+        if (existsSync(defaultMapPath)) {
+          const { copyFileSync } = await import("fs");
+          copyFileSync(defaultMapPath, mapJsonPath);
+        }
+      }
     }
 
     // Regenerate agent DNA and fun names from template
