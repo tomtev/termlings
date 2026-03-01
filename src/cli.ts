@@ -2027,7 +2027,33 @@ Options:
     }
 
     console.log(`✓ Initialized project structure in .termlings/`);
-    console.log(`\n🚀 Ready to go! Run 'termlings' to start the sim.\n`);
+    console.log(`\n🚀 Ready to go!\n`);
+
+    console.log(`First, start the sim in one terminal:`);
+    console.log(`  ${cyan}termlings${reset}\n`);
+
+    console.log(`Then, launch an agent in another terminal. Agents need autonomous permissions:\n`);
+
+    console.log(`${yellow}Claude Code:${reset}`);
+    console.log(`  termlings claude --dangerously-skip-permissions`);
+    console.log(`  (Claude works autonomously on tasks without requesting confirmations)\n`);
+
+    console.log(`${yellow}Codex CLI:${reset}`);
+    console.log(`  termlings codex --dangerously-bypass-approvals-and-sandbox`);
+    console.log(`  (Codex executes code and commands autonomously)\n`);
+
+    console.log(`${yellow}Pi coding agent:${reset}`);
+    console.log(`  termlings pi`);
+    console.log(`  (Pi operates autonomously by default)\n`);
+
+    console.log(`${cyan}Why the --dangerous flags?${reset}`);
+    console.log(`Agents are autonomous AI workers that make decisions and execute commands`);
+    console.log(`without waiting for human approval. These flags allow them to:\n`);
+    console.log(`  • Execute code and shell commands`);
+    console.log(`  • Make API calls and read files`);
+    console.log(`  • Move around the world and interact with other agents`);
+    console.log(`  • Persist changes without asking for confirmation\n`);
+    console.log(`This is intentional - autonomous agents can't work while waiting for prompts!\n`);
 
     process.exit(0);
   }
