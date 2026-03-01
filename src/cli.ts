@@ -1999,27 +1999,33 @@ Options:
     // Show 3 random termlings avatars
     try {
       const { renderTerminal } = await import("./index.js");
-      const avatars = [
-        renderTerminal(generateRandomDNA()),
-        renderTerminal(generateRandomDNA()),
-        renderTerminal(generateRandomDNA()),
-      ];
+      const dna1 = generateRandomDNA();
+      const dna2 = generateRandomDNA();
+      const dna3 = generateRandomDNA();
+
+      const avatar1 = renderTerminal(dna1);
+      const avatar2 = renderTerminal(dna2);
+      const avatar3 = renderTerminal(dna3);
 
       // Split each avatar into lines and render side-by-side
-      const avatarLines = avatars.map(a => a.split('\n'));
-      const maxLines = Math.max(...avatarLines.map(lines => lines.length));
+      const lines1 = avatar1.split('\n');
+      const lines2 = avatar2.split('\n');
+      const lines3 = avatar3.split('\n');
+
+      const maxLines = Math.max(lines1.length, lines2.length, lines3.length);
 
       console.log();
       for (let i = 0; i < maxLines; i++) {
-        let row = "          ";  // Padding
-        for (const lines of avatarLines) {
-          row += (lines[i] ?? "").padEnd(12);
-        }
+        let row = "        ";  // Padding
+        row += (lines1[i] ?? "").padEnd(14);
+        row += (lines2[i] ?? "").padEnd(14);
+        row += (lines3[i] ?? "").padEnd(14);
         console.log(row);
       }
       console.log();
-    } catch {
-      // Silently skip if avatar rendering fails
+    } catch (e) {
+      // Skip if avatar rendering fails
+      console.log();
     }
 
     console.log(`${yellow}    ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦${reset}`);
