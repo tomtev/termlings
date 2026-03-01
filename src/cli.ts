@@ -1910,13 +1910,14 @@ Options:
     const yellow = "\x1b[33m";
     const reset = "\x1b[0m";
 
-    console.log(`\n${yellow}✦ Welcome to termlings!${reset}\n`);
-    console.log("This project doesn't have a .termlings directory yet.");
-    console.log("Let's set up your first agent.\n");
+    // Clear screen and show full-screen init
+    process.stdout.write("\x1b[2J\x1b[H");
+
+    const cols = process.stdout.columns || 80;
+    const rows = process.stdout.rows || 24;
 
     let confirmed: boolean;
 
-    // Show 5 random termlings avatars with animation
     try {
       const { renderTerminalSmall } = await import("./index.js");
       const dnas = [generateRandomDNA(), generateRandomDNA(), generateRandomDNA(), generateRandomDNA(), generateRandomDNA()];
@@ -1925,64 +1926,89 @@ Options:
         return str.replace(/\x1b\[[0-9;]*m/g, '').length;
       };
 
-      // Render a frame and return the number of lines
-      const renderFrame = (frame: number, isFirstFrame: boolean): number => {
+      // Render a frame and return the avatar lines
+      const renderFrame = (frame: number): string[] => {
         const avatars = dnas.map(dna => renderTerminalSmall(dna, frame));
         const allLines = avatars.map(a => a.split('\n').filter(l => l.trim()));
         const maxWidths = allLines.map(lines => Math.max(...lines.map(getVisibleWidth), 0));
         const maxLines = Math.max(...allLines.map(l => l.length));
         const topPadding = allLines.map(lines => maxLines - lines.length);
 
-        // Clear screen and show frame
-        if (!isFirstFrame) {
-          // Move cursor up to overwrite previous frame
-          process.stdout.write(`\x1b[${maxLines + 1}A\x1b[J`);
-        }
-
-        console.log();
+        const result: string[] = [];
         for (let i = 0; i < maxLines; i++) {
           let row = "";
           for (let j = 0; j < allLines.length; j++) {
             let line = "";
-            // Only show avatar lines after top padding
             if (i >= topPadding[j]!) {
               line = allLines[j]![i - topPadding[j]!] || "";
             }
             const width = maxWidths[j]!;
             row += line + " ".repeat(Math.max(2, width - getVisibleWidth(line) + 2));
           }
-          console.log(row);
+          result.push(row);
+        }
+        return result;
+      };
+
+      // Get initial frame to calculate dimensions
+      const frames = [0, 1, 2, 3];
+      const avatarLines = renderFrame(frames[0]!);
+      const avatarHeight = avatarLines.length;
+      const avatarWidth = Math.max(...avatarLines.map(getVisibleWidth));
+
+      // Calculate layout: center avatars and prompt vertically
+      const promptText = "Create .termlings and initialize first agent? (y/n) ";
+      const totalHeight = avatarHeight + 3; // avatars + spacing + prompt
+      const startRow = Math.max(0, Math.floor((rows - totalHeight) / 2));
+
+      // Helper to position and render full screen
+      const renderScreen = (frameLines: string[], showPrompt: boolean = false) => {
+        // Clear screen
+        process.stdout.write("\x1b[2J\x1b[H");
+
+        // Top padding
+        for (let i = 0; i < startRow; i++) {
+          process.stdout.write("\n");
         }
 
-        return maxLines + 1;
+        // Avatars centered horizontally
+        for (const line of frameLines) {
+          const padding = Math.max(0, Math.floor((cols - getVisibleWidth(line)) / 2));
+          process.stdout.write(" ".repeat(padding) + line + "\n");
+        }
+
+        // Spacing
+        process.stdout.write("\n");
+
+        // Prompt centered horizontally
+        if (showPrompt) {
+          const promptPadding = Math.max(0, Math.floor((cols - promptText.length) / 2));
+          process.stdout.write(" ".repeat(promptPadding) + promptText);
+        }
       };
 
       // Show initial frame
-      const frames = [0, 1, 2, 3];
-      const avatarLineCount = renderFrame(frames[0]!, true);
-
-      // Random greeting after animation
-      const phrases = ["Hi!", "Ready?", "Let's go!", "Welcome!", "👋"];
-      const phrase = phrases[Math.floor(Math.random() * phrases.length)];
-      console.log(`${cyan}${phrase}${reset}\n`);
+      renderScreen(avatarLines, false);
 
       const rl = createInterface({ input: process.stdin, output: process.stdout });
 
-      // Start animation loop while waiting for input
+      // Start animation loop
       let currentFrameIdx = 0;
       let isAnswered = false;
 
       const animInterval = setInterval(() => {
         if (!isAnswered) {
           currentFrameIdx = (currentFrameIdx + 1) % 4;
-          // Move cursor up past avatar + greeting lines to redraw
-          process.stdout.write(`\x1b[${avatarLineCount + 2}A\x1b[J`);
-          renderFrame(frames[currentFrameIdx]!, false);
+          const frameLines = renderFrame(frames[currentFrameIdx]!);
+          renderScreen(frameLines, false);
         }
       }, 200);
 
+      // Show prompt and wait
+      renderScreen(avatarLines, true);
+
       confirmed = await new Promise<boolean>((resolve) => {
-        rl.question("Create .termlings and initialize first agent? (y/n) ", (answer) => {
+        rl.on("line", (answer) => {
           isAnswered = true;
           clearInterval(animInterval);
           rl.close();
@@ -1990,7 +2016,8 @@ Options:
         });
       });
     } catch (e) {
-      // Skip if rendering fails - show prompt without animation
+      // Skip if rendering fails - show simple prompt
+      process.stdout.write("\x1b[2J\x1b[H");
       const rl = createInterface({ input: process.stdin, output: process.stdout });
 
       confirmed = await new Promise<boolean>((resolve) => {
@@ -2002,9 +2029,12 @@ Options:
     }
 
     if (!confirmed) {
-      console.log("\nRun 'termlings --help' to see all commands.");
+      process.stdout.write("\x1b[2J\x1b[H");
+      console.log("Run 'termlings --help' to see all commands.");
       process.exit(0);
     }
+
+    process.stdout.write("\x1b[2J\x1b[H");
 
     // Show simple termlings text
     console.log();
