@@ -317,31 +317,41 @@ function createTitleScene(room: string, onReady: () => void, mode: "title" | "in
         1
       )
 
-      const waitText = "Waiting for agent..."
-      const waitX = Math.floor((cols - waitText.length) / 2)
-      if (hintY > 0 && hintY < rows) stampText(buffer, cols, rows, waitX, hintY, waitText, dimGray)
-
-      // Show "Run in [path]:" instruction (relative to home)
-      const instructText = `Run in ${pathFromHome}:`
-      const instructY = hintY + 2
-      const instructX = Math.floor((cols - instructText.length) / 2)
-      if (instructY > 0 && instructY < rows) stampText(buffer, cols, rows, instructX, instructY, instructText, readyGreen)
-
-      // Animate command with typewriter effect
-      const currentCmd = commands[currentCmdIndex]!
-      const charCount = Math.floor(currentCmd.length * typewriterProgress)
-      const displayCmd = currentCmd.substring(0, charCount) + (charCount < currentCmd.length ? "▌" : "")
-
-      const cmdY = instructY + 1
-      const cmdX = Math.floor((cols - currentCmd.length) / 2)
-      if (cmdY > 0 && cmdY < rows) stampText(buffer, cols, rows, cmdX, cmdY, displayCmd, veryDimGray)
-
-      // --- Init mode: show prompt instead of title ---
+      // --- Init mode: show welcome message and prompt ---
       if (mode === "init") {
-        const promptText = "Create .termlings and initialize first agent? (y/n) "
-        const promptY = Math.floor(rows / 2) + 5
+        const welcomeText = "✦ Welcome to termlings! ✦"
+        const welcomeX = Math.floor((cols - welcomeText.length) / 2)
+        if (hintY > 0 && hintY < rows) stampText(buffer, cols, rows, welcomeX, hintY, welcomeText, [100, 200, 255])
+
+        const setupText = "Let's set up your first agent."
+        const setupX = Math.floor((cols - setupText.length) / 2)
+        const setupY = hintY + 2
+        if (setupY > 0 && setupY < rows) stampText(buffer, cols, rows, setupX, setupY, setupText, [150, 150, 150])
+
+        const promptText = "Create .termlings and initialize first agent? (y/n)"
+        const promptY = setupY + 2
         const promptX = Math.floor((cols - promptText.length) / 2)
-        if (promptY > 0 && promptY < rows) stampText(buffer, cols, rows, promptX, promptY, promptText, [200, 200, 200])
+        if (promptY > 0 && promptY < rows) stampText(buffer, cols, rows, promptX, promptY, promptText, [220, 220, 220])
+      } else {
+        // Title mode: show commands
+        const waitText = "Waiting for agent..."
+        const waitX = Math.floor((cols - waitText.length) / 2)
+        if (hintY > 0 && hintY < rows) stampText(buffer, cols, rows, waitX, hintY, waitText, dimGray)
+
+        // Show "Run in [path]:" instruction (relative to home)
+        const instructText = `Run in ${pathFromHome}:`
+        const instructY = hintY + 2
+        const instructX = Math.floor((cols - instructText.length) / 2)
+        if (instructY > 0 && instructY < rows) stampText(buffer, cols, rows, instructX, instructY, instructText, readyGreen)
+
+        // Animate command with typewriter effect
+        const currentCmd = commands[currentCmdIndex]!
+        const charCount = Math.floor(currentCmd.length * typewriterProgress)
+        const displayCmd = currentCmd.substring(0, charCount) + (charCount < currentCmd.length ? "▌" : "")
+
+        const cmdY = instructY + 1
+        const cmdX = Math.floor((cols - currentCmd.length) / 2)
+        if (cmdY > 0 && cmdY < rows) stampText(buffer, cols, rows, cmdX, cmdY, displayCmd, veryDimGray)
       }
 
       // --- Border ---
