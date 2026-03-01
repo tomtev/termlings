@@ -1995,6 +1995,33 @@ Options:
     console.log();
     console.log(`${yellow}         Build autonomous AI agents & teams${reset}`);
     console.log();
+
+    // Show 3 random termlings avatars
+    try {
+      const { renderTerminal } = await import("./index.js");
+      const avatars = [
+        renderTerminal(generateRandomDNA()),
+        renderTerminal(generateRandomDNA()),
+        renderTerminal(generateRandomDNA()),
+      ];
+
+      // Split each avatar into lines and render side-by-side
+      const avatarLines = avatars.map(a => a.split('\n'));
+      const maxLines = Math.max(...avatarLines.map(lines => lines.length));
+
+      console.log();
+      for (let i = 0; i < maxLines; i++) {
+        let row = "          ";  // Padding
+        for (const lines of avatarLines) {
+          row += (lines[i] ?? "").padEnd(12);
+        }
+        console.log(row);
+      }
+      console.log();
+    } catch {
+      // Silently skip if avatar rendering fails
+    }
+
     console.log(`${yellow}    ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦${reset}`);
     console.log();
 
