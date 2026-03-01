@@ -25,7 +25,8 @@
   "description": "Framework for building autonomous AI agents & teams in the terminal",
   "files": [
     "src",
-    "bin"
+    "bin",
+    "templates"
   ],
   "homepage": "https://termlings.com",
   "keywords": [

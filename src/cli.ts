@@ -1928,22 +1928,11 @@ Options:
       process.exit(0);
     }
 
-    // Show fancy logo with termfont
-    const { composeText, applyPadding } = await import("termfont");
-
+    // Show logo
     console.log();
     console.log(`${yellow}    ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦${reset}`);
     console.log();
-
-    try {
-      const logoText = composeText("termlings", 3, [100, 150, 255]);
-      const paddedLogo = applyPadding(logoText, 2, 1);
-      console.log(paddedLogo);
-    } catch {
-      // Fallback to simple text if termfont fails
-      console.log(`${cyan}termlings${reset}`);
-    }
-
+    console.log(`${cyan}    termlings${reset}`);
     console.log(`${yellow}         Build autonomous AI agents & teams${reset}`);
     console.log();
     console.log(`${yellow}    ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦ ✧ ✦${reset}`);
