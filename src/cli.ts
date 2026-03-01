@@ -130,6 +130,7 @@ if (agentAdapter) {
     console.error(`\n❌ No active termlings sim found!\n`);
     console.error(`You need to start the sim first in another terminal:\n`);
     console.error(`  ${cyan}termlings${reset}\n`);
+    console.error(`(in the same folder as this project)\n`);
     console.error(`Then run this command again to connect your agent.\n`);
     process.exit(1);
   }
