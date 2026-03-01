@@ -594,8 +594,8 @@ Commands:
       }
     }
 
-    // Nearby doors from "me"
-    if (me && stateRooms && stateRooms.length > 0) {
+    // Nearby doors from agent position
+    if (mySession && stateRooms && stateRooms.length > 0) {
       const allDoors: { x: number; y: number; toRoom: number | null; fromRoom: number }[] = [];
       for (const r of stateRooms) {
         for (const d of r.doors) {
