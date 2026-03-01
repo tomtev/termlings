@@ -100,11 +100,12 @@ termlings create --name "Alice"     # Create with name
 termlings create --dna <hex>        # Create with DNA
 ```
 
-### Rendering
+### Avatar visualization
 ```bash
-termlings render [dna|name]         # Render avatar
-termlings render --svg              # SVG output
-termlings render --mp4 --walk       # Animated MP4
+termlings avatar [dna|name]         # Visualize avatar
+termlings avatar --svg              # SVG output
+termlings avatar --mp4 --walk       # Animated MP4
+termlings avatar object <type>      # Render object
 ```
 
 ### Message targets
@@ -161,7 +162,7 @@ bin/termlings.js              # Entry point
         ├── scheduler.ts      # calendar scheduler
         ├── init.ts           # workspace init
         ├── create.ts         # agent creation
-        └── render.ts         # avatar rendering
+        └── avatar.ts         # avatar visualization
 ```
 
 Each command has comprehensive `--help` documentation:

@@ -1,19 +1,19 @@
 /**
- * Render command - avatars and objects
+ * Avatar command - visualize termling avatars and objects
  */
 
-export async function handleRender(flags: Set<string>, positional: string[], opts: Record<string, string>) {
+export async function handleAvatar(flags: Set<string>, positional: string[], opts: Record<string, string>) {
   if (flags.has("help")) {
     console.log(`
-🎨 Render - Visualize avatars & objects
+🎨 Avatar - Visualize termling avatars & objects
 
 Terminal rendering of termling avatars and world objects.
 
 AVATAR RENDERING:
-  termlings render                          Render random avatar
-  termlings render <dna>                    Render avatar by DNA (hex)
-  termlings render <name>                   Render avatar by name
-  termlings render --random                 Randomize DNA
+  termlings avatar                          Render random avatar
+  termlings avatar <dna>                    Render avatar by DNA (hex)
+  termlings avatar <name>                   Render avatar by name
+  termlings avatar --random                 Randomize DNA
 
 AVATAR OPTIONS:
   --svg                                     Output as SVG instead of terminal
@@ -26,23 +26,23 @@ AVATAR OPTIONS:
   --bw                                      Black & white mode
 
 OBJECT RENDERING:
-  termlings render object <type>            Render object type
-  termlings render object <type> --list     List all objects
-  termlings render object <type> --color R,G,B  Custom color
-  termlings render object <type> --debug-collision  Show collision
+  termlings avatar object <type>            Render object type
+  termlings avatar object <type> --list     List all objects
+  termlings avatar object <type> --color R,G,B  Custom color
+  termlings avatar object <type> --debug-collision  Show collision
 
 EXAMPLES:
-  $ termlings render 2c5f423
+  $ termlings avatar 2c5f423
   alice [dna: 2c5f423]
   (renders avatar in terminal)
 
-  $ termlings render alice --svg > avatar.svg
+  $ termlings avatar alice --svg > avatar.svg
   (exports to SVG file)
 
-  $ termlings render alice --mp4 --walk
+  $ termlings avatar alice --mp4 --walk
   (creates animated MP4 with walking)
 
-  $ termlings render object table
+  $ termlings avatar object table
   (renders table object)
 `);
     return;

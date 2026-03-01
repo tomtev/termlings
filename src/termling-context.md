@@ -21,7 +21,7 @@ termlings message --help               # Messaging guide
 termlings task --help                  # Task management
 termlings calendar --help              # Calendar events
 termlings browser --help               # Browser automation
-termlings render --help                # Avatar rendering
+termlings avatar --help                # Avatar visualization
 termlings create --help                # Agent creation
 ```
 
@@ -190,13 +190,14 @@ termlings CLI
   ├── scheduler             [src/commands/scheduler.ts]
   ├── init                  [src/commands/init.ts]
   ├── create                [src/commands/create.ts]
-  └── render                [src/commands/render.ts]
+  └── avatar                [src/commands/avatar.ts]
 ```
 
 Each command has built-in documentation with examples. Always start with `--help`:
 - `termlings calendar --help` → Learn calendar syntax
 - `termlings task --help` → Task workflow guide
 - `termlings browser --help` → Browser automation examples
+- `termlings avatar --help` → Avatar visualization guide
 
 ## Removed behavior
 

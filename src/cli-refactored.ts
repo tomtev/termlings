@@ -110,7 +110,7 @@ try {
 
     if (flags.has("help") || flags.has("h")) {
       console.log(`Usage: termlings [options]
-       termlings render [dna|name] [options]
+       termlings avatar [dna|name] [options]
        termlings <agent> [options]
 
 Workspace (default):
@@ -131,10 +131,10 @@ Scheduler:
   termlings scheduler      Run calendar scheduler
   termlings scheduler --daemon  Run as background daemon
 
-Agent Launcher:
-  termlings claude         Start Claude Code as agent
+Avatar & Creation:
+  termlings avatar <dna>   Visualize avatar
+  termlings avatar object <type>  Render object
   termlings create         Create new agent
-  termlings render <dna>   Render avatar
 `);
       process.exit(0);
     }

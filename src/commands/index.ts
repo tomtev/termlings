@@ -9,7 +9,7 @@ import { handleBrowser } from "./browser.js";
 import { handleScheduler } from "./scheduler.js";
 import { handleInit } from "./init.js";
 import { handleCreate } from "./create.js";
-import { handleRender } from "./render.js";
+import { handleAvatar } from "./avatar.js";
 
 export async function routeCommand(
   positional: string[],
@@ -51,8 +51,8 @@ export async function routeCommand(
       await handleCreate(flags, positional, opts);
       return true;
 
-    case "render":
-      await handleRender(flags, positional, opts);
+    case "avatar":
+      await handleAvatar(flags, positional, opts);
       return true;
   }
 
