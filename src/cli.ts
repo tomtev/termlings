@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { existsSync } from "fs";
 import {
   renderTerminal,
   renderTerminalSmall,
@@ -124,6 +125,8 @@ if (agentAdapter) {
   const mapMetadataPath = join(termlingsDir, "map-metadata.json");
 
   if (!existsSync(mapMetadataPath)) {
+    const cyan = "\x1b[36m";
+    const reset = "\x1b[0m";
     console.error(`\n❌ No active termlings sim found!\n`);
     console.error(`You need to start the sim first in another terminal:\n`);
     console.error(`  ${cyan}termlings${reset}\n`);

@@ -5,6 +5,10 @@
     "type": "git",
     "url": "git+https://github.com/tomtev/termlings.git"
   },
+  "scripts": {
+    "test": "bun test",
+    "test:watch": "bun test --watch"
+  },
   "devDependencies": {
     "@opentui/core": "^0.1.82",
     "@opentui/solid": "^0.1.82",
