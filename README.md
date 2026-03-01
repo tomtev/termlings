@@ -1,93 +1,99 @@
-<p align="center">
-  <img src="banner.png" alt="termlings — Framework for autonomous AI agents & teams in the terminal" width="800" />
-</p>
-
 # termlings
 
-**Framework for building autonomous AI agents & teams.**
+**Workspace for Claude Code agents to collaborate, communicate, and work together.**
 
-Termlings is a framework for creating and managing autonomous AI agents and teams that can communicate, cooperate, and collaborate together in a shared world — right inside the terminal.
+Termlings is a lightweight framework for orchestrating teams of autonomous Claude Code agents. Agents run as Claude sessions in parallel terminals, discover each other, send messages, claim tasks, check calendars, and use a shared browser for human-in-loop workflows — all coordinated through simple CLI commands and a web UI.
 
-<p align="center">
-  <img src="demo.gif" alt="Animated termlings walking, talking, and waving" />
-</p>
+## Features
+
+- 🤖 **Multi-agent teams** — Launch multiple Claude Code agents that work independently or together
+- 💬 **Messaging & discovery** — Agents find and message each other by stable DNA identity
+- 📋 **Task management** — Claim work, update status, track progress with shared task lists
+- 📅 **Calendar & scheduling** — Events with recurrence, notifications, team scheduling
+- 🌐 **Browser automation** — Shared browser via PinchTab for web interaction and human-in-loop
+- 👤 **Persistent identity** — Each agent gets a unique avatar DNA that survives across restarts
+- 💾 **Local-first storage** — All state in `.termlings/` — no databases, no cloud
+- ⚡ **Lightweight context** — Minimal token overhead — agents understand the system with ~3KB of context
+- 🔌 **HTTP API** — Programmatic access to workspace state and operations
+
+## What is termlings?
+
+**Not a game or simulation.** Termlings is a **workspace coordinator** — think of it like Slack + task manager + calendar for AI agents.
+
+- **Agents** — Claude Code sessions with persistent identity (name, DNA, visual avatar)
+- **Communication** — Direct messaging, agent discovery, chat-based coordination
+- **Task management** — Claim work, update status, add progress notes, track blockers
+- **Scheduling** — Calendar events with recurrence, automated notifications
+- **Browser automation** — Agents can browse the web via PinchTab (shared browser, persistent session)
+- **Human-in-loop** — Operator can intervene, take over agent tasks, or get help from agents
+
+All state is **file-based** in `.termlings/` — no databases, no external services. Perfect for local teams and research.
 
 ## Why termlings?
 
-AI agents today are isolated processes. They can read files and run commands, but they can't *see* each other, *talk* to each other, or work together as a team. Termlings changes that.
+AI agents today are isolated processes. They run code, but they don't **cooperate** with other agents or integrate with human workflows.
 
-Build **autonomous worker teams** where agents can:
+Termlings solves this with:
 
-- **Communicate** — Send direct messages, post to shared chat, discover and collaborate with teammates
-- **Cooperate** — Work together on shared tasks, coordinate movements, divide labor
-- **Persist & Observe** — See what others are doing in real-time, build shared spaces, create artifacts that persist
-- **Have presence** — Each agent gets a unique embodied identity with a pixel-art avatar generated from a 7-character DNA string (~32M combinations)
-- **Collaborate in shared spaces** — Conference rooms, work areas, and common spaces where agents naturally interact
-
-**Technical advantages:**
-
-- **Minimal context cost** — ASCII art and simple CLI commands mean agents spend almost zero tokens. No screenshots, no image models — just lightweight text
-- **Shared terminal world** — Tile-based sim with buildings, doors, desks, and furniture — all rendered with ANSI escape codes
-- **A* pathfinding** — Agents navigate intelligently with room-aware pathfinding, auto-opening doors, and obstacle avoidance
-- **Persistent objects** — Agents can create, place, and interact with objects that survive across sessions
-- **Claude-first agent runtime** — optimized for Claude Code hooks and local file-based orchestration
-
-## The vision
-
-Termlings enables **autonomous AI agents & teams** — agents that can work independently or together, think together, and build together.
-
-**For researchers & teams building with AI agents:**
-- Build individual agents with persistent identity and autonomous decision-making
-- Create teams of specialized agents that coordinate and collaborate
-- Study emergent team behaviors and coordination patterns
-- Test distributed decision-making and multi-agent collaboration
-- Run autonomous agents that solve problems together or independently
-- Build agents that specialize, coordinate, and scale
-
-**Emergent behaviors that happen when agents can collaborate:**
-- Agents form working relationships and divide labor based on strengths
-- They negotiate, share knowledge, and develop trust over time
-- They build shared spaces and coordinate around common goals
-- They communicate about what they're doing and why
-- They create artifacts (documents, code, plans) that persist for others
-
-The terminal is the perfect medium: it's where code agents already live, it's lightweight, and ASCII art means agents can understand their world with minimal context overhead. No vision models needed — just pure communication and coordination.
+- **Lightweight coordination** — CLI commands (not screenshots/vision). Minimal token overhead.
+- **Persistent identities** — Each agent keeps the same name, avatar, and DNA across sessions
+- **Shared workspace** — One `.termlings/` directory, multiple agents reading/writing state
+- **Local-first** — Everything stays on your machine. No API calls, no auth keys, no vendor lock-in
+- **Claude-native** — Built for Claude Code. Uses hooks for typing presence, environment vars for context injection
+- **Human collaboration** — Operators can join the workspace, message agents, take over tasks, see what's happening in real-time
 
 ## Quick start
 
+**Terminal 1: Start the workspace UI**
 ```bash
-# Terminal 1: Start the web workspace
 termlings
-
-# Terminal 2: Launch an agent
-termlings claude              # Claude Code
 ```
 
-On first run in a project, `termlings` will ask to initialize a local `.termlings/` workspace and select a template (currently `office`).
+This launches a web server on `http://localhost:4173` where you can see agents, messages, tasks, and calendar.
 
-If a Termlings web server is already running, running `termlings` in another project will register that project and add it as a project tab in the existing UI.
+**Terminal 2+: Launch agents**
+```bash
+termlings claude              # Launch Claude Code with agent context
+termlings create alice        # Create a new agent named "alice"
+termlings alice               # Launch the "alice" agent
+```
 
-See [AGENTS.md](AGENTS.md) for detailed agent setup, commands, and examples.
+On first run, termlings initializes `.termlings/` with config files and directories.
 
-## Workspace controls
+See [docs/TERMLINGS.md](docs/TERMLINGS.md) for complete guide to agent identity, context injection, and lifecycle.
 
-The workspace is web-first (SvelteKit + Oat UI). Agent coordination happens via simple CLI commands:
+## CLI commands
 
-### Agent commands
+Agents coordinate via simple CLI commands:
 
-- **`termlings list-agents`** — discover active teammates and their session IDs
-- **`termlings message <target> <message>`** — send direct messages
-  - `<session-id>` — message a specific agent session
-  - `agent:<dna>` — message agent by stable identity (works across restarts)
-  - `human:<id>` — message human operator (use `human:default` for owner)
-- **`termlings task <cmd>`** — manage work
-  - `task list` — see all tasks
-  - `task claim <id>` — claim a task
-  - `task status <id> <status>` — update task status
-  - `task note <id> <note>` — add progress notes
-- **`termlings calendar <cmd>`** — view schedule
-  - `calendar list` — see your events
-  - `calendar show <id>` — view event details
+### Messaging & Discovery
+- **`termlings list-agents`** — See who's online and their session IDs
+- **`termlings message <target> <text>`** — Send a message
+  - `<session-id>` — Direct message a specific session
+  - `agent:<dna>` — Message by stable DNA (works across restarts)
+  - `human:default` — Message the operator/human
+
+### Task Management
+- **`termlings task list`** — See all tasks
+- **`termlings task show <id>`** — View task details
+- **`termlings task claim <id>`** — Claim a task to work on
+- **`termlings task status <id> <status>`** — Update status (open, claimed, in-progress, blocked, completed)
+- **`termlings task note <id> <note>`** — Add progress notes
+
+### Calendar & Scheduling
+- **`termlings calendar list`** — See your events
+- **`termlings calendar show <id>`** — View event details
+- **`termlings calendar create`** — Create a new event
+- **`termlings scheduler`** — Run calendar scheduler daemon (checks every 60s)
+- **`termlings scheduler --daemon`** — Keep running in background
+
+### Browser Automation
+- **`termlings browser start`** — Launch PinchTab server
+- **`termlings browser navigate <url>`** — Go to a URL
+- **`termlings browser screenshot`** — Get current page (base64)
+- **`termlings browser type <text>`** — Type into focused element
+- **`termlings browser click <selector>`** — Click element by CSS selector
+- **`termlings browser extract`** — Get visible page text
 
 ### Example workflow
 
@@ -103,302 +109,248 @@ termlings task claim task-42
 termlings task status task-42 in-progress
 
 # 4. Coordinate with teammates
-termlings message agent:alice-dna "Starting task-42, will finish in 30min"
+termlings message agent:0a3f201 "Starting task-42, will finish in 30min"
 
 # 5. Update progress
-termlings task note task-42 "50% complete, hit issue with API rate limits"
+termlings task note task-42 "50% complete, hit issue with rate limits"
 
 # 6. Ask for help if blocked
-termlings message human:default "Need AWS credentials to proceed with task-42"
+termlings message human:default "Need API key to proceed"
 
 # 7. Complete work
 termlings task status task-42 completed "Results in /tmp/analysis.json"
-termlings message agent:bob-dna "task-42 done, ready for review"
+termlings message agent:0a3f201 "task-42 done, ready for review"
+
+# 8. Browser automation
+termlings browser start
+termlings browser navigate "https://example.com"
+termlings browser screenshot
+termlings browser extract
 ```
 
 ## Workspace management
 
 ```bash
-# Start on default local host/port
+# Start the web UI on default localhost
 termlings
 
-# Expose server outside localhost
+# Expose to network
 termlings --host 0.0.0.0 --port 4173
 
-# Clear runtime state (sessions + IPC queues/messages)
+# Clear runtime state (sessions, messages in IPC)
 termlings --clear
 
-# Initialize workspace explicitly
+# Initialize workspace (creates .termlings/ structure)
 termlings init
+
+# Initialize with a template
+termlings init --template office
 ```
 
-## Shared API
+## File structure
 
-The workspace exposes a shared HTTP API for web UI and external apps:
+```
+.termlings/
+├── agents/                    # Saved agent definitions
+│   ├── alice/
+│   │   ├── SOUL.md           # Personality & role
+│   │   └── avatar.svg        # Visual identity
+│   └── bob/
+│       ├── SOUL.md
+│       └── avatar.svg
+├── store/
+│   ├── messages.jsonl        # Message history (append-only)
+│   ├── tasks/
+│   │   └── tasks.json        # Task definitions
+│   ├── calendar/
+│   │   └── calendar.json     # Events & recurrence
+│   └── browser/
+│       ├── config.json       # PinchTab settings
+│       ├── process.json      # Server PID & port
+│       ├── history.jsonl     # Browser automation log
+│       └── profile/          # Chrome profile (persistent)
+├── sessions/                 # Active agent sessions
+│   └── tl-*.json            # Session state per agent
+└── map.json                 # World definition (if using templates)
+```
 
-- `GET /api/v1/projects` — list known projects in the local hub
-- `GET /api/v1/state` — full snapshot (sessions, messages, tasks, crons) for a project
-- `GET /api/v1/sessions` — active sessions
-- `POST /api/v1/sessions` — upsert session `{ sessionId, name, dna }`
-- `POST /api/v1/sessions/leave` — remove session `{ sessionId }`
-- `POST /api/v1/messages` — send chat/DM `{ kind, text, target?, from?, fromName? }`
+## HTTP API
 
-Project scoping:
-- Use `?project=<projectId>` on API endpoints, or pass `projectId` in POST body for write endpoints.
-- In the web UI, project tabs switch this automatically.
+The workspace exposes APIs for programmatic access:
 
-Auth:
-- Set `TERMLINGS_API_TOKEN` to require auth.
-- Clients then send either `Authorization: Bearer <token>` or `x-termlings-token: <token>`.
+**Core API** (v1):
+- `GET /api/v1/projects` — List registered projects
+- `GET /api/v1/state` — Full workspace snapshot (sessions, messages, tasks, calendar)
+- `GET /api/v1/sessions` — List active sessions
+- `POST /api/v1/sessions` — Create/update session
+- `POST /api/v1/sessions/leave` — Remove session
+- `POST /api/v1/messages` — Send message
 
-## Agent context
+**Workspace API** (real-time streaming):
+- `GET /api/workspace/stream` — Server-sent events (SSE) for live updates
+- `POST /api/workspace/join` — Join workspace
+- `POST /api/workspace/message` — Send message
+- `POST /api/workspace/leave` — Leave workspace
 
-When an agent joins, termlings automatically injects **termling-context.md** — a context file that tells the agent:
+**Health & status**:
+- `GET /api/hub/health` — Health check
 
-- **Who it is** — Name, DNA, session ID, purpose
-- **How to interact** — Available commands (`sessions`, `send`, `chat`, tasks, etc.)
-- **Communication rules** — How agents discover and message each other
-- **Workspace mechanics** — Threads, direct messages, and shared task coordination
+Authentication (optional):
+- Set `TERMLINGS_API_TOKEN` environment variable to require auth
+- Clients include `Authorization: Bearer <token>` header
 
-This context is injected automatically by the Claude adapter:
+## Agent context & identity
 
-- **Claude** (`termlings claude`) — Uses `--append-system-prompt`
+When an agent launches, termlings injects context automatically:
 
-The context file is **lightweight** (~2.5KB) so agents can understand the world with minimal token overhead. Agents receive environment variables for identity:
-
+**Environment variables** (passed via `termlings claude`):
 ```bash
-TERMLINGS_SESSION_ID=tl-a8ab0631      # Unique agent ID
+TERMLINGS_SESSION_ID=tl-a8ab0631      # Unique session ID (16 hex chars)
 TERMLINGS_AGENT_NAME=Rusty             # Display name
-TERMLINGS_AGENT_DNA=0a3f201            # Avatar DNA (persists across restarts)
-TERMLINGS_ROOM=default                 # Which room to join
+TERMLINGS_AGENT_DNA=0a3f201            # Stable identity (7-char hex)
+TERMLINGS_IPC_DIR=.termlings/          # Workspace directory
+TERMLINGS_CONTEXT=...                  # Framework documentation
 ```
 
-This allows agents to identify themselves in messages and maintain consistent avatars across sessions.
+**Context file** (`src/termling-context.md`):
+- How to use CLI commands
+- Communication patterns
+- Task workflow examples
+- Human-in-loop integration
+- Browser automation guide
 
-## Avatar system
+The context is **lightweight** (~3KB) — agents understand the system with minimal token overhead.
 
-Each termling is uniquely defined by a **7-character hex DNA string** that encodes facial features, body type, hat, and colors. With ~32 million possible combinations, every termling is different.
+**Persistent identity:**
+- DNA stays the same across sessions (agent recognizable by teammates)
+- Can be messaged by DNA even after restart: `termlings message agent:0a3f201 "msg"`
+- SOUL.md file stores personality, role, and preferences
 
-See **[AVATARS.md](AVATARS.md)** for complete documentation on:
-- **DNA encoding** — How traits are packed into 7 hex characters
-- **Rendering** — Terminal ANSI, SVG, and framework components
-- **Generation** — Random or name-based DNA
-- **Animation** — Walking, talking, waving, and custom rendering
+## Agent DNA & avatars
 
-Quick examples:
+Each agent has a **7-character hex DNA string** that:
+- Encodes facial features, body type, hair, colors (~32M combinations)
+- Remains stable across sessions (agent stays recognizable)
+- Can be visualized as pixel art (terminal, SVG, MP4)
 
+**View an avatar:**
 ```bash
-# Render a termling by DNA
-npx termlings render 0a3f201
-
-# Render by name (deterministic — same name = same avatar)
-npx termlings render Alice
-
-# Animated
-npx termlings render 0a3f201 --walk --talk
-
-# Export SVG
-npx termlings render 0a3f201 --svg > avatar.svg
+termlings avatar 0a3f201              # Terminal ANSI rendering
+termlings avatar alice                # By agent name
+termlings avatar 0a3f201 --svg        # SVG output
+termlings avatar 0a3f201 --random     # Generate random DNA
 ```
+
+See [docs/AVATARS.md](docs/AVATARS.md) for full documentation on DNA encoding, rendering formats, and animation.
 
 ## Create an agent
 
-Create a new agent with an interactive avatar generator:
+Create a new agent interactively:
 
 ```bash
-npx termlings create my-agent
+termlings create                      # Guided creation
+termlings create alice                # Create agent "alice"
+termlings create alice --dna 0a3f201  # With specific DNA
 ```
 
-This generates a random avatar (reroll until you like it), creates `.termlings/my-agent/SOUL.md` with the agent's name, purpose, and DNA, and generates `avatar.svg`. The agent receives all instructions via the termlings CLI context.
+This creates `.termlings/alice/` with:
+- `SOUL.md` — Personality, role, preferences (edit to customize)
+- `avatar.svg` — Generated visual identity
 
-Store multiple agents in the same repo:
+**Store multiple agents** in the same workspace:
 ```
-.termlings/
-  rusty/SOUL.md
-  fern/SOUL.md
-  pip/SOUL.md
-```
-
-## Run a termlings session
-
-Start the shared world where agents can interact:
-
-```bash
-termlings
+.termlings/agents/
+  alice/SOUL.md
+  bob/SOUL.md
+  charlie/SOUL.md
 ```
 
-This launches the sim server. Agents in other terminals can now join and interact.
+## Running teams of agents
 
-**Terminal 1: Start the world**
+**Step 1: Start the workspace**
 ```bash
 termlings
 ```
 
-**Terminal 2+: Join as an agent**
+Opens `http://localhost:4173` — see all agents, messages, tasks, calendar in one place.
+
+**Step 2: Launch agents** (in separate terminals)
 ```bash
-termlings claude              # Launch Claude Code as an agent
-termlings rusty               # Launch local soul "rusty" with Claude
+termlings claude           # New agent with random identity
+termlings alice            # Launch saved agent "alice"
 ```
 
-Each agent gets a unique session ID and can see other agents on the map, send messages, move around, and interact with the world.
+Each agent:
+- Gets a unique session ID (`tl-...`)
+- Can message other agents by DNA
+- Can claim tasks and check calendar
+- Can use browser automation if needed
+- Can message the human operator for help
+
+**Step 3: Agents collaborate**
+- See each other with `termlings list-agents`
+- Send messages with `termlings message agent:<dna>`
+- Claim and work on shared tasks
+- Check calendar for meetings
+- Use browser to interact with external services
 
 ## Documentation
 
-**Getting started:**
-- [AGENTS.md](AGENTS.md) — Complete agent guide (launching, commands, IPC protocol, examples)
-- [docs/team-coordination.md](docs/team-coordination.md) — How agents communicate, cooperate, and work together
-- [docs/task-system.md](docs/task-system.md) — Shared task management system (assign work, track progress)
-- [docs/cron-system.md](docs/cron-system.md) — Schedule automated messages and reminders to agents
-- [AVATARS.md](AVATARS.md) — Avatar system (DNA encoding, rendering, generation, animation)
+**Getting started & agent guides:**
+- [docs/TERMLINGS.md](docs/TERMLINGS.md) — What termlings are, how identity works, lifecycle
+- [docs/CLAUDE.md](docs/CLAUDE.md) — Using termlings with Claude Code
+- [docs/AGENTS.md](AGENTS.md) — Agent system architecture and commands
+- [src/termling-context.md](src/termling-context.md) — Context injected into agent sessions
 
-**Building worlds:**
-- [docs/creating-maps.md](docs/creating-maps.md) — Create custom maps with tiles, objects, doors, and spawns
-- [docs/objects.md](docs/objects.md) — Objects system (building, persistence, physics, interaction, animations)
-- [docs/custom-objects.md](docs/custom-objects.md) — Creating custom objects with JSON definitions and particle effects
-- [docs/testing-objects.md](docs/testing-objects.md) — Testing objects with colors and collision debug
+**Workspace features:**
+- [docs/MESSAGING.md](docs/MESSAGING.md) — Messaging and agent discovery
+- [docs/TASK.md](docs/TASK.md) — Task management and workflows
+- [docs/CALENDAR.md](docs/CALENDAR.md) — Calendar events and scheduling
+- [docs/SCHEDULER.md](docs/SCHEDULER.md) — Calendar scheduler daemon
+- [docs/BROWSER.md](docs/BROWSER.md) — Browser automation and human-in-loop
+- [docs/AVATARS.md](docs/AVATARS.md) — Avatar DNA system and rendering
 
-**Technical reference:**
-- [docs/sim-engine.md](docs/sim-engine.md) — Sim engine architecture and design
-- [docs/engine-api.md](docs/engine-api.md) — Complete engine API reference
-- [docs/data-storage.md](docs/data-storage.md) — How all data is stored (file-based system)
+**Web interface & infrastructure:**
+- [docs/WEB.md](docs/WEB.md) — Web workspace UI and features
+- [docs/INIT.md](docs/INIT.md) — Workspace initialization and reset
+- [docs/HOOKS.md](docs/HOOKS.md) — Claude Code hooks (typing presence)
 
-## Framework components
+## Component library
 
-Termlings also ships as a component library for rendering avatars in web and terminal UIs:
+Render agent avatars in your own UI:
 
 ```bash
 npm install termlings
 ```
 
-### Svelte
-
-```svelte
-<script>
-  import { Avatar } from 'termlings/svelte';
-</script>
-
-<Avatar dna="0a3f201" walking />
-```
-
-### React
-
-```tsx
-import { Avatar } from 'termlings/react';
-
-<Avatar dna="0a3f201" walking />
-```
-
-### Vue
-
-```vue
-<script setup>
-  import { Avatar } from 'termlings/vue';
-</script>
-
-<template>
-  <Avatar dna="0a3f201" walking />
-</template>
-```
-
-### Ink (terminal React)
-
-```tsx
-import { Avatar } from 'termlings/ink';
-
-<Avatar dna="0a3f201" walking />
-```
-
-### Core (framework-agnostic)
-
+**Core functions:**
 ```ts
 import {
   generateRandomDNA,
   decodeDNA,
   encodeDNA,
-  generateGrid,
-  traitsFromName,
   renderSVG,
   renderTerminal,
   renderTerminalSmall,
 } from 'termlings';
 ```
 
-### Props
+**Framework components:**
+```tsx
+// React
+import { Avatar } from 'termlings/react';
+<Avatar dna="0a3f201" walking />
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `dna` | `string` | — | 7-char hex DNA string |
-| `name` | `string` | — | Derive traits from name hash |
-| `size` | `'sm' \| 'lg' \| 'xl'` | `'lg'` | Pixel size (3/8/14px per cell) |
-| `walking` | `boolean` | `false` | Animate legs |
-| `talking` | `boolean` | `false` | Animate mouth |
-| `waving` | `boolean` | `false` | Animate arms |
+// Vue
+import { Avatar } from 'termlings/vue';
+<Avatar dna="0a3f201" walking />
 
-## Engine
-
-The sim engine is available as a separate export for building custom worlds:
-
-```ts
-import {
-  loadMap,
-  loadDefaultMap,
-  allocBuffer,
-  clearBuffer,
-  renderBuffer,
-  stampTiles,
-  stampEntity,
-  makeEntity,
-  buildWalkGrid,
-  stepNpc,
-} from "termlings/engine"
+// Svelte
+import { Avatar } from 'termlings/svelte';
+<Avatar {dna} walking />
 ```
 
-See [docs/engine-api.md](docs/engine-api.md) for the full API reference and [docs/sim-engine.md](docs/sim-engine.md) for architecture details.
-
-### Custom maps
-
-Create a map directory with `map.json`:
-
-```bash
-npx termlings play ./my-map/
-```
-
-See [docs/creating-maps.md](docs/creating-maps.md) for complete guide to map format, objects, doors, and spawns.
-
-## Architecture
-
-```
-src/engine/
-  types.ts         — Core types (RGB, Cell, TileDef, Entity, SimConfig)
-  renderer.ts      — Buffer allocation, ANSI output, sprite stamping
-  tilemap-core.ts  — Tilemap rendering with wind animation
-  camera.ts        — Camera transforms and dead-zone scrolling
-  input.ts         — Keyboard handling
-  entity.ts        — Entity creation and animation
-  furniture.ts     — Furniture overlay system
-  doors.ts         — Proximity-triggered door state machine
-  sound.ts         — Terminal bell audio cues
-  npc-ai.ts        — A* pathfinding and NPC wander AI
-  ipc.ts           — File-based IPC for agent control
-  scene.ts         — Scene interface and render loop runner
-  index.ts         — Barrel re-exports
-
-src/sim.ts         — Main sim loop (AI, rendering, IPC, camera)
-src/simple-sim.ts  — Simple mode sim (no map, agent grid with chat)
-src/title.ts       — Animated title screen
-src/cli.ts         — CLI entry point and routing
-```
-
-## Exports
-
-```
-termlings          — Core (DNA, grid, SVG, terminal rendering)
-termlings/engine   — Sim engine (tilemap, entities, pathfinding, IPC)
-termlings/svelte   — Svelte 5 component
-termlings/react    — React component
-termlings/vue      — Vue component
-termlings/ink      — Ink (terminal React) component
-```
+See [docs/AVATARS.md](docs/AVATARS.md) for rendering options (terminal, SVG, MP4, animations).
 
 ## License
 
