@@ -1919,23 +1919,20 @@ Options:
       const { renderTerminalSmall } = await import("./index.js");
       const dnas = [generateRandomDNA(), generateRandomDNA(), generateRandomDNA(), generateRandomDNA(), generateRandomDNA()];
 
-      // Animate by cycling through frames
-      const frames = [0, 1, 2, 3];
-      for (const frame of frames) {
-        // Render all 5 avatars with current frame
+      const getVisibleWidth = (str: string) => {
+        return str.replace(/\x1b\[[0-9;]*m/g, '').length;
+      };
+
+      // Render a frame and return the number of lines
+      const renderFrame = async (frame: number, isFirstFrame: boolean) => {
         const avatars = dnas.map(dna => renderTerminalSmall(dna, frame));
         const allLines = avatars.map(a => a.split('\n').filter(l => l.trim()));
-
-        const getVisibleWidth = (str: string) => {
-          return str.replace(/\x1b\[[0-9;]*m/g, '').length;
-        };
-
         const maxWidths = allLines.map(lines => Math.max(...lines.map(getVisibleWidth), 0));
         const maxLines = Math.max(...allLines.map(l => l.length));
         const topPadding = allLines.map(lines => maxLines - lines.length);
 
         // Clear screen and show frame
-        if (frame > 0) {
+        if (!isFirstFrame) {
           // Move cursor up to overwrite previous frame
           process.stdout.write(`\x1b[${maxLines + 1}A\x1b[J`);
         }
@@ -1955,8 +1952,17 @@ Options:
           console.log(row);
         }
 
-        // Small delay for animation
-        await new Promise(r => setTimeout(r, 200));
+        return maxLines + 1;
+      };
+
+      // Animate with multiple cycles (3 cycles = 2.4 seconds, enough for user to read question)
+      const frames = [0, 1, 2, 3];
+      let lineCount = 0;
+      for (let cycle = 0; cycle < 3; cycle++) {
+        for (let frameIdx = 0; frameIdx < frames.length; frameIdx++) {
+          lineCount = await renderFrame(frames[frameIdx]!, cycle === 0 && frameIdx === 0);
+          await new Promise(r => setTimeout(r, 200));
+        }
       }
 
       // Random greeting after animation
