@@ -328,8 +328,9 @@ function createTitleScene(room: string, onReady: () => void, mode: "title" | "in
         const setupY = hintY + 2
         if (setupY > 0 && setupY < rows) stampText(buffer, cols, rows, setupX, setupY, setupText, [150, 150, 150])
 
+        // Prompt appears much lower, after the avatar area
         const promptText = "Create .termlings and initialize first agent? (y/n)"
-        const promptY = setupY + 2
+        const promptY = rows - 3
         const promptX = Math.floor((cols - promptText.length) / 2)
         if (promptY > 0 && promptY < rows) stampText(buffer, cols, rows, promptX, promptY, promptText, [220, 220, 220])
       } else {
