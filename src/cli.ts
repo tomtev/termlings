@@ -1906,31 +1906,37 @@ Options:
 
   const termlingsDir = join(process.cwd(), ".termlings");
   if (!existsSync(termlingsDir)) {
-    // Use scene-based init screen
-    const { InitScene } = await import("./engine/init-scene.js");
+    // Use title scene with init prompt overlay
+    const { createInitScene } = await import("./title.js");
     const { runScene } = await import("./engine/scene.js");
+    const { enterScreen, exitScreen } = await import("./engine/renderer.js");
 
-    let confirmed = false;
+    let confirmed: boolean | null = null;
 
-    const scene = new InitScene({
-      onConfirm: (result: boolean) => {
-        confirmed = result;
-        handle.stop();
-      },
+    const scene = createInitScene((key: string) => {
+      if (confirmed !== null) return;
+      if (key === "y" || key === "Y") {
+        confirmed = true;
+      } else if (key === "n" || key === "N") {
+        confirmed = false;
+      }
     });
 
     // Enter alt screen
-    process.stdout.write("\x1b[?1049h");
+    const rows = process.stdout.rows || 24;
+    process.stdout.write("\x1b[2J\x1b[3J\x1b[H");
+    process.stdout.write(enterScreen(rows));
 
     const handle = runScene(scene);
 
-    // Wait for scene to complete
+    // Wait for user response
     await new Promise<void>((resolve) => {
       const checkInterval = setInterval(() => {
-        if (confirmed || !handle) {
+        if (confirmed !== null) {
           clearInterval(checkInterval);
+          handle.stop();
           // Exit alt screen
-          process.stdout.write("\x1b[?1049l");
+          process.stdout.write(exitScreen());
           resolve();
         }
       }, 50);

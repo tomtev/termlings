@@ -130,7 +130,7 @@ function buildTitleWalkGrid(w: number, h: number): WalkGrid {
   return { data, width: w, height: h }
 }
 
-function createTitleScene(room: string, onReady: () => void): Scene {
+function createTitleScene(room: string, onReady: () => void, mode: "title" | "init" = "title", onKey?: (key: string) => void): Scene {
   let tiles: string[][] = []
   let _lastHasAgents = false
 
@@ -336,6 +336,14 @@ function createTitleScene(room: string, onReady: () => void): Scene {
       const cmdX = Math.floor((cols - currentCmd.length) / 2)
       if (cmdY > 0 && cmdY < rows) stampText(buffer, cols, rows, cmdX, cmdY, displayCmd, veryDimGray)
 
+      // --- Init mode: show prompt instead of title ---
+      if (mode === "init") {
+        const promptText = "Create .termlings and initialize first agent? (y/n) "
+        const promptY = Math.floor(rows / 2) + 5
+        const promptX = Math.floor((cols - promptText.length) / 2)
+        if (promptY > 0 && promptY < rows) stampText(buffer, cols, rows, promptX, promptY, promptText, [200, 200, 200])
+      }
+
       // --- Border ---
       stampUI(buffer, cols, rows, [])
     },
@@ -350,9 +358,15 @@ function createTitleScene(room: string, onReady: () => void): Scene {
       return {
         onArrow(_dir: string) {},
         onKey(ch: string) {
-          if (ch === "q" || ch === "Q" || ch === "\x03") {
-            process.stdout.write(exitScreen())
-            process.exit(0)
+          if (mode === "init" && onKey) {
+            // In init mode, handle y/n
+            onKey(ch)
+          } else {
+            // In title mode, handle q to quit
+            if (ch === "q" || ch === "Q" || ch === "\x03") {
+              process.stdout.write(exitScreen())
+              process.exit(0)
+            }
           }
         },
       }
@@ -362,6 +376,10 @@ function createTitleScene(room: string, onReady: () => void): Scene {
       // Nothing to persist
     },
   }
+}
+
+export function createInitScene(onKey: (key: string) => void): Scene {
+  return createTitleScene("default", () => {}, "init", onKey)
 }
 
 export async function showTitleScreen(room: string): Promise<void> {
