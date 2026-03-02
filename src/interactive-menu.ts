@@ -134,11 +134,11 @@ export interface GridItem {
 /**
  * Display agents in a grid with their small avatars
  * Navigate with arrow keys, select with Enter
+ * Grid is responsive to terminal width
  */
 export async function selectAgentGrid(
   items: GridItem[],
   title?: string,
-  cols: number = 3,
   options?: { input?: Readable; output?: Writable }
 ): Promise<string> {
   const input = options?.input || process.stdin;
@@ -150,7 +150,6 @@ export async function selectAgentGrid(
 
   return new Promise<string>((resolve) => {
     let selectedIndex = 0;
-    const rows = Math.ceil(items.length / cols);
 
     const render = () => {
       output.write("\x1b[2J\x1b[H"); // Clear screen
@@ -159,6 +158,12 @@ export async function selectAgentGrid(
       // Get avatar lines for all items
       const avatarLines: string[][] = items.map((item) => item.avatar.split("\n"));
       const maxLines = Math.max(...avatarLines.map((lines) => lines.length));
+
+      // Calculate responsive columns based on terminal width
+      const termWidth = process.stdout.columns || 80;
+      const itemWidth = 12; // Avatar width + spacing
+      const cols = Math.max(1, Math.floor((termWidth - 4) / itemWidth));
+      const rows = Math.ceil(items.length / cols);
 
       // Render grid row by row
       for (let row = 0; row < rows; row++) {
@@ -171,7 +176,7 @@ export async function selectAgentGrid(
             const avatarLines_ = avatarLines[index]!;
             const avatarLine = avatarLines_[line] || "";
 
-            output.write(avatarLine);
+            output.write(avatarLine.padEnd(10));
             output.write("  "); // Spacing between columns
           }
           output.write("\n");
@@ -188,10 +193,11 @@ export async function selectAgentGrid(
           const reset = "\x1b[0m";
           const dimGray = "\x1b[90m";
 
-          const name = item.label.substring(0, 10).padEnd(10);
-          const titleText = item.title ? `\n${dimGray}${item.title.substring(0, 10)}${reset}` : "";
+          const name = item.label.substring(0, 8);
+          const titleSuffix = item.title ? ` — ${item.title.substring(0, 15)}` : "";
+          const label = `${name}${titleSuffix}`.substring(0, 10).padEnd(10);
 
-          output.write(`${nameColor}${name}${reset}${titleText}`);
+          output.write(`${nameColor}${label}${reset}`);
           output.write("  ");
         }
         output.write("\n\n");
