@@ -85,27 +85,23 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
       const name = a.soul?.name || a.name;
       const title = a.soul?.title ? ` — ${a.soul.title}` : "";
 
-      // Get face and hat colors from DNA (same as avatar rendering)
-      let hatColor = "";
+      // Get body color from DNA
       let faceColor = "";
       if (a.soul?.dna) {
         try {
           const traits = decodeDNA(a.soul.dna);
           const colors = getTraitColors(traits, false);
-          hatColor = `\x1b[38;2;${colors.hatRgb[0]};${colors.hatRgb[1]};${colors.hatRgb[2]}m▪\x1b[0m`;
           faceColor = `\x1b[38;2;${colors.faceRgb[0]};${colors.faceRgb[1]};${colors.faceRgb[2]}m█\x1b[0m`;
         } catch {
-          hatColor = "▪";
           faceColor = "●";
         }
       } else {
-        hatColor = " ";
         faceColor = " ";
       }
 
       return {
         value: JSON.stringify({ type: "existing", agent: a }),
-        label: `${hatColor} ${name}${title}`,
+        label: `${name}${title}`,
         description: `${faceColor}`,
       };
     }),
