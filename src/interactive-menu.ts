@@ -129,6 +129,7 @@ export interface GridItem {
   title?: string;
   value: string;
   avatar: string; // Terminal-rendered avatar
+  disabled?: boolean; // Grayed out if true
 }
 
 /**
@@ -189,8 +190,17 @@ export async function selectAgentGrid(
 
           const item = items[index]!;
           const isSelected = index === selectedIndex;
-          const nameColor = isSelected ? "\x1b[1;36m" : "\x1b[0m";
+          const isDisabled = item.disabled;
+          const dimGray = "\x1b[90m";
+          const cyan = "\x1b[1;36m";
           const reset = "\x1b[0m";
+
+          let nameColor = reset;
+          if (isDisabled) {
+            nameColor = dimGray;
+          } else if (isSelected) {
+            nameColor = cyan;
+          }
 
           const name = item.label.substring(0, 10).padEnd(10);
           output.write(`${nameColor}${name}${reset}`);
@@ -204,7 +214,8 @@ export async function selectAgentGrid(
           if (index >= items.length) break;
 
           const item = items[index]!;
-          const dimGray = "\x1b[90m";
+          const isDisabled = item.disabled;
+          const dimGray = isDisabled ? "\x1b[90m" : "\x1b[90m";
           const reset = "\x1b[0m";
 
           const titleText = item.title ? item.title.substring(0, 10).padEnd(10) : "".padEnd(10);
@@ -239,27 +250,49 @@ export async function selectAgentGrid(
         if (currentRow > 0) {
           newIndex = (currentRow - 1) * cols + currentCol;
           if (newIndex >= items.length) newIndex = selectedIndex;
+          // Skip disabled items
+          while (newIndex !== selectedIndex && items[newIndex]?.disabled) {
+            newIndex -= cols;
+            if (newIndex < 0) newIndex = selectedIndex;
+          }
         }
       } else if (key === "\u001b[B" || key === "j") {
         // Down arrow
         if (currentRow < rows - 1) {
           newIndex = (currentRow + 1) * cols + currentCol;
           if (newIndex >= items.length) newIndex = selectedIndex;
+          // Skip disabled items
+          while (newIndex !== selectedIndex && items[newIndex]?.disabled) {
+            newIndex += cols;
+            if (newIndex >= items.length) newIndex = selectedIndex;
+          }
         }
       } else if (key === "\u001b[C" || key === "l") {
         // Right arrow
         if (currentCol < cols - 1 && selectedIndex + 1 < items.length) {
           newIndex = selectedIndex + 1;
+          // Skip disabled items
+          while (newIndex < items.length && items[newIndex]?.disabled) {
+            newIndex++;
+          }
+          if (newIndex >= items.length) newIndex = selectedIndex;
         }
       } else if (key === "\u001b[D" || key === "h") {
         // Left arrow
         if (currentCol > 0) {
           newIndex = selectedIndex - 1;
+          // Skip disabled items
+          while (newIndex >= 0 && items[newIndex]?.disabled) {
+            newIndex--;
+          }
+          if (newIndex < 0) newIndex = selectedIndex;
         }
       } else if (key === "\r" || key === "\n") {
-        // Enter
-        cleanup();
-        resolve(items[selectedIndex]!.value);
+        // Enter - only if not disabled
+        if (!items[selectedIndex]?.disabled) {
+          cleanup();
+          resolve(items[selectedIndex]!.value);
+        }
         return;
       }
 

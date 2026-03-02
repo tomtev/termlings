@@ -70,26 +70,42 @@ export function discoverLocalAgents(): LocalAgent[] {
  * Includes option to create random agent
  */
 export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promise<LocalAgent | null | "create-random"> {
-  // Get active agents in this room
-  // Note: With chunks, active agents are stored in sessions, not centralized state
-  const activeAgentDnas = new Set<string>();
-  // TODO: Query sessions directory to get active DNAs
-  // For now, all agents are available for selection
-
   const { selectAgentGrid } = await import("../interactive-menu.js");
   const { renderTerminalSmall } = await import("../index.js");
+  const { readdirSync, readFileSync, existsSync } = await import("fs");
+
+  // Get active agents from sessions directory
+  const activeAgentDnas = new Set<string>();
+  const sessionsDir = join(process.cwd(), ".termlings", "sessions");
+  if (existsSync(sessionsDir)) {
+    try {
+      const sessionFiles = readdirSync(sessionsDir);
+      for (const file of sessionFiles) {
+        if (file.endsWith(".json")) {
+          try {
+            const sessionData = JSON.parse(readFileSync(join(sessionsDir, file), "utf-8"));
+            if (sessionData.dna) {
+              activeAgentDnas.add(sessionData.dna);
+            }
+          } catch {}
+        }
+      }
+    } catch {}
+  }
 
   // Build grid items for existing agents
   const gridItems = localAgents.map((a) => {
     const name = a.soul?.name || a.name;
     const title = a.soul?.title || "";
-    const avatar = a.soul?.dna ? renderTerminalSmall(a.soul.dna, 0) : "?";
+    const isActive = a.soul?.dna ? activeAgentDnas.has(a.soul.dna) : false;
+    const avatar = a.soul?.dna ? renderTerminalSmall(a.soul.dna, 0, isActive) : "?";
 
     return {
       value: JSON.stringify({ type: "existing", agent: a }),
       label: name,
       title,
       avatar,
+      disabled: isActive,
     };
   });
 
