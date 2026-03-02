@@ -84,8 +84,6 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
     ...localAgents.map((a) => {
       const name = a.soul?.name || a.name;
       const title = a.soul?.title ? ` — ${a.soul.title}` : "";
-      const purpose = a.soul?.purpose || "Autonomous agent";
-      const status = a.soul?.dna && activeAgentDnas.has(a.soul.dna) ? " (in room)" : "";
 
       // Get face and hat colors from DNA (same as avatar rendering)
       let hatColor = "";
@@ -105,15 +103,10 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
         faceColor = " ";
       }
 
-      // Fade out description text (but keep color square bright)
-      const dimGray = "\x1b[90m";
-      const reset = "\x1b[0m";
-      const fadedText = `${dimGray}${purpose}${status}${reset}`;
-
       return {
         value: JSON.stringify({ type: "existing", agent: a }),
         label: `${hatColor} ${name}${title}`,
-        description: `${faceColor} ${fadedText}`,
+        description: `${faceColor}`,
       };
     }),
     {
