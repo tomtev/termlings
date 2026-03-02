@@ -7,7 +7,7 @@ Termlings helps you build and manage anything — companies, projects, household
 ## Features
 
 - 🤖 **Multi-agent teams** — Launch multiple Claude Code agents that work independently or together
-- 💬 **Messaging & discovery** — Agents find and message each other by stable DNA identity
+- 💬 **Presistent agent** — Create and manage agents with a peronality.
 - 📋 **Task management** — Claim work, update status, track progress with shared task lists
 - 📅 **Calendar & scheduling** — Events with recurrence, notifications, team scheduling
 - 🌐 **Browser automation** — Shared browser via PinchTab for web interaction and human-in-loop
@@ -44,12 +44,17 @@ Termlings solves this with:
 
 ## Quick start
 
-**Terminal 1: Start the workspace UI**
+**Terminal 1: Start the workspace TUI (default)**
 ```bash
 termlings
 ```
 
-This launches a web server on `http://localhost:4173` where you can see agents, messages, tasks, and calendar.
+This launches a terminal workspace UI for the current directory.
+
+To open the web UI instead:
+```bash
+termlings web
+```
 
 **Terminal 2+: Launch agents**
 ```bash
@@ -67,10 +72,12 @@ See [docs/TERMLINGS.md](docs/TERMLINGS.md) for complete guide to agent identity,
 Agents coordinate via simple CLI commands:
 
 ### Messaging & Discovery
-- **`termlings list-agents`** — See who's online and their session IDs
+- **`termlings brief`** — Full workspace snapshot (recommended at session start)
+- **`termlings org-chart`** — See hierarchy, reporting lines, and who's online
+- **`termlings list-agents`** — Legacy alias for `org-chart`
 - **`termlings message <target> <text>`** — Send a message
   - `<session-id>` — Direct message a specific session
-  - `agent:<dna>` — Message by stable DNA (works across restarts)
+  - `agent:<slug>` — Message by slug (works across restarts)
   - `human:default` — Message the operator/human
 
 ### Task Management
@@ -89,17 +96,18 @@ Agents coordinate via simple CLI commands:
 
 ### Browser Automation
 - **`termlings browser start`** — Launch PinchTab server
-- **`termlings browser navigate <url>`** — Go to a URL
-- **`termlings browser screenshot`** — Get current page (base64)
-- **`termlings browser type <text>`** — Type into focused element
-- **`termlings browser click <selector>`** — Click element by CSS selector
-- **`termlings browser extract`** — Get visible page text
+- **`termlings browser tabs list`** — List open tabs + IDs
+- **`termlings browser navigate <url> [--tab <id>]`** — Go to a URL
+- **`termlings browser screenshot [--tab <id>]`** — Get current page (base64)
+- **`termlings browser type <text> [--tab <id>]`** — Type into focused element
+- **`termlings browser click <selector> [--tab <id>]`** — Click element by CSS selector
+- **`termlings browser extract [--tab <id>]`** — Get visible page text
 
 ### Example workflow
 
 ```bash
 # 1. See who's online
-termlings list-agents
+termlings org-chart
 
 # 2. Check your tasks
 termlings task list
@@ -109,7 +117,7 @@ termlings task claim task-42
 termlings task status task-42 in-progress
 
 # 4. Coordinate with teammates
-termlings message agent:0a3f201 "Starting task-42, will finish in 30min"
+termlings message agent:developer "Starting task-42, will finish in 30min"
 
 # 5. Update progress
 termlings task note task-42 "50% complete, hit issue with rate limits"
@@ -119,7 +127,7 @@ termlings message human:default "Need API key to proceed"
 
 # 7. Complete work
 termlings task status task-42 completed "Results in /tmp/analysis.json"
-termlings message agent:0a3f201 "task-42 done, ready for review"
+termlings message agent:developer "task-42 done, ready for review"
 
 # 8. Browser automation
 termlings browser start
@@ -131,11 +139,14 @@ termlings browser extract
 ## Workspace management
 
 ```bash
-# Start the web UI on default localhost
+# Start the default terminal workspace UI
 termlings
 
-# Expose to network
-termlings --host 0.0.0.0 --port 4173
+# Start the web UI on default localhost
+termlings web
+
+# Expose web UI to network
+termlings web --host 0.0.0.0 --port 4173
 
 # Clear runtime state (sessions, messages in IPC)
 termlings --clear
@@ -212,7 +223,7 @@ TERMLINGS_IPC_DIR=.termlings/          # Workspace directory
 TERMLINGS_CONTEXT=...                  # Framework documentation
 ```
 
-**Context file** (`src/termling-context.md`):
+**Context file** (`src/termlings-system-message.md`):
 - How to use CLI commands
 - Communication patterns
 - Task workflow examples
@@ -222,8 +233,8 @@ TERMLINGS_CONTEXT=...                  # Framework documentation
 The context is **lightweight** (~3KB) — agents understand the system with minimal token overhead.
 
 **Persistent identity:**
-- DNA stays the same across sessions (agent recognizable by teammates)
-- Can be messaged by DNA even after restart: `termlings message agent:0a3f201 "msg"`
+- Slug stays the same across sessions (agent recognizable by teammates)
+- Can be messaged by slug even after restart: `termlings message agent:developer "msg"`
 - SOUL.md file stores personality, role, and preferences
 
 ## Agent DNA & avatars
@@ -272,7 +283,11 @@ This creates `.termlings/alice/` with:
 termlings
 ```
 
-Opens `http://localhost:4173` — see all agents, messages, tasks, calendar in one place.
+Starts the terminal workspace view. If you want browser-based monitoring, run:
+
+```bash
+termlings web
+```
 
 **Step 2: Launch agents** (in separate terminals)
 ```bash
@@ -282,14 +297,14 @@ termlings alice            # Launch saved agent "alice"
 
 Each agent:
 - Gets a unique session ID (`tl-...`)
-- Can message other agents by DNA
+- Can message other agents by slug
 - Can claim tasks and check calendar
 - Can use browser automation if needed
 - Can message the human operator for help
 
 **Step 3: Agents collaborate**
-- See each other with `termlings list-agents`
-- Send messages with `termlings message agent:<dna>`
+- See each other with `termlings org-chart`
+- Send messages with `termlings message agent:<slug>`
 - Claim and work on shared tasks
 - Check calendar for meetings
 - Use browser to interact with external services
@@ -332,30 +347,34 @@ Creates `.termlings/browser/` directory with configuration and profile directory
 termlings browser start
 ```
 
-Launches PinchTab server in headless mode (default, recommended). PinchTab manages Chrome in the background at `.termlings/browser/profile/`.
+Launches PinchTab server in headed mode by default for human-in-loop visibility. Use `termlings browser start --headless` for background runs.
 
 **Note:** Browser automation is optional. If PinchTab is not installed, agents can skip browser commands and work with other features (messaging, tasks, calendar).
+Browser automation uses PinchTab root endpoints and can target a specific tab via `--tab <tab-id>`.
 
 ### Agent Commands
 
 Once running, agents use the CLI to control the shared browser:
 
 ```bash
+# Resolve a tab first for deterministic automation
+TAB_ID=$(termlings browser tabs list | awk '/^   id:/{print $2; exit}')
+
 # Navigate to a website
-termlings browser navigate "https://example.com"
+termlings browser navigate "https://example.com" --tab "$TAB_ID"
 
 # Wait for page load (automatic with most commands)
-termlings browser screenshot          # Get current page as base64
+termlings browser screenshot --tab "$TAB_ID"          # Get current page as base64
 
 # Extract visible text content
-termlings browser extract             # Useful for checking what happened
+termlings browser extract --tab "$TAB_ID"             # Useful for checking what happened
 
 # Interact with the page
-termlings browser type "search query"        # Type into focused element
-termlings browser click "button.search"      # Click by CSS selector
+termlings browser type "search query" --tab "$TAB_ID"        # Type into focused element
+termlings browser click "button.search" --tab "$TAB_ID"      # Click by CSS selector
 
 # Check authentication
-termlings browser check-login                # Exit 1 if login required
+termlings browser check-login --tab "$TAB_ID"                # Exit 1 if login required
 
 # Get full cookie list
 termlings browser cookies list
@@ -428,8 +447,9 @@ See [docs/BROWSER.md](docs/BROWSER.md) for advanced features (patterns, human-in
 **Getting started & agent guides:**
 - [docs/TERMLINGS.md](docs/TERMLINGS.md) — What termlings are, how identity works, lifecycle
 - [docs/CLAUDE.md](docs/CLAUDE.md) — Using termlings with Claude Code
+- [docs/HUMANS.md](docs/HUMANS.md) — Human operators, credentials, access control (future RBAC)
 - [docs/AGENTS.md](AGENTS.md) — Agent system architecture and commands
-- [src/termling-context.md](src/termling-context.md) — Context injected into agent sessions
+- [src/termlings-system-message.md](src/termlings-system-message.md) — Context injected into agent sessions
 
 **Workspace features:**
 - [docs/MESSAGING.md](docs/MESSAGING.md) — Messaging and agent discovery
@@ -442,8 +462,9 @@ See [docs/BROWSER.md](docs/BROWSER.md) for advanced features (patterns, human-in
 **Web interface & infrastructure:**
 - [docs/WEB.md](docs/WEB.md) — Web workspace UI and features
 - [docs/API.md](docs/API.md) — HTTP API reference (all endpoints with examples)
+- [docs/PRESENCE.md](docs/PRESENCE.md) — Presence model (online + typing/working)
 - [docs/INIT.md](docs/INIT.md) — Workspace initialization and reset
-- [docs/HOOKS.md](docs/HOOKS.md) — Claude Code hooks (typing presence)
+- [docs/HOOKS.md](docs/HOOKS.md) — Legacy Claude hook cleanup
 
 ## Component library
 

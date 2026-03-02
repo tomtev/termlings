@@ -37,23 +37,29 @@ See: https://pinchtab.com/docs/headless-vs-headed/
 termlings browser start
 ```
 
-Starts PinchTab server in **headless mode** (background, no visible UI) by default. This avoids graphics conflicts on macOS.
+Starts PinchTab server in **headed mode** (visible UI) by default for human-in-loop workflows.
 
 ```
 ✓ Browser started (PID 6866, port 9867)
 Profile: .termlings/browser/profile/
 ```
 
-**Headed mode (with visible UI):**
-
-⚠️ **Not recommended on macOS** - Running in headed mode interferes with the display server and causes other Chrome-based applications (including Electron apps) to display with white screens.
-
-If you still want to try headed mode:
+Use headed mode explicitly:
 ```bash
-BRIDGE_HEADLESS=false termlings browser start
+termlings browser start --headed
 ```
 
-**Recommendation:** Use headless mode (default) for all macOS systems. For operator visibility, consider:
+You can force headless mode explicitly:
+```bash
+termlings browser start --headless
+```
+
+Legacy env-var control still works:
+```bash
+BRIDGE_HEADLESS=true termlings browser start
+```
+
+**Recommendation:** Use headed mode for operator oversight and intervention. Switch to headless for CI/background jobs:
 - Running on a Linux system or CI environment
 - Using a remote/containerized setup
 - Running on a separate machine
@@ -87,29 +93,43 @@ Browser: running
 
 ```bash
 termlings browser navigate "https://example.com"
+termlings browser navigate "https://example.com" --tab <tab-id>
 ```
 
-Navigate to a URL. Works with any valid web address.
+Navigate to a URL in the active tab (or explicit `--tab`).
 
 ### Screenshot
 
 ```bash
 termlings browser screenshot
+termlings browser screenshot --tab <tab-id> --out /tmp/page.png
 ```
 
-Takes a screenshot of the current page and returns it as base64-encoded JPEG:
+Takes a screenshot of the active tab (or explicit `--tab`) and returns base64 by default.
 
 ```
 /9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABt...
 ```
 
+### Snapshot
+
+```bash
+termlings browser snapshot
+termlings browser snapshot --tab <tab-id>
+termlings browser snapshot --compact --interactive --depth 2
+```
+
+`snapshot` calls PinchTab's root `/snapshot` endpoint and passes `tabId` when you use `--tab`.
+Use `--tab <tab-id>` for deterministic multi-agent runs.
+
 ### Extract Text
 
 ```bash
 termlings browser extract
+termlings browser extract --tab <tab-id>
 ```
 
-Gets all visible text from the current page:
+Gets all visible text from the active tab (or explicit `--tab`):
 
 ```
 Example Domain
@@ -120,6 +140,7 @@ This domain is for use in documentation examples...
 
 ```bash
 termlings browser type "hello world"
+termlings browser type "hello world" --tab <tab-id>
 ```
 
 Types text into the focused element (input field, textarea, etc.).
@@ -128,6 +149,7 @@ Types text into the focused element (input field, textarea, etc.).
 
 ```bash
 termlings browser click "button.submit"
+termlings browser click "button.submit" --tab <tab-id>
 ```
 
 Clicks an element by CSS selector.
@@ -136,6 +158,7 @@ Clicks an element by CSS selector.
 
 ```bash
 termlings browser cookies list
+termlings browser cookies list --tab <tab-id>
 ```
 
 Returns all cookies as JSON:
@@ -179,13 +202,13 @@ Multiple agents can work on the same browser instance safely:
 export TERMLINGS_AGENT_NAME="Alice"
 export TERMLINGS_AGENT_DNA="0a3f201"
 termlings browser navigate "https://example.com"
-termlings browser extract
+termlings browser extract --tab <tab-id>
 
 # Meanwhile, Agent Bob works concurrently on different tab
 export TERMLINGS_AGENT_NAME="Bob"
 export TERMLINGS_AGENT_DNA="1b4e312"
 termlings browser navigate "https://other-site.com"
-termlings browser screenshot
+termlings browser screenshot --tab <tab-id>
 ```
 
 Each agent's commands are tracked separately in the dashboard and activity log with their identity preserved.
@@ -203,6 +226,7 @@ Each agent's commands are tracked separately in the dashboard and activity log w
 
 ```bash
 termlings browser check-login
+termlings browser check-login --tab <tab-id>
 ```
 
 Detects if the current page requires login by looking for common login indicators (login forms, auth fields, etc.).
@@ -214,14 +238,15 @@ Detects if the current page requires login by looking for common login indicator
 **Usage in shell scripts:**
 
 ```bash
-if termlings browser check-login; then
+TAB_ID=$(termlings browser tabs list | awk '/^   id:/{print $2; exit}')
+if termlings browser check-login --tab "$TAB_ID"; then
   echo "Login required"
   termlings browser request-help "Please log in to example.com"
   exit 0
 fi
 
 echo "Already logged in, continuing..."
-termlings browser extract
+termlings browser extract --tab "$TAB_ID"
 ```
 
 ### Request Operator Help
@@ -244,7 +269,7 @@ Run: `termlings browser` commands to interact
 
 ```bash
 termlings browser screenshot              # See current page
-termlings browser navigate "https://...")  # Navigate if needed
+termlings browser navigate "https://..."  # Navigate if needed
 termlings browser type "credentials"      # Type credentials
 termlings browser click "button.login"    # Click login button
 termlings browser screenshot              # Verify success
@@ -253,7 +278,7 @@ termlings browser screenshot              # Verify success
 **The agent continues:** After the operator completes the task, the agent can continue using the shared profile:
 
 ```bash
-termlings browser extract  # Now sees authenticated content
+termlings browser extract --tab <tab-id>  # Now sees authenticated content
 ```
 
 ## Activity Logging
@@ -333,9 +358,10 @@ termlings browser start
 
 # Navigate to target site
 termlings browser navigate "https://data-portal.example.com"
+TAB_ID=$(termlings browser tabs list | awk '/^   id:/{print $2; exit}')
 
 # Check if login is needed
-if termlings browser check-login; then
+if termlings browser check-login --tab "$TAB_ID"; then
   # Notify operator
   termlings browser request-help \
     "Data portal requires authentication. Please log in."
@@ -343,7 +369,7 @@ if termlings browser check-login; then
 fi
 
 # Extract data from authenticated page
-data=$(termlings browser extract)
+data=$(termlings browser extract --tab "$TAB_ID")
 echo "Extracted data:"
 echo "$data"
 
@@ -383,6 +409,7 @@ Some websites block screenshots. The command may return empty. Try extracting te
 
 ```bash
 termlings browser extract
+termlings browser extract --tab <tab-id>
 ```
 
 ## API Reference
@@ -393,11 +420,11 @@ termlings browser extract
 | `start` | Start server | No |
 | `stop` | Stop server | No |
 | `status` | Show status | No |
-| `navigate` | Go to URL | Yes |
-| `screenshot` | Capture page | Yes |
-| `type` | Input text | Yes |
-| `click` | Click element | Yes |
-| `extract` | Get page text | Yes |
-| `cookies` | List cookies | Yes |
-| `check-login` | Detect login | Yes |
+| `navigate` | Go to URL (active tab or `--tab`) | Yes |
+| `screenshot` | Capture page (active tab or `--tab`) | Yes |
+| `type` | Input text (active tab or `--tab`) | Yes |
+| `click` | Click element (active tab or `--tab`) | Yes |
+| `extract` | Get page text (active tab or `--tab`) | Yes |
+| `cookies` | List cookies (active tab or `--tab`) | Yes |
+| `check-login` | Detect login (active tab or `--tab`) | Yes |
 | `request-help` | Notify operator | No |

@@ -51,7 +51,7 @@ termlings task claim task-123
 termlings task status task-123 in-progress
 
 # Notify teammates (optional)
-termlings message agent:<teammate-dna> "Starting task-123, will finish in 2 hours"
+termlings message agent:developer "Starting task-123, will finish in 2 hours"
 ```
 
 ## Tracking Progress
@@ -85,13 +85,13 @@ When handing off work to a teammate:
 # Agent A (finishing)
 termlings task note task-42 "Complete, ready for Bob's review. Key files: /src/api.ts, /tests/"
 termlings task status task-42 in-progress "Ready for review"
-termlings message agent:<bob-dna> "task-42 ready for review"
+termlings message agent:bob "task-42 ready for review"
 
 # Agent B (taking over)
 termlings task claim task-42
 termlings task status task-42 in-progress "Starting review"
 termlings task note task-42 "Review in progress. Found 2 issues in error handling"
-termlings message agent:<alice-dna> "Found issues, proposing fixes in PR#123"
+termlings message agent:alice "Found issues, proposing fixes in PR#123"
 
 # Complete
 termlings task status task-42 completed "Reviewed and approved. Merged to main"

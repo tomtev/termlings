@@ -25,15 +25,15 @@ COMMANDS:
   termlings calendar disable <event-id>       Disable event
 
 CREATE SYNTAX:
-  termlings calendar create <agent-id> [<agent-id> ...] <title> <start-iso> <end-iso> [recurrence]
+  termlings calendar create <agent-slug> [<agent-slug> ...] <title> <start-iso> <end-iso> [recurrence]
 
 RECURRENCE:
   none (default), hourly, daily, weekly, monthly
 
 EXAMPLES:
-  $ termlings calendar create tl-alice "Daily Standup" "2026-03-02T09:00:00Z" "2026-03-02T09:30:00Z" daily
+  $ termlings calendar create alice "Daily Standup" "2026-03-02T09:00:00Z" "2026-03-02T09:30:00Z" daily
 
-  $ termlings calendar create tl-alice tl-bob "Sprint Planning" "2026-03-03T14:00:00Z" "2026-03-03T16:00:00Z"
+  $ termlings calendar create alice bob "Sprint Planning" "2026-03-03T14:00:00Z" "2026-03-03T16:00:00Z"
 
   $ termlings calendar list
   ID          Title              Start                    End                      Agents
@@ -63,13 +63,20 @@ BEST PRACTICES:
     let agents: string[] = [];
     let titleIdx = 2;
 
-    while (titleIdx < positional.length && positional[titleIdx]?.startsWith("tl-")) {
-      agents.push(positional[titleIdx]);
+    // Accept agent slugs (e.g., "alice", "developer") — stop when we hit the title (quoted string or non-slug)
+    while (titleIdx < positional.length) {
+      const arg = positional[titleIdx];
+      // If arg looks like a date or starts with quotes, it's the title
+      if (!arg || arg.match(/^\d{4}-/) || arg.startsWith('"') || arg.startsWith("'")) break;
+      // If next args look like they complete create syntax (title + dates), current must be last agent
+      const remaining = positional.length - titleIdx;
+      if (remaining <= 3) break; // Need at least title + start + end after agents
+      agents.push(arg);
       titleIdx++;
     }
 
     if (agents.length === 0) {
-      console.error("Error: At least one agent ID required (e.g., tl-alice)");
+      console.error("Error: At least one agent slug required (e.g., alice, developer)");
       process.exit(1);
     }
 
@@ -106,14 +113,14 @@ BEST PRACTICES:
   }
 
   if (subcommand === "list") {
-    const sessionId = process.env.TERMLINGS_SESSION_ID;
+    const agentSlug = process.env.TERMLINGS_AGENT_SLUG || "";
     const agentIdArg = positional[2];
 
     let agentId: string | null = null;
     if (agentIdArg === "--agent" && positional[3]) {
       agentId = positional[3];
-    } else if (sessionId && !agentIdArg) {
-      agentId = sessionId;
+    } else if (agentSlug && !agentIdArg) {
+      agentId = agentSlug;
     }
 
     const events = agentId

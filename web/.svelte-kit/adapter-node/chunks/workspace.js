@@ -1,7 +1,8 @@
 import { readdirSync, unlinkSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "fs";
 import { join, resolve, basename } from "path";
 const SESSION_STALE_MS = 35e3;
-const HOOK_TYPING_STALE_MS = 8e3;
+const TYPING_STALE_MS = 12e3;
+const TYPING_MESSAGE_SUPPRESS_MS = 2e3;
 function defaultProjectRoot() {
   if (process.env.TERMLINGS_PROJECT_ROOT) {
     return resolve(process.env.TERMLINGS_PROJECT_ROOT);
@@ -125,8 +126,10 @@ function parseSoul(content) {
   const name = yaml.match(/^name:\s*(.+)$/m)?.[1]?.trim();
   const dna = yaml.match(/^dna:\s*(.+)$/m)?.[1]?.trim();
   const title = yaml.match(/^title:\s*(.+)$/m)?.[1]?.trim();
+  const title_short = yaml.match(/^title_short:\s*(.+)$/m)?.[1]?.trim();
+  const role = yaml.match(/^role:\s*(.+)$/m)?.[1]?.trim();
   if (!name || !dna) return null;
-  return { name, dna, title };
+  return { name, dna, title, title_short, role };
 }
 function listSavedAgents(root) {
   const currentRoot = projectRoot(root);
@@ -146,7 +149,9 @@ function listSavedAgents(root) {
         agentId: entry.name,
         name: parsed.name,
         dna: parsed.dna,
-        title: parsed.title
+        title: parsed.title,
+        title_short: parsed.title_short,
+        role: parsed.role
       });
     } catch {
     }
@@ -163,6 +168,8 @@ function mergeAgentPresence(savedAgents, sessions, activityBySessionId) {
       name: agent.name,
       dna: agent.dna,
       title: agent.title,
+      title_short: agent.title_short,
+      role: agent.role,
       online: false,
       typing: false,
       sessionIds: [],
@@ -199,32 +206,62 @@ function mergeAgentPresence(savedAgents, sessions, activityBySessionId) {
     return a.name.localeCompare(b.name);
   });
 }
-function resolveHookTyping(sessionId, root) {
+function resolveTypingState(sessionId, root) {
   const direct = safeReadJson(typingPath(sessionId, root), null);
   if (direct && typeof direct.typing === "boolean") {
+    const source = direct.source === "terminal" ? "terminal" : void 0;
     return {
-      typing: direct.typing,
+      typing: source ? direct.typing : false,
+      source,
       updatedAt: typeof direct.updatedAt === "number" ? direct.updatedAt : 0
     };
   }
   return null;
 }
-function collectSessionActivity(sessions, root) {
+function collectSessionActivity(sessions, messages, root) {
   const bySessionId = /* @__PURE__ */ new Map();
-  const now = Date.now();
   let maxUpdatedAt = 0;
-  for (const session of sessions) {
-    const hookTyping = resolveHookTyping(session.sessionId, root);
-    const hookUpdatedAt = hookTyping?.updatedAt ?? 0;
-    const hookFresh = hookUpdatedAt > 0 && now - hookUpdatedAt <= HOOK_TYPING_STALE_MS;
-    const hookTypingActive = hookFresh && hookTyping?.typing === true;
-    let typing = false;
-    let source;
-    if (hookTypingActive) {
-      typing = true;
-      source = "hook";
+  const now = Date.now();
+  const sessionDnaById = new Map(sessions.map((session) => [session.sessionId, session.dna]));
+  const latestMessageBySessionId = /* @__PURE__ */ new Map();
+  const latestMessageByDna = /* @__PURE__ */ new Map();
+  const trackLatest = (map, key, ts) => {
+    if (!key) return;
+    const prev = map.get(key) ?? 0;
+    if (ts > prev) {
+      map.set(key, ts);
     }
-    const updatedAt = hookUpdatedAt;
+  };
+  for (const message of messages) {
+    if (!message || typeof message.ts !== "number") continue;
+    const ts = message.ts;
+    trackLatest(latestMessageBySessionId, message.from, ts);
+    trackLatest(latestMessageBySessionId, message.target, ts);
+    trackLatest(latestMessageByDna, message.fromDna ?? (message.from ? sessionDnaById.get(message.from) : void 0), ts);
+    trackLatest(latestMessageByDna, message.targetDna ?? (message.target ? sessionDnaById.get(message.target) : void 0), ts);
+  }
+  for (const session of sessions) {
+    const typingState = resolveTypingState(session.sessionId, root);
+    const updatedAt = typingState?.updatedAt ?? 0;
+    const latestMessageTs = Math.max(
+      latestMessageBySessionId.get(session.sessionId) ?? 0,
+      latestMessageByDna.get(session.dna) ?? 0
+    );
+    let typing = typingState?.typing === true;
+    let source = typingState?.source;
+    const isStale = updatedAt <= 0 || now - updatedAt > TYPING_STALE_MS;
+    if (typing && isStale) {
+      typing = false;
+    }
+    if (typing && latestMessageTs >= updatedAt) {
+      typing = false;
+    }
+    if (typing && latestMessageTs > 0 && now - latestMessageTs <= TYPING_MESSAGE_SUPPRESS_MS) {
+      typing = false;
+    }
+    if (!typing) {
+      source = void 0;
+    }
     bySessionId.set(session.sessionId, { typing, source, updatedAt });
     if (updatedAt > maxUpdatedAt) maxUpdatedAt = updatedAt;
   }
@@ -313,9 +350,9 @@ function loadWorkspaceSnapshot(root) {
   ensureWorkspace(currentRoot);
   const meta = safeReadJson(workspaceMetaPath(currentRoot), null);
   const sessions = listSessions(currentRoot);
-  const activity = collectSessionActivity(sessions, currentRoot);
-  const agents = mergeAgentPresence(listSavedAgents(currentRoot), sessions, activity.bySessionId);
   const messages = loadRecentMessages(300, currentRoot);
+  const activity = collectSessionActivity(sessions, messages, currentRoot);
+  const agents = mergeAgentPresence(listSavedAgents(currentRoot), sessions, activity.bySessionId);
   const indexPath = messageIndexPath(currentRoot);
   const index = safeReadJson(indexPath, { channels: [], dms: [] });
   const channels = index.channels ?? [];

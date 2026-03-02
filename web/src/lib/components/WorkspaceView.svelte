@@ -53,9 +53,10 @@
     name: string
     dna: string
     title?: string
+    title_short?: string
     online: boolean
-    typing?: boolean
-    activitySource?: "hook"
+    typing: boolean
+    activitySource?: "terminal"
     sessionIds: string[]
     source: "saved" | "ephemeral"
   }
@@ -116,6 +117,13 @@
   let wavingDnaSet = new Set<string>()
   const TALK_DURATION_MS = 2000
   const WAVE_DURATION_MS = 1500
+  const PASTE_COMPACT_MIN_CHARS = 700
+  const PASTE_COMPACT_MIN_LINES = 8
+  const PASTE_COMPACT_MULTILINE_MIN_CHARS = 300
+  const PASTE_COMPACT_MULTILINE_MIN_LINES = 4
+  const DRAFT_BLOCK_TOKEN_GLOBAL = /\[Image #\d+\]|\[Pasted Content \d+ chars\]/g
+  let imagePlaceholderCounter = 0
+  let imagePlaceholderByUrl = new Map<string, string>()
 
   type Thread = {
     id: string
@@ -125,7 +133,7 @@
     online?: boolean
     title?: string
     typing?: boolean
-    activitySource?: "hook"
+    activitySource?: "terminal"
   }
 
   type InboxSummary = {
@@ -241,6 +249,230 @@
     }
   }
 
+  function normalizePastedInput(input: string): string {
+    const withNormalizedNewlines = input.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+    const withMediaPlaceholders = replaceImageUrlsWithPlaceholders(withNormalizedNewlines)
+    return compactLargePastedContent(withMediaPlaceholders, withNormalizedNewlines.length)
+  }
+
+  function compactLargePastedContent(input: string, rawCharCount: number): string {
+    const trimmed = input.trim()
+    if (!trimmed) return input
+
+    const lineCount = input.split("\n").length
+    const largeByChars = rawCharCount >= PASTE_COMPACT_MIN_CHARS
+    const largeByLines = lineCount >= PASTE_COMPACT_MIN_LINES
+    const largeMultiline =
+      rawCharCount >= PASTE_COMPACT_MULTILINE_MIN_CHARS
+      && lineCount >= PASTE_COMPACT_MULTILINE_MIN_LINES
+
+    if (!largeByChars && !largeByLines && !largeMultiline) return input
+    return `[Pasted Content ${rawCharCount} chars]`
+  }
+
+  function replaceImageUrlsWithPlaceholders(input: string): string {
+    const quotedLocalImageRegex = /(['"])([^'"\n]*\.(?:png|jpe?g|gif|webp|bmp|svg|avif|heic|tiff?)(?:[?#][^'"\n]*)?)\1/gi
+    let out = input.replace(quotedLocalImageRegex, (_match, _quote: string, rawPath: string) => {
+      if (!isLikelyImagePath(rawPath)) return _match
+      return placeholderForImageUrl(rawPath)
+    })
+
+    const localPathRegex = /(?:^|[\s(])(file:\/\/[^\s)]+|~\/[^\s)]+|\/[^\s)]+)(?=$|[\s),.!?;:'"])/gi
+    out = out.replace(localPathRegex, (full: string, rawPath: string) => {
+      const prefix = full.slice(0, full.length - rawPath.length)
+      const { path, suffix } = stripTrailingPathPunctuation(rawPath)
+      if (!isLikelyImagePath(path)) return full
+      return `${prefix}${placeholderForImageUrl(path)}${suffix}`
+    })
+
+    const markdownImageRegex = /!\[[^\]]*]\((https?:\/\/[^\s)]+)\)/gi
+    out = out.replace(markdownImageRegex, (_match, rawUrl: string) => {
+      const { url } = stripTrailingUrlPunctuation(rawUrl)
+      if (!isLikelyImageUrl(url)) return _match
+      return placeholderForImageUrl(url)
+    })
+
+    const urlRegex = /(https?:\/\/[^\s]+)/gi
+    out = out.replace(urlRegex, (rawUrl: string) => {
+      const { url, suffix } = stripTrailingUrlPunctuation(rawUrl)
+      if (!isLikelyImageUrl(url)) return rawUrl
+      return `${placeholderForImageUrl(url)}${suffix}`
+    })
+    return out
+  }
+
+  function stripTrailingPathPunctuation(value: string): { path: string; suffix: string } {
+    let path = value
+    let suffix = ""
+    while (path.length > 0 && /[)\],.!?;:'"]/.test(path[path.length - 1] || "")) {
+      suffix = `${path[path.length - 1]}${suffix}`
+      path = path.slice(0, -1)
+    }
+    return { path, suffix }
+  }
+
+  function stripTrailingUrlPunctuation(value: string): { url: string; suffix: string } {
+    let url = value
+    let suffix = ""
+    while (url.length > 0 && /[)\],.!?;:'"]/.test(url[url.length - 1] || "")) {
+      suffix = `${url[url.length - 1]}${suffix}`
+      url = url.slice(0, -1)
+    }
+    return { url, suffix }
+  }
+
+  function isLikelyImageUrl(raw: string): boolean {
+    if (!raw) return false
+    if (/\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|tiff?)(?:[?#].*)?$/i.test(raw)) return true
+    try {
+      const parsed = new URL(raw)
+      const host = parsed.hostname.toLowerCase()
+      return host.includes("images.unsplash.com")
+        || host.includes("i.imgur.com")
+        || host.includes("cdn.discordapp.com")
+        || host.includes("media.tenor.com")
+    } catch {
+      return false
+    }
+  }
+
+  function isLikelyImagePath(raw: string): boolean {
+    if (!raw) return false
+    if (!/\.(png|jpe?g|gif|webp|bmp|svg|avif|heic|tiff?)(?:[?#].*)?$/i.test(raw)) return false
+    if (raw.startsWith("/") || raw.startsWith("~/")) return true
+    if (raw.startsWith("file://")) {
+      try {
+        const parsed = new URL(raw)
+        return parsed.protocol === "file:"
+      } catch {
+        return false
+      }
+    }
+    return false
+  }
+
+  function placeholderForImageUrl(url: string): string {
+    const existing = imagePlaceholderByUrl.get(url)
+    if (existing) return existing
+    imagePlaceholderCounter += 1
+    const placeholder = `[Image #${imagePlaceholderCounter}]`
+    imagePlaceholderByUrl = new Map(imagePlaceholderByUrl).set(url, placeholder)
+    return placeholder
+  }
+
+  function findComposeBlockSpanAt(index: number): { start: number; end: number } | null {
+    if (index < 0 || index >= composeText.length) return null
+    DRAFT_BLOCK_TOKEN_GLOBAL.lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = DRAFT_BLOCK_TOKEN_GLOBAL.exec(composeText)) !== null) {
+      const start = match.index
+      const end = start + match[0].length
+      if (index >= start && index < end) {
+        return { start, end }
+      }
+    }
+    return null
+  }
+
+  function setComposeTextWithCaret(nextText: string, nextCaret: number, target: HTMLInputElement): void {
+    composeText = nextText
+    queueMicrotask(() => {
+      target.setSelectionRange(nextCaret, nextCaret)
+    })
+  }
+
+  function insertIntoComposeText(insertText: string, target: HTMLInputElement | null): void {
+    const safeText = insertText.replace(/\r\n/g, "\n").replace(/\r/g, "\n")
+    if (!target) {
+      composeText += safeText
+      return
+    }
+
+    const start = target.selectionStart ?? composeText.length
+    const end = target.selectionEnd ?? start
+    const nextText = `${composeText.slice(0, start)}${safeText}${composeText.slice(end)}`
+    const nextCursor = start + safeText.length
+    setComposeTextWithCaret(nextText, nextCursor, target)
+  }
+
+  function handleComposerPaste(event: ClipboardEvent): void {
+    if (composerDisabled) return
+    const pastedText = event.clipboardData?.getData("text/plain") ?? event.clipboardData?.getData("text") ?? ""
+    if (!pastedText) return
+    event.preventDefault()
+    const normalized = normalizePastedInput(pastedText)
+    if (!normalized) return
+    const target = event.currentTarget instanceof HTMLInputElement ? event.currentTarget : null
+    insertIntoComposeText(normalized, target)
+  }
+
+  function handleComposerDrop(event: DragEvent): void {
+    event.preventDefault()
+    if (composerDisabled) return
+    const raw =
+      event.dataTransfer?.getData("text/uri-list")
+      || event.dataTransfer?.getData("text/plain")
+      || event.dataTransfer?.getData("text")
+      || ""
+    if (!raw) return
+    const normalized = normalizePastedInput(raw)
+    if (!normalized) return
+    const target = event.currentTarget instanceof HTMLInputElement ? event.currentTarget : null
+    insertIntoComposeText(normalized, target)
+  }
+
+  function handleComposerDragOver(event: DragEvent): void {
+    event.preventDefault()
+  }
+
+  function handleComposerKeydown(event: KeyboardEvent): void {
+    if (composerDisabled) return
+    if (event.metaKey || event.ctrlKey || event.altKey) return
+    const target = event.currentTarget instanceof HTMLInputElement ? event.currentTarget : null
+    if (!target) return
+
+    const selectionStart = target.selectionStart ?? 0
+    const selectionEnd = target.selectionEnd ?? selectionStart
+    if (selectionStart !== selectionEnd) return
+
+    if (event.key === "ArrowLeft") {
+      if (selectionStart <= 0) return
+      const block = findComposeBlockSpanAt(selectionStart - 1)
+      if (!block) return
+      event.preventDefault()
+      setComposeTextWithCaret(composeText, block.start, target)
+      return
+    }
+
+    if (event.key === "ArrowRight") {
+      if (selectionStart >= composeText.length) return
+      const block = findComposeBlockSpanAt(selectionStart)
+      if (!block) return
+      event.preventDefault()
+      setComposeTextWithCaret(composeText, block.end, target)
+      return
+    }
+
+    if (event.key === "Backspace") {
+      if (selectionStart <= 0) return
+      const block = findComposeBlockSpanAt(selectionStart - 1)
+      if (!block) return
+      event.preventDefault()
+      const nextText = `${composeText.slice(0, block.start)}${composeText.slice(block.end)}`
+      setComposeTextWithCaret(nextText, block.start, target)
+      return
+    }
+
+    if (event.key === "Delete") {
+      if (selectionStart >= composeText.length) return
+      const block = findComposeBlockSpanAt(selectionStart)
+      if (!block) return
+      event.preventDefault()
+      const nextText = `${composeText.slice(0, block.start)}${composeText.slice(block.end)}`
+      setComposeTextWithCaret(nextText, block.start, target)
+    }
+  }
+
   function formatTime(ts: number): string {
     return new Date(ts).toLocaleTimeString()
   }
@@ -298,6 +530,16 @@
 
   function messageTargetDna(message: Message): string | undefined {
     return message.targetDna ?? (message.target ? sessionDnaById.get(message.target) : undefined)
+  }
+
+  function isAgentWorkingDna(dna?: string): boolean {
+    if (!dna) return false
+    return agentByDna.get(dna)?.typing === true
+  }
+
+  function isTalkingOrWorkingDna(dna?: string): boolean {
+    if (!dna) return false
+    return talkingDnaSet.has(dna) || isAgentWorkingDna(dna)
   }
 
   function messageRoute(message: Message): string {
@@ -490,7 +732,7 @@
         kind: "dm",
         dna: agent.dna,
         online: agent.online,
-        title: agent.title,
+        title: agent.title_short || agent.title,
         typing: agent.typing ?? false,
         activitySource: agent.activitySource,
       })
@@ -510,7 +752,7 @@
           kind: "dm",
           dna: fromDna,
           online: known?.online ?? onlineDnaSet.has(fromDna),
-          title: known?.title,
+          title: known?.title_short || known?.title,
           typing: known?.typing ?? false,
           activitySource: known?.activitySource,
         })
@@ -524,7 +766,7 @@
           kind: "dm",
           dna: targetDna,
           online: known?.online ?? onlineDnaSet.has(targetDna),
-          title: known?.title,
+          title: known?.title_short || known?.title,
           typing: known?.typing ?? false,
           activitySource: known?.activitySource,
         })
@@ -831,7 +1073,7 @@
                         size="lg"
                         dna={summary.dna}
                         name={summary.label}
-                        talking={talkingDnaSet.has(summary.dna ?? "")}
+                        talking={isTalkingOrWorkingDna(summary.dna)}
                         waving={wavingDnaSet.has(summary.dna ?? "")}
                       />
                     </span>
@@ -876,7 +1118,7 @@
                           dna: messageFromDna(message),
                           fallback: "Agent",
                         })}
-                        talking={talkingDnaSet.has(messageFromDna(message) ?? "")}
+                        talking={isTalkingOrWorkingDna(messageFromDna(message))}
                         waving={wavingDnaSet.has(messageFromDna(message) ?? "")}
                       />
                     </span>
@@ -909,6 +1151,10 @@
           <input
             bind:value={composeText}
             disabled={composerDisabled}
+            on:dragover={handleComposerDragOver}
+            on:drop={handleComposerDrop}
+            on:keydown={handleComposerKeydown}
+            on:paste={handleComposerPaste}
             placeholder={
               activeThreadId === "workspace"
                 ? "Message #workspace"

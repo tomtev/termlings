@@ -24,10 +24,10 @@ Every termling has:
 - Example: folder `alice` → display name `"Alice The Great"`
 
 ### 3. DNA (7-character hex)
-- Stable identity across restarts
+- Used for avatar rendering
 - Determines avatar appearance
 - Example: `0a3f201` renders as a specific avatar
-- Used for messaging: `termlings message agent:0a3f201 "msg"`
+- Internal only — use slug for messaging
 
 ### 4. Session ID (runtime only)
 - 16-character hex ID assigned when the agent starts
@@ -158,7 +158,7 @@ When a termling launches:
 2. **Available for discovery**: Other agents can find it via:
    ```bash
    termlings list-agents
-   # Output shows: tl-abc123def456  Alice  [0a3f201]  online
+   # Output shows: agent:alice  Alice  Developer  Build and ship product
    ```
 
 3. **Can be messaged**:
@@ -166,8 +166,8 @@ When a termling launches:
    # By session ID (this session only)
    termlings message tl-abc123def456 "msg"
 
-   # By DNA (works across restarts)
-   termlings message agent:0a3f201 "msg"
+   # By slug (works across restarts)
+   termlings message agent:alice "msg"
    ```
 
 ### 4. Context at Runtime
@@ -185,7 +185,7 @@ echo $TERMLINGS_AGENT_DNA       # Your DNA
 ```bash
 # Your context is automatically used
 termlings list-agents           # Shows all agents
-termlings message agent:bob-dna "msg"  # Bob receives it from you
+termlings message agent:bob "msg"      # Bob receives it from you
 termlings task claim task-123   # Claimed by you
 termlings task note task-123 "progress"  # Logged as your note
 ```
@@ -234,7 +234,7 @@ termlings task claim task-123
 termlings task status task-123 in-progress
 
 # Collaborate with teammates
-termlings message agent:bob-dna "I'm starting task-123"
+termlings message agent:bob "I'm starting task-123"
 
 # Track progress
 termlings task note task-123 "50% complete"
@@ -247,7 +247,7 @@ termlings message human:default "Task done"
 ### Step 6: Close Session
 When done, terminate Claude Code. Session file remains for history:
 - Previous messages still visible
-- Can be messaged via `agent:<dna>` from other agents
+- Can be messaged via `agent:<slug>` from other agents
 - Can resume with same identity later
 
 ## Multi-Termling Collaboration
@@ -257,7 +257,7 @@ When done, terminate Claude Code. Session file remains for history:
 **Agent Alice:**
 ```bash
 termlings task note task-42 "Complete, ready for Bob to review"
-termlings message agent:<bob-dna> "task-42 ready for you"
+termlings message agent:bob "task-42 ready for you"
 ```
 
 **Agent Bob:**
@@ -281,7 +281,7 @@ termlings task claim task-2
 termlings task claim task-3
 
 # All coordinate via messages
-termlings message agent:alice-dna "I'm blocked on task-3, waiting for your data"
+termlings message agent:alice "I'm blocked on task-3, waiting for your data"
 ```
 
 ## Best Practices
@@ -289,8 +289,8 @@ termlings message agent:alice-dna "I'm blocked on task-3, waiting for your data"
 ✅ **DO:**
 - Edit SOUL.md to describe the termling's role and expertise
 - Use meaningful names (`alice`, `reviewer`, `data-bot`)
-- Use stable DNA for persistent identity
-- Message teammates with `agent:<dna>` (persists across restarts)
+- Use slug for persistent identity and messaging
+- Message teammates with `agent:<slug>` (persists across restarts)
 - Add termlings to git (they're just JSON files)
 
 ❌ **DON'T:**
@@ -317,7 +317,7 @@ termlings claude
 ### Collaboration
 ```bash
 # While active, termling can:
-termlings message agent:bob-dna "..."        # Send messages
+termlings message agent:bob "..."             # Send messages
 termlings task claim <id>                    # Claim work
 termlings browser navigate "..."             # Automate web
 ```
@@ -331,8 +331,8 @@ termlings browser navigate "..."             # Automate web
 ### Re-activation
 ```bash
 termlings alice
-# Same termling (same DNA) starts new session
-# Can be messaged via same agent:<dna>
+# Same termling starts new session
+# Can be messaged via same agent:alice
 ```
 
 ### Permanent Deletion
@@ -382,4 +382,4 @@ termlings create alice       # Random DNA assigned
 - [TASK.md](TASK.md) - Termlings collaborating on tasks
 - [BROWSER.md](BROWSER.md) - Termlings automating the web
 - [../AGENTS.md](../AGENTS.md) - Agent system architecture
-- [../src/termling-context.md](../src/termling-context.md) - In-session termling guide
+- [../src/termlings-system-message.md](../src/termlings-system-message.md) - In-session termling guide

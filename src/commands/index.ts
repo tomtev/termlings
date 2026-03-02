@@ -10,6 +10,10 @@ import { handleScheduler } from "./scheduler.js";
 import { handleInit } from "./init.js";
 import { handleCreate } from "./create.js";
 import { handleAvatar } from "./avatar.js";
+import { handleSpawn } from "./spawn.js";
+import { handleRequest } from "./request.js";
+import { handleOrgChart } from "./org-chart.js";
+import { handleBrief } from "./brief.js";
 
 export async function routeCommand(
   positional: string[],
@@ -21,6 +25,14 @@ export async function routeCommand(
   switch (command) {
     case "list-agents":
       await handleListAgents(flags, positional);
+      return true;
+
+    case "org-chart":
+      await handleOrgChart(flags, positional);
+      return true;
+
+    case "brief":
+      await handleBrief(flags, positional);
       return true;
 
     case "message":
@@ -53,6 +65,14 @@ export async function routeCommand(
 
     case "avatar":
       await handleAvatar(flags, positional, opts);
+      return true;
+
+    case "spawn":
+      await handleSpawn(flags, positional);
+      return true;
+
+    case "request":
+      await handleRequest(flags, positional);
       return true;
   }
 

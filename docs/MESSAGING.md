@@ -10,16 +10,16 @@ termlings list-agents
 
 Output:
 ```
-Session ID (16 chars)  Agent Name  [DNA]  Last Seen
-tl-abc123def456        Alice       [2c5f423] last-seen 5s ago (you)
-tl-xyz789pqr012        Bob         [1b4e312] last-seen 120s ago
+Slug            Name         Title              Role
+agent:developer Alice        Developer          Build and ship product (you)
+agent:designer  Bob          Designer           Design and user experience
 ```
 
 Tells you:
 - Who's currently online
-- Their display name
-- Their stable DNA (7-char hex)
-- When they were last active
+- Their slug (use for messaging)
+- Their display name and title
+- Their role
 
 ## Send Messages
 
@@ -35,9 +35,9 @@ termlings message tl-abc123def456 "Hi Alice! Can you review the PR?"
 ```
 Use for immediate, live communication.
 
-**2. Agent DNA** (stable, recommended ⭐)
+**2. Agent Slug** (stable, recommended ⭐)
 ```bash
-termlings message agent:2c5f423 "Starting task-42, will finish in 30min"
+termlings message agent:developer "Starting task-42, will finish in 30min"
 ```
 Use for persistent threads - works across agent restarts.
 
@@ -56,10 +56,10 @@ Aliases:
 ### Coordination
 ```bash
 # Agent A
-termlings message agent:<bob-dna> "task-42 is ready for your review"
+termlings message agent:bob "task-42 is ready for your review"
 
 # Agent B
-termlings message agent:<alice-dna> "Got it, reviewing now"
+termlings message agent:alice "Got it, reviewing now"
 ```
 
 ### Status Updates
@@ -75,7 +75,7 @@ termlings message human:default "Stuck on CORS issue - need to pair with someone
 ## Best Practices
 
 ✅ **DO:**
-- Use `agent:<dna>` for team coordination (persistent)
+- Use `agent:<slug>` for team coordination (persistent)
 - Message `human:default` when blocked or needing help
 - Include concrete next steps in messages
 - Send updates every 30 minutes on long tasks
@@ -93,7 +93,7 @@ Each entry includes:
 - Timestamp
 - From/to (session IDs or human targets)
 - Message text
-- Metadata (agent DNA, etc.)
+- Metadata (agent slug, etc.)
 
 Access history programmatically or view in web UI.
 
@@ -106,7 +106,7 @@ Often you'll message teammates after task updates:
 termlings task status task-42 completed "Analysis saved to /tmp/output.json"
 
 # Notify teammate
-termlings message agent:<bob-dna> "task-42 done, ready for review"
+termlings message agent:bob "task-42 done, ready for review"
 ```
 
 See [TASK.md](TASK.md) for task management.

@@ -592,6 +592,14 @@ function WorkspaceView($$renderer, $$props) {
     function messageTargetDna(message) {
       return message.targetDna ?? (message.target ? sessionDnaById.get(message.target) : void 0);
     }
+    function isAgentWorkingDna(dna) {
+      if (!dna) return false;
+      return agentByDna.get(dna)?.typing === true;
+    }
+    function isTalkingOrWorkingDna(dna) {
+      if (!dna) return false;
+      return talkingDnaSet.has(dna) || isAgentWorkingDna(dna);
+    }
     function messageRoute(message) {
       const fromLabel = resolveActorName({
         id: message.from,
@@ -690,7 +698,7 @@ function WorkspaceView($$renderer, $$props) {
           kind: "dm",
           dna: agent.dna,
           online: agent.online,
-          title: agent.title,
+          title: agent.title_short || agent.title,
           typing: agent.typing ?? false,
           activitySource: agent.activitySource
         });
@@ -707,7 +715,7 @@ function WorkspaceView($$renderer, $$props) {
             kind: "dm",
             dna: fromDna,
             online: known?.online ?? onlineDnaSet.has(fromDna),
-            title: known?.title,
+            title: known?.title_short || known?.title,
             typing: known?.typing ?? false,
             activitySource: known?.activitySource
           });
@@ -720,7 +728,7 @@ function WorkspaceView($$renderer, $$props) {
             kind: "dm",
             dna: targetDna,
             online: known?.online ?? onlineDnaSet.has(targetDna),
-            title: known?.title,
+            title: known?.title_short || known?.title,
             typing: known?.typing ?? false,
             activitySource: known?.activitySource
           });
@@ -935,7 +943,7 @@ function WorkspaceView($$renderer, $$props) {
             size: "lg",
             dna: summary.dna,
             name: summary.label,
-            talking: talkingDnaSet.has(summary.dna ?? ""),
+            talking: isTalkingOrWorkingDna(summary.dna),
             waving: wavingDnaSet.has(summary.dna ?? "")
           });
           $$renderer2.push(`<!----></span> <span class="author svelte-qt3mqg">${escape_html(summary.label)}</span></div> <div class="inbox-summary-meta svelte-qt3mqg"><span class="badge">(${escape_html(summary.count)})</span> <span class="timestamp svelte-qt3mqg">${escape_html(formatTime(summary.lastMessage.ts))}</span></div></div> <p class="svelte-qt3mqg">${escape_html(summary.lastMessage.text)}</p> `);
@@ -972,7 +980,7 @@ function WorkspaceView($$renderer, $$props) {
               dna: messageFromDna(message),
               fallback: "Agent"
             }),
-            talking: talkingDnaSet.has(messageFromDna(message) ?? ""),
+            talking: isTalkingOrWorkingDna(messageFromDna(message)),
             waving: wavingDnaSet.has(messageFromDna(message) ?? "")
           });
           $$renderer2.push(`<!----></span> <span class="author svelte-qt3mqg">${escape_html(resolveActorName({

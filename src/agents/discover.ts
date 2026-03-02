@@ -5,7 +5,16 @@ import { createInterface } from "readline";
 export interface LocalAgent {
   name: string;
   path: string;
-  soul?: { name: string; title?: string; dna: string; description: string };
+  soul?: {
+    name: string;
+    title?: string;
+    title_short?: string;
+    role?: string;
+    team?: string;
+    reports_to?: string;
+    dna: string;
+    description: string;
+  };
 }
 
 /**
@@ -40,6 +49,10 @@ export function discoverLocalAgents(): LocalAgent[] {
         const yaml = frontmatterMatch[1];
         const name = yaml.match(/^name:\s*(.+)$/m)?.[1];
         const title = yaml.match(/^title:\s*(.+)$/m)?.[1];
+        const title_short = yaml.match(/^title_short:\s*(.+)$/m)?.[1];
+        const role = yaml.match(/^role:\s*(.+)$/m)?.[1];
+        const team = yaml.match(/^team:\s*(.+)$/m)?.[1];
+        const reports_to = yaml.match(/^reports_to:\s*(.+)$/m)?.[1];
         const dna = yaml.match(/^dna:\s*(.+)$/m)?.[1];
         const description = (frontmatterMatch[2] || "").trim();
 
@@ -47,6 +60,10 @@ export function discoverLocalAgents(): LocalAgent[] {
           soul = {
             name,
             title,
+            title_short,
+            role,
+            team,
+            reports_to,
             dna,
             description,
           };
@@ -96,14 +113,14 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
   // Build grid items for existing agents
   const gridItems = localAgents.map((a) => {
     const name = a.soul?.name || a.name;
-    const title = a.soul?.title || "";
+    const role = a.soul?.role || "";
     const isActive = a.soul?.dna ? activeAgentDnas.has(a.soul.dna) : false;
     const avatar = a.soul?.dna ? renderTerminalSmall(a.soul.dna, 0, isActive) : "?";
 
     return {
       value: JSON.stringify({ type: "existing", agent: a }),
       label: name,
-      title,
+      title: a.soul?.title_short || a.soul?.title,
       avatar,
       disabled: isActive,
     };

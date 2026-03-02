@@ -1,0 +1,16 @@
+{
+  "claude": {
+    "default": {
+      "description": "Launch with full autonomy",
+      "command": "termlings claude --dangerously-skip-permissions"
+    },
+    "auto": {
+      "description": "Launch with full autonomy (skip all permission prompts)",
+      "command": "termlings claude --dangerously-skip-permissions"
+    },
+    "safe": {
+      "description": "Launch in safe mode (default permissions)",
+      "command": "termlings claude"
+    }
+  }
+}

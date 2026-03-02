@@ -221,29 +221,20 @@ export function getRecentMessages(
   const index = loadIndex(root)
   const messages: WorkspaceMessage[] = []
 
-  // Load recent from each channel (proportional limit)
-  const channelLimit = Math.ceil(limit * 0.6 / Math.max(index.channels.length, 1))
+  // Load all indexed channel messages and trim globally after merge.
   for (const channel of index.channels) {
-    const channelMsgs = getChannelMessages(channel.name, root)
-    if (channelMsgs.length > channelLimit) {
-      messages.push(...channelMsgs.slice(-channelLimit))
-    } else {
-      messages.push(...channelMsgs)
-    }
+    messages.push(...getChannelMessages(channel.name, root))
   }
 
-  // Load recent from DMs (proportional limit)
-  const dmLimit = Math.ceil(limit * 0.4 / Math.max(index.dms.length, 1))
+  // Load all indexed DM messages and trim globally after merge.
   for (const dm of index.dms) {
-    const dmMsgs = getDmMessages(dm.target, root)
-    if (dmMsgs.length > dmLimit) {
-      messages.push(...dmMsgs.slice(-dmLimit))
-    } else {
-      messages.push(...dmMsgs)
-    }
+    messages.push(...getDmMessages(dm.target, root))
   }
 
-  // Sort by timestamp and return recent
+  // Include system events alongside chat/DM entries.
+  messages.push(...getSystemMessages(root))
+
+  // Sort by timestamp and return recent globally.
   messages.sort((a, b) => a.ts - b.ts)
   return messages.slice(-limit)
 }

@@ -39,7 +39,7 @@ EXAMPLES:
 NEXT STEPS:
   1. termlings             Start the workspace web UI
   2. termlings claude      Launch Claude Code as an agent
-  3. termlings list-agents See active agents
+  3. termlings org-chart   See team hierarchy
   4. termlings task list   Check available tasks
 `);
     return;

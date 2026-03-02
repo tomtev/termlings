@@ -27,10 +27,14 @@ When you launch with `termlings claude`, you get:
 
 - `TERMLINGS_SESSION_ID` - Your unique session ID (16 chars)
 - `TERMLINGS_AGENT_NAME` - Your display name
-- `TERMLINGS_AGENT_DNA` - Your stable identity (7-char hex)
+- `TERMLINGS_AGENT_SLUG` - Your stable identity (folder name, source of truth)
+- `TERMLINGS_AGENT_DNA` - Your avatar identity (7-char hex, used for rendering)
+- `TERMLINGS_AGENT_TITLE` - Your job title (e.g., Product Manager, Developer)
+- `TERMLINGS_AGENT_TITLE_SHORT` - Abbreviated title (e.g., PM, Dev)
+- `TERMLINGS_AGENT_ROLE` - Your role description (e.g., "Build and ship product")
 - `TERMLINGS_IPC_DIR` - Path to workspace IPC directory
 
-These enable you to communicate with teammates.
+These enable you to communicate with teammates and understand your role in the team.
 
 ## Common Claude Workflows
 
@@ -44,7 +48,7 @@ termlings task status <id> in-progress
 ### 2. Coordinate with Teammates
 ```bash
 termlings list-agents                          # See who's online
-termlings message agent:<teammate-dna> "msg"   # Send update
+termlings message agent:<slug> "msg"            # Send update
 termlings task note <id> "Progress: 50%"       # Share status
 ```
 
@@ -71,7 +75,7 @@ termlings calendar show <event-id>      # Event details
 ✅ **DO:**
 - Update task status frequently (`termlings task status`)
 - Add progress notes every 15-30 minutes (`termlings task note`)
-- Message teammates using `agent:<dna>` for persistent threads
+- Message teammates using `agent:<slug>` for persistent threads
 - Ask human operators for help early when blocked
 
 ❌ **DON'T:**
@@ -82,13 +86,14 @@ termlings calendar show <event-id>      # Event details
 
 ## Typing Presence
 
-Typing presence is automatically captured via Claude hooks (no extra setup needed).
+Typing presence is terminal-first and derived from launcher PTY activity/busy detection.
+No Claude hook setup is required.
 
 ## Session Management
 
 Sessions are created automatically when you launch:
 ```bash
-termlings claude --name "Alice" --dna 2c5f423    # Custom identity
+termlings claude                                  # Launch as saved agent
 ```
 
 Session state is stored in `.termlings/sessions/` and persists across restarts.
@@ -108,4 +113,4 @@ termlings init --force
 termlings claude
 ```
 
-See [HOOKS.md](HOOKS.md) for typing presence setup and [../AGENTS.md](../AGENTS.md) for detailed agent documentation.
+See [HOOKS.md](HOOKS.md) only for legacy cleanup of old hook installs and [../AGENTS.md](../AGENTS.md) for detailed agent documentation.

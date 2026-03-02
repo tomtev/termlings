@@ -5,85 +5,58 @@ const HOOK_SCRIPT_NAME = "termlings-hooks.sh";
 const HOOK_SCRIPT_PATH = join(homedir(), ".claude", "hooks", HOOK_SCRIPT_NAME);
 const CLAUDE_SETTINGS_PATH = join(homedir(), ".claude", "settings.json");
 
-const HOOK_EVENTS = ["UserPromptSubmit", "Stop"] as const;
+type HookEntry = { hooks?: Array<{ command?: string }> };
 
-function buildHookEntry(): { matcher?: string; hooks: { type: string; command: string; async: boolean; timeout: number }[] } {
-  const entry: { matcher?: string; hooks: { type: string; command: string; async: boolean; timeout: number }[] } = {
-    hooks: [{ type: "command", command: HOOK_SCRIPT_PATH, async: true, timeout: 2 }],
-  };
-  return entry;
+function filterTermlingsHooks(entries: unknown[] | undefined): { filtered: HookEntry[]; changed: boolean } {
+  const typed = (entries || []) as HookEntry[];
+  const filtered = typed.filter(
+    (entry) => !entry.hooks?.some((hook) => hook.command === HOOK_SCRIPT_PATH),
+  );
+  return { filtered, changed: filtered.length !== typed.length };
 }
 
-export async function installTermlingsHooks(): Promise<{ scriptInstalled: boolean; settingsUpdated: boolean }> {
-  const { readFile, writeFile, copyFile, chmod, mkdir } = await import("fs/promises");
+export async function uninstallTermlingsHooks(): Promise<{ scriptRemoved: boolean; settingsUpdated: boolean }> {
+  const { readFile, writeFile, unlink, mkdir } = await import("fs/promises");
 
-  // Ensure hooks dir exists
-  const hooksDir = join(homedir(), ".claude", "hooks");
-  await mkdir(hooksDir, { recursive: true, mode: 0o700 }).catch(() => {});
-
-  // Copy hook script from src to ~/.claude/hooks/
-  let scriptInstalled = false;
-  try {
-    const bundledScript = join(import.meta.dir, HOOK_SCRIPT_NAME);
-    await copyFile(bundledScript, HOOK_SCRIPT_PATH);
-    await chmod(HOOK_SCRIPT_PATH, 0o755);
-    scriptInstalled = true;
-  } catch {
-    // Script copy failed — not fatal
-  }
-
-  // Update ~/.claude/settings.json with hook entries
   let settingsUpdated = false;
   try {
-    let settings: Record<string, unknown> = {};
-    try {
-      const raw = await readFile(CLAUDE_SETTINGS_PATH, "utf-8");
-      settings = JSON.parse(raw);
-    } catch {
-      // No existing settings — start fresh
-    }
-
+    const raw = await readFile(CLAUDE_SETTINGS_PATH, "utf-8");
+    const settings = JSON.parse(raw) as Record<string, unknown>;
     const hooks = (settings.hooks || {}) as Record<string, unknown[]>;
-    let needsWrite = false;
+    let changed = false;
 
-    // Remove stale termlings hook registration from PermissionRequest.
-    const permissionEntries = hooks.PermissionRequest as Array<{ hooks?: Array<{ command?: string }> }> | undefined;
-    if (permissionEntries && permissionEntries.length > 0) {
-      const filtered = permissionEntries.filter(
-        (entry) => !entry.hooks?.some((h) => h.command === HOOK_SCRIPT_PATH)
-      );
-      if (filtered.length !== permissionEntries.length) {
-        if (filtered.length > 0) {
-          hooks.PermissionRequest = filtered as unknown[];
-        } else {
-          delete hooks.PermissionRequest;
-        }
-        needsWrite = true;
+    for (const [event, entries] of Object.entries(hooks)) {
+      const { filtered, changed: eventChanged } = filterTermlingsHooks(entries);
+      if (!eventChanged) continue;
+      changed = true;
+      if (filtered.length > 0) {
+        hooks[event] = filtered as unknown[];
+      } else {
+        delete hooks[event];
       }
     }
 
-    for (const event of HOOK_EVENTS) {
-      const existing = hooks[event] as Array<{ hooks?: Array<{ command?: string }> }> | undefined;
-      const alreadyInstalled = existing?.some(
-        (entry) => entry.hooks?.some((h) => h.command === HOOK_SCRIPT_PATH)
-      );
-      if (!alreadyInstalled) {
-        if (!hooks[event]) hooks[event] = [];
-        (hooks[event] as unknown[]).push(buildHookEntry());
-        needsWrite = true;
+    if (changed) {
+      if (Object.keys(hooks).length > 0) {
+        settings.hooks = hooks;
+      } else {
+        delete settings.hooks;
       }
-    }
-
-    if (needsWrite) {
-      settings.hooks = hooks;
-      // Ensure ~/.claude/ directory exists
       await mkdir(join(homedir(), ".claude"), { recursive: true }).catch(() => {});
       await writeFile(CLAUDE_SETTINGS_PATH, JSON.stringify(settings, null, 2) + "\n", "utf-8");
       settingsUpdated = true;
     }
   } catch {
-    // Settings update failed — not fatal
+    // Missing/invalid settings are fine.
   }
 
-  return { scriptInstalled, settingsUpdated };
+  let scriptRemoved = false;
+  try {
+    await unlink(HOOK_SCRIPT_PATH);
+    scriptRemoved = true;
+  } catch {
+    // Script may not exist; that's fine.
+  }
+
+  return { scriptRemoved, settingsUpdated };
 }

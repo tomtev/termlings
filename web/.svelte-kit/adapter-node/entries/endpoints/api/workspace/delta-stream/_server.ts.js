@@ -1,7 +1,7 @@
 import { a as loadWorkspaceSnapshot } from "../../../../../chunks/workspace.js";
 import { r as resolveProjectContext } from "../../../../../chunks/hub.js";
 import { s as subscribeHubChanges, a as subscribeProjectChanges, b as subscribeMessageChanges } from "../../../../../chunks/message-watcher.js";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readdirSync, readFileSync } from "fs";
 import { join } from "path";
 class WorkspaceDeltaComputer {
   lastSnapshot = null;
@@ -19,8 +19,7 @@ class WorkspaceDeltaComputer {
       try {
         const channelsDir = join(storageDir, "channels");
         if (existsSync(channelsDir)) {
-          const fs = require("fs");
-          for (const file of fs.readdirSync(channelsDir)) {
+          for (const file of readdirSync(channelsDir)) {
             if (file.endsWith(".jsonl")) {
               const channel = file.replace(".jsonl", "");
               messagesState.channels.add(channel);
@@ -39,8 +38,7 @@ class WorkspaceDeltaComputer {
         }
         const dmsDir = join(storageDir, "dms");
         if (existsSync(dmsDir)) {
-          const fs = require("fs");
-          for (const file of fs.readdirSync(dmsDir)) {
+          for (const file of readdirSync(dmsDir)) {
             if (file.endsWith(".jsonl")) {
               const target = file.replace(".jsonl", "");
               messagesState.dms.add(target);
@@ -97,7 +95,6 @@ class WorkspaceDeltaComputer {
       }
     }
     const storageDir = join(root, ".termlings", "store", "messages");
-    require("fs");
     for (const channel of changes.channels) {
       const channelPath = join(storageDir, "channels", `${channel}.jsonl`);
       if (existsSync(channelPath)) {

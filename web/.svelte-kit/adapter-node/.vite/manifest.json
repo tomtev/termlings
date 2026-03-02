@@ -198,19 +198,19 @@
       "_WorkspaceView.js"
     ]
   },
-  "src/routes/[project]/agents/[dna]/+page.server.ts": {
-    "file": "entries/pages/_project_/agents/_dna_/_page.server.ts.js",
-    "name": "entries/pages/_project_/agents/_dna_/_page.server.ts",
-    "src": "src/routes/[project]/agents/[dna]/+page.server.ts",
+  "src/routes/[project]/agents/[slug]/+page.server.ts": {
+    "file": "entries/pages/_project_/agents/_slug_/_page.server.ts.js",
+    "name": "entries/pages/_project_/agents/_slug_/_page.server.ts",
+    "src": "src/routes/[project]/agents/[slug]/+page.server.ts",
     "isEntry": true,
     "imports": [
       "_workspace-route.js"
     ]
   },
-  "src/routes/[project]/agents/[dna]/+page.svelte": {
-    "file": "entries/pages/_project_/agents/_dna_/_page.svelte.js",
-    "name": "entries/pages/_project_/agents/_dna_/_page.svelte",
-    "src": "src/routes/[project]/agents/[dna]/+page.svelte",
+  "src/routes/[project]/agents/[slug]/+page.svelte": {
+    "file": "entries/pages/_project_/agents/_slug_/_page.svelte.js",
+    "name": "entries/pages/_project_/agents/_slug_/_page.svelte",
+    "src": "src/routes/[project]/agents/[slug]/+page.svelte",
     "isEntry": true,
     "imports": [
       "_index2.js",

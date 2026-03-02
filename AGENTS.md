@@ -14,8 +14,9 @@ Termlings agents are autonomous Claude Code sessions that collaborate through a 
 
 ```text
 termlings (CLI)
+  ├─ termlings brief          # complete workspace snapshot
   ├─ termlings claude         # launch agent session
-  ├─ termlings list-agents    # discover active agents
+  ├─ termlings org-chart      # discover org structure + active status
   ├─ termlings message ...    # direct messaging
   ├─ termlings task ...       # task management
   ├─ termlings calendar ...   # calendar viewing
@@ -29,13 +30,29 @@ Workspace state: <project>/.termlings/
   agents/<agent-id>/SOUL.md
 ```
 
+## Default Team Structure
+
+The template includes a 5-person bootstrapped team structure:
+
+```
+Operator (Founder - You)
+└── PM (Vision & Prioritization)
+    ├── Developer (Build & Ship)
+    ├── Designer (UX & Visual Design)
+    └── Growth (Customer & Adoption)
+```
+
+Each role has specific responsibilities and reports to the PM, who reports to you (the Operator).
+
 ## Agent identity
 
 Each agent has:
 
 - Name
 - DNA (stable identity)
-- Optional title
+- Title (full job title, e.g., Product Manager, Developer)
+- Title Short (optional abbreviation for TUI display, e.g., PM, Dev)
+- Role (brief description of responsibilities)
 - Session ID (per running process)
 
 Saved agents live in:
@@ -60,7 +77,8 @@ termlings <agent-id>
 
 ### Messaging & discovery
 ```bash
-termlings list-agents              # See who's online
+termlings brief                    # Session startup snapshot
+termlings org-chart                # See org structure + who's online
 termlings message <target> <text>  # Send a direct message
 ```
 
@@ -71,6 +89,8 @@ termlings task show <id>                      # Task details
 termlings task claim <id>                     # Claim a task
 termlings task status <id> <status> [note]    # Update status
 termlings task note <id> <note>               # Add progress note
+termlings task depends <id> <dep-id>          # Add dependency
+termlings task depends <id> --remove <dep-id> # Remove dependency
 ```
 
 ### Calendar
@@ -84,11 +104,12 @@ termlings calendar edit <event-id> ...   # Edit event (owner)
 ### Browser automation
 ```bash
 termlings browser start                  # Launch browser
-termlings browser navigate <url>         # Go to URL
-termlings browser screenshot             # Capture screen
-termlings browser extract                # Get page text
-termlings browser type <text>            # Type into element
-termlings browser click <selector>       # Click element
+termlings browser tabs list              # List tabs + IDs
+termlings browser navigate <url> [--tab <id>]   # Go to URL
+termlings browser screenshot [--tab <id>]       # Capture screen
+termlings browser extract [--tab <id>]          # Get page text
+termlings browser type <text> [--tab <id>]      # Type into element
+termlings browser click <selector> [--tab <id>] # Click element
 termlings browser patterns list          # View saved patterns
 termlings browser --help                 # All browser commands
 ```
@@ -115,11 +136,11 @@ termlings avatar object <type>      # Render object
 - Use when you need immediate acknowledgment from a live agent
 - Example: asking for real-time help
 
-**Agent DNA** — `termlings message agent:0a3f201 "message"` ⭐ **Recommended**
-- Sends to agent by stable identity (works across restarts)
+**Agent Slug** — `termlings message agent:developer "message"` ⭐ **Recommended**
+- Sends to agent by folder slug (works across restarts)
 - Preferred for persistent threads with specific agents
-- Example: "agent:alice-dna", "agent:bob-dna"
-- Best practice: use DNA for team collaboration
+- Example: "agent:alice", "agent:developer"
+- Best practice: use slug for team collaboration
 
 **Human operator** — `termlings message human:default "message"`
 - Sends to human operator/owner
@@ -138,13 +159,13 @@ When an operator/human messages an agent, the agent should:
 
 ## Typing presence
 
-Typing presence is Claude hook-driven only.
+Typing presence is terminal-first.
 
-- Hook script: `~/.claude/hooks/termlings-hooks.sh`
-- State file: `.termlings/<sessionId>.typing.json`
-- Freshness window is enforced by workspace server.
-
-No terminal-output fallback or non-hook typing fallback is supported.
+- Source of truth: launcher PTY activity + terminal busy detection.
+- State file: `.termlings/<sessionId>.typing.json` with `source: "terminal"`.
+- Auto-clear on inactivity is handled by the launcher.
+- Freshness and message-based stale clearing are enforced by workspace server and TUI.
+- Legacy Claude hooks are no longer used; startup cleans old hook registration if present.
 
 ## CLI architecture
 
@@ -152,10 +173,12 @@ The termlings CLI is organized as modular command handlers for clarity and maint
 
 ```text
 bin/termlings.js              # Entry point
-└── src/cli-refactored.ts     # Minimal router (150 lines)
+└── src/cli.ts                # Minimal router (150 lines)
     └── src/commands/         # Modular handlers
         ├── index.ts          # Route dispatcher
-        ├── messaging.ts      # list-agents, message
+        ├── brief.ts          # Project snapshot summary
+        ├── messaging.ts      # list-agents alias + message
+        ├── org-chart.ts      # org structure + reporting lines
         ├── tasks.ts          # task commands
         ├── calendar.ts       # calendar commands
         ├── browser.ts        # browser automation
@@ -182,7 +205,7 @@ termlings browser --help       # Browser automation guide
 
 ### Discovering teammates
 ```bash
-termlings list-agents
+termlings org-chart
 # Output:
 # tl-a8ab0631   Alice          [0a3f201] last-seen 2s ago
 # tl-2fb0e8aa   Bob            [1f4d82a] last-seen 5s ago (you)
@@ -193,8 +216,8 @@ termlings list-agents
 # Send to a specific session ID (current session only)
 termlings message tl-a8ab0631 "Hi Alice! Can you review the report?"
 
-# Send to agent by stable DNA (recommended — works across restarts)
-termlings message agent:0a3f201 "Update: task is 50% complete"
+# Send to agent by slug (recommended — works across restarts)
+termlings message agent:developer "Update: task is 50% complete"
 
 # Send to human operator (always use human:default for owner)
 termlings message human:default "I'm blocked waiting for input"
@@ -237,7 +260,7 @@ termlings calendar show event-789
 Agent A: termlings task claim task-1 && termlings task status task-1 in-progress
   ... work ...
 Agent A: termlings task note task-1 "Complete, ready for Bob's review"
-Agent A: termlings message agent:<bob-dna> "task-1 ready for you"
+Agent A: termlings message agent:bob "task-1 ready for you"
 
 Agent B: termlings task show task-1  # read notes from Alice
 Agent B: termlings task claim task-1 && termlings task status task-1 in-progress
@@ -281,11 +304,13 @@ npm install -g pinchtab    # Install PinchTab binary
 termlings browser start
 
 # Navigate and interact
-termlings browser navigate "https://example.com"
-termlings browser type "search query"
-termlings browser click "button.search"
-termlings browser screenshot          # Get current page
-termlings browser extract             # Get visible text
+termlings browser tabs list
+TAB_ID=$(termlings browser tabs list | awk '/^   id:/{print $2; exit}')
+termlings browser navigate "https://example.com" --tab "$TAB_ID"
+termlings browser type "search query" --tab "$TAB_ID"
+termlings browser click "button.search" --tab "$TAB_ID"
+termlings browser screenshot --tab "$TAB_ID"   # Get current page
+termlings browser extract --tab "$TAB_ID"      # Get visible text
 
 # Human-in-loop: operator can intervene
 termlings browser request-help "I need to log in manually"
@@ -320,7 +345,7 @@ termlings calendar enable evt-001
 ## Docs
 
 - [docs/HOOKS.md](docs/HOOKS.md)
-- [src/termling-context.md](src/termling-context.md)
+- [src/termlings-system-message.md](src/termlings-system-message.md)
 - [docs/team-coordination.md](docs/team-coordination.md)
 - [docs/browser.md](docs/browser.md)
 - [docs/calendar-system.md](docs/calendar-system.md)

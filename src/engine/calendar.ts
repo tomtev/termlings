@@ -7,7 +7,7 @@ export interface CalendarEvent {
   id: string
   title: string
   description: string
-  assignedAgents: string[] // Array of session IDs
+  assignedAgents: string[] // Array of agent slugs (e.g. "developer", "alice")
   startTime: number // Unix timestamp when event starts
   endTime: number // Unix timestamp when event ends
   recurrence: CalendarRecurrence
@@ -15,7 +15,7 @@ export interface CalendarEvent {
   lastNotification?: number // Timestamp of last notification sent
   enabled: boolean
   createdAt: number
-  createdBy: string // "OWNER" or session ID
+  createdBy: string // "OWNER" or agent slug
   updatedAt: number
 }
 

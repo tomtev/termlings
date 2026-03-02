@@ -114,12 +114,26 @@ function sessionFile(root: string, sessionId: string): string {
   return join(sessionsDir(root), `${sessionId}.json`)
 }
 
+function typingFile(root: string, sessionId: string): string {
+  return join(termlingsDir(root), `${sessionId}.typing.json`)
+}
+
+function clearSessionTyping(sessionId: string, root: string, ts: number): void {
+  try {
+    writeFileSync(
+      typingFile(root, sessionId),
+      JSON.stringify({ typing: false, source: "terminal", updatedAt: ts }) + "\n",
+    )
+  } catch {}
+}
+
 function normalizeSession(raw: any, fallbackSessionId: string): WorkspaceSession | null {
   if (!raw || typeof raw !== "object") return null
   const hasPresenceTimestamps = typeof raw.joinedAt === "number" || typeof raw.lastSeenAt === "number"
   if (!hasPresenceTimestamps) return null
   const sessionId = typeof raw.sessionId === "string" ? raw.sessionId : fallbackSessionId
-  const name = typeof raw.name === "string" && raw.name.length > 0 ? raw.name : sessionId
+  const rawName = typeof raw.name === "string" && raw.name.length > 0 ? raw.name : sessionId
+  const name = rawName.replace(/\x1b\[[0-9;]*[a-zA-Z~]/g, "")
   const dna = typeof raw.dna === "string" && raw.dna.length > 0 ? raw.dna : "0000000"
   const now = Date.now()
   const joinedAt = typeof raw.joinedAt === "number" ? raw.joinedAt : now
@@ -131,6 +145,7 @@ export function ensureWorkspaceDirs(root = process.cwd()): void {
   const base = termlingsDir(root)
   mkdirSync(base, { recursive: true })
   mkdirSync(join(base, "agents"), { recursive: true })
+  mkdirSync(join(base, "humans"), { recursive: true })
   mkdirSync(join(base, "objects"), { recursive: true })
   mkdirSync(sessionsDir(root), { recursive: true })
   mkdirSync(storeDir(root), { recursive: true })
@@ -243,6 +258,9 @@ export function appendWorkspaceMessage(
 ): WorkspaceMessage {
   ensureWorkspaceDirs(root)
   const record = msgStorage.appendMessage(message, root)
+  if (record.kind !== "system" && typeof record.from === "string" && record.from.startsWith("tl-")) {
+    clearSessionTyping(record.from, root, record.ts)
+  }
   touchWorkspace(root)
   return record
 }

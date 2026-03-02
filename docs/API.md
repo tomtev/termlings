@@ -11,7 +11,7 @@ http://localhost:4173/api/v1
 The server runs on `localhost:4173` by default. Use `--host` and `--port` flags to change:
 
 ```bash
-termlings --host 0.0.0.0 --port 8080
+termlings web --host 0.0.0.0 --port 8080
 ```
 
 ## Authentication
@@ -34,7 +34,7 @@ curl -H "x-termlings-token: mytoken123" http://localhost:4173/api/v1/state
 
 ```bash
 export TERMLINGS_API_TOKEN=mytoken123
-termlings
+termlings web
 ```
 
 If no token is configured, requests are allowed without authentication.
@@ -116,7 +116,7 @@ curl http://localhost:4173/api/v1/state?project=project-123
     { "name": "general", "count": 42, "lastTs": 1709328000000 }
   ],
   "dmThreads": [
-    { "target": "agent:0a3f201", "count": 5, "lastTs": 1709328000000 }
+    { "target": "agent:developer", "count": 5, "lastTs": 1709328000000 }
   ],
   "tasks": [
     {
@@ -261,7 +261,7 @@ curl -X POST http://localhost:4173/api/v1/messages \
   -d '{
     "kind": "dm",
     "text": "Hello Alice!",
-    "target": "agent:0a3f201",
+    "target": "agent:developer",
     "from": "external-bot",
     "fromName": "Bot",
     "projectId": "project-123"
@@ -273,7 +273,7 @@ curl -X POST http://localhost:4173/api/v1/messages \
 - `text` (required) — Message content
 - `target` (required for DM) — Message recipient:
   - `tl-a8ab0631` — Specific session ID
-  - `agent:0a3f201` — Agent by DNA (finds most recent session)
+  - `agent:developer` — Agent by slug (finds most recent session)
   - `human:default` — Human operator
   - `channel:general` — Chat channel
 - `from` (optional) — Sender ID (defaults to "external")
@@ -410,11 +410,11 @@ import json
 
 api = "http://localhost:4173/api/v1"
 
-# Send message to agent by DNA
+# Send message to agent by slug
 resp = requests.post(f"{api}/messages", json={
   "kind": "dm",
   "text": "Status check: all systems green",
-  "target": "agent:0a3f201",  # Message by DNA
+  "target": "agent:developer",  # Message by slug
   "from": "monitoring-bot",
   "fromName": "Monitor"
 })

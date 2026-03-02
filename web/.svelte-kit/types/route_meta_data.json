@@ -41,8 +41,8 @@
 	"/[project]": [
 		"src/routes/[project]/+page.server.ts"
 	],
-	"/[project]/agents/[dna]": [
-		"src/routes/[project]/agents/[dna]/+page.server.ts"
+	"/[project]/agents/[slug]": [
+		"src/routes/[project]/agents/[slug]/+page.server.ts"
 	],
 	"/[project]/calendar": [
 		"src/routes/[project]/calendar/+page.server.ts"

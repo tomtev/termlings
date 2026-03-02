@@ -32,7 +32,7 @@ WHAT IT CREATES:
 NEXT STEPS:
   1. Edit .termlings/agents/<name>/SOUL.md to customize
   2. termlings <name>           Launch the agent
-  3. termlings message agent:<dna> "Welcome"  Start collaborating
+  3. termlings message agent:<name> "Welcome"  Start collaborating
 `);
     return;
   }

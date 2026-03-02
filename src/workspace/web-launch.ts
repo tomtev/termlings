@@ -1,8 +1,9 @@
-import { createReadStream, createWriteStream, existsSync, openSync, closeSync } from "fs"
+import { createReadStream, createWriteStream, existsSync, openSync, closeSync, writeFileSync, readFileSync } from "fs"
 import { spawn, spawnSync } from "child_process"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { createInterface } from "readline/promises"
+import { userInfo } from "os"
 
 import { ensureWorkspaceDirs } from "./state.js"
 import { initializeWorkspaceFromTemplate, listWorkspaceTemplates } from "./setup.js"
@@ -16,6 +17,58 @@ import {
 } from "./hub.js"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+/**
+ * Get default human name from system and git
+ */
+function getDefaultHumanName(): string {
+  // Try git config first (user.name)
+  try {
+    const result = spawnSync("git", ["config", "user.name"], {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    })
+    if (result.stdout && result.status === 0) {
+      return result.stdout.trim()
+    }
+  } catch {}
+
+  // Fallback to OS username
+  try {
+    const info = userInfo()
+    return info.username || "User"
+  } catch {}
+
+  return "User"
+}
+
+/**
+ * Prompt user for their name and update default human
+ */
+async function setupDefaultHuman(
+  rl: any,
+  projectRoot: string,
+): Promise<void> {
+  const humanPath = join(projectRoot, ".termlings", "humans", "default", "SOUL.md")
+
+  try {
+    const defaultName = getDefaultHumanName()
+
+    console.log("")
+    const answer = await rl.question(
+      `What's your name? [${defaultName}] `,
+    )
+    const name = answer.trim() || defaultName
+
+    // Update the default human SOUL.md with the name
+    if (existsSync(humanPath)) {
+      const content = readFileSync(humanPath, "utf8")
+      const updated = content.replace(/^name:\s*.+$/m, `name: ${name}`)
+      writeFileSync(humanPath, updated, "utf8")
+      console.log(`✓ Your name: ${name}`)
+    }
+  } catch {}
+}
 
 export async function ensureWorkspaceInitializedForLaunch(
   forceSetup = false,
@@ -97,6 +150,10 @@ export async function ensureWorkspaceInitializedForLaunch(
 
     const result = initializeWorkspaceFromTemplate(template, projectRoot)
     console.log(`✓ Initialized .termlings using template: ${result.templateName}`)
+
+    // Set up default human identity
+    await setupDefaultHuman(rl, projectRoot)
+
     return true
   } finally {
     rl.close()

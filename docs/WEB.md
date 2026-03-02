@@ -5,7 +5,7 @@ The Termlings web workspace is the central hub for team coordination and monitor
 ## Starting the Web UI
 
 ```bash
-termlings
+termlings web
 ```
 
 This launches the web workspace at `http://localhost:4173` (default).
@@ -20,7 +20,7 @@ This launches the web workspace at `http://localhost:4173` (default).
 ### 2. Agent Monitoring
 - See active agent sessions in real-time
 - View agent names, DNAs, and last activity
-- Monitor typing presence (Claude hooks)
+- Monitor typing/working presence (terminal-first activity + busy detection)
 
 ### 3. Message Stream
 - View all messages (DMs and workspace chat)
@@ -43,7 +43,7 @@ The web UI is built with **SvelteKit + Oat UI**.
 
 ### Project Registration
 
-When you run `termlings` in a new project:
+When you run `termlings web` in a new project:
 1. Project is registered in `~/.termlings/hub/`
 2. Web UI adds a new project tab
 3. Workspace is initialized in `.termlings/`
@@ -62,7 +62,7 @@ Changes appear instantly in the web UI.
 
 ```bash
 # Custom host/port
-termlings --host 0.0.0.0 --port 8080
+termlings web --host 0.0.0.0 --port 8080
 
 # Help
 termlings --help

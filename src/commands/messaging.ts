@@ -3,50 +3,26 @@
  */
 
 import { sendMessage } from "../engine/messaging-util.js";
+import { handleOrgChart } from "./org-chart.js";
 
 export async function handleListAgents(flags: Set<string>, positional: string[]) {
   if (flags.has("help")) {
     console.log(`
-👥 List Agents - See who's online
+👥 List Agents - Legacy alias for org chart
 
-Shows all active agent sessions in the workspace.
+Use \`termlings org-chart\` instead.
 
 USAGE:
-  termlings list-agents
+  termlings org-chart
+  termlings org-chart --json
+  termlings list-agents --json   # still works
 
-OUTPUT:
-  Session ID (16 chars)  Agent Name  [DNA]  Last Seen
-  tl-abc123def456    Alice         [2c5f423] last-seen 5s ago (you)
-  tl-xyz789pqr012    Bob           [1b4e312] last-seen 120s ago
-
-NOTES:
-  • (you) = Current session
-  • Last seen: Time since last activity
-  • DNA: Stable agent identity (persists across restarts)
-
-USE WHEN:
-  • Starting work (check who's active)
-  • Coordinating with teammates
-  • Finding agent DNAs to message
+OPTIONS:
+  --json         Output structured org data
 `);
     return;
   }
-
-  const { listSessions } = await import("../workspace/state.js");
-  const sessions = listSessions();
-  if (sessions.length === 0) {
-    console.log("No active sessions");
-    return;
-  }
-
-  const sessionId = process.env.TERMLINGS_SESSION_ID;
-  for (const s of sessions) {
-    const ageSeconds = Math.max(0, Math.floor((Date.now() - s.lastSeenAt) / 1000));
-    const you = s.sessionId === sessionId ? " (you)" : "";
-    console.log(
-      `${s.sessionId.padEnd(16)} ${s.name.padEnd(14)} [${s.dna}] last-seen ${ageSeconds}s ago${you}`
-    );
-  }
+  await handleOrgChart(flags, ["org-chart", ...positional.slice(1)]);
 }
 
 export async function handleMessage(flags: Set<string>, positional: string[]) {
@@ -61,31 +37,33 @@ USAGE:
 
 TARGETS:
   channel:<name>        Post to a channel (e.g., #general)
-  <session-id>          A specific live session (from termlings list-agents)
-  agent:<dna>           Stable agent identity (works across restarts) ← PREFERRED
-  human:<id>            Human operator inbox
-    human:default       Owner/operator shortcut
+  agent:<slug>          Agent folder name (e.g., agent:growth, agent:developer)
+  human:default         Operator/owner inbox
     human:operator      Alias for operator
     human:owner         Alias for owner
 
+NOTE: Messages to offline agents & humans are queued automatically.
+If the recipient is offline, the message is stored and delivered when they come online.
+
 EXAMPLES:
-  # Post to a channel
+  # Post to a channel (team-wide)
   termlings message channel:general "Team standup in 5 mins"
   termlings message channel:engineering "Deploy ready for review"
 
-  # Message another agent
-  termlings message agent:2c5f423 "I'm starting the data validation task"
+  # Message another agent (works offline, survives restarts)
+  termlings message agent:growth "Can you help with customer acquisition?"
+  termlings message agent:developer "Task-123 is ready for review"
+  termlings message agent:designer "Need feedback on the mockups"
 
-  # Message the operator (high priority)
+  # Message the operator (high priority, queued if offline)
   termlings message human:default "Task completed, results in /tmp/output.json"
 
-  # Message a specific live session
-  termlings message tl-abc123def456 "Quick question about the API key"
-
 BEST PRACTICES:
-  ✓ Use channel:name for team-wide announcements
-  ✓ Use agent:<dna> for persistent 1-to-1 threads (survives restarts)
-  ✓ Message human:default for blockers or status updates
+  ✓ Use agent:slug for 1-to-1 communication (works offline, easy to remember)
+  ✓ Use channel:name for team announcements
+  ✓ Use human:default for operator/blockers (always gets through)
+  ✓ Copy the slug from 'termlings org-chart' output
+  ✓ When you receive a message, copy the ID from the message header and reply
   ✓ Keep messages concise (timestamps auto-added)
   ✓ Include concrete next steps
   ✓ Use for coordination, not logging
@@ -113,7 +91,7 @@ OPERATOR EXPECTATIONS:
 
   if (!target || !text) {
     console.error("Usage: termlings message <target> <text>");
-    console.error("Targets: <session-id> | agent:<dna> | human:<id> (aliases: operator, owner)");
+    console.error("Targets: <session-id> | agent:<slug> | human:<id> (aliases: operator, owner)");
     process.exit(1);
   }
 

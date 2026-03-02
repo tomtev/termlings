@@ -18,7 +18,7 @@ export interface MenuItem {
 export async function selectMenu(
   items: MenuItem[],
   title?: string,
-  options?: { input?: Readable; output?: Writable }
+  options?: { input?: Readable; output?: Writable; footer?: string }
 ): Promise<string> {
   const input = options?.input || process.stdin;
   const output = options?.output || process.stdout;
@@ -52,6 +52,9 @@ export async function selectMenu(
         }
       }
 
+      if (options?.footer) {
+        output.write(`\n\x1b[90m${options.footer}\x1b[0m`);
+      }
       output.write("\n\x1b[90m(↑/↓ to select, Enter to confirm)\x1b[0m");
     };
 
@@ -150,7 +153,8 @@ export async function selectAgentGrid(
   const rl = createInterface({ input, output, terminal: true });
 
   return new Promise<string>((resolve) => {
-    let selectedIndex = 0;
+    let selectedIndex = items.findIndex((item) => !item.disabled);
+    if (selectedIndex === -1) selectedIndex = 0;
 
     // Get avatar lines for all items
     const avatarLines: string[][] = items.map((item) => item.avatar.split("\n"));

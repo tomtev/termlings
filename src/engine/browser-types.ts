@@ -57,3 +57,13 @@ export interface ProfileReference {
   createdAt: number
   lastUsed?: number
 }
+
+export interface AgentBrowserState {
+  sessionId: string
+  agentName?: string
+  agentSlug?: string
+  agentDna?: string
+  url?: string
+  lastAction: string
+  lastActionAt: number
+}

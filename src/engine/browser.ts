@@ -7,6 +7,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   writeFileSync,
   symlinkSync,
   unlinkSync,
@@ -14,7 +15,7 @@ import {
 } from "fs"
 import { join } from "path"
 import { getTermlingsDir } from "./ipc.js"
-import type { BrowserConfig, ProcessState, ActivityLogEntry, ProfileReference } from "./browser-types.js"
+import type { BrowserConfig, ProcessState, ActivityLogEntry, ProfileReference, AgentBrowserState } from "./browser-types.js"
 
 /**
  * Get the browser directory (.termlings/browser)
@@ -102,7 +103,7 @@ export function getActivityHistoryPath(): string {
 
 /**
  * Default browser configuration
- * Headless mode by default (macOS has display conflicts with headed mode)
+ * Runtime start mode defaults to headed for human-in-loop visibility.
  */
 export const DEFAULT_BROWSER_CONFIG: BrowserConfig = {
   port: 8222,
@@ -292,7 +293,7 @@ export async function initializeBrowserDirs(): Promise<void> {
  * Start the PinchTab browser server (orchestrator)
  * The orchestrator manages instances and profiles via REST API
  */
-export async function startBrowser(): Promise<{ pid: number; port: number }> {
+export async function startBrowser(options: { headless?: boolean } = {}): Promise<{ pid: number; port: number }> {
   // Ensure directories exist
   await initializeBrowserDirs()
 
@@ -316,20 +317,28 @@ export async function startBrowser(): Promise<{ pid: number; port: number }> {
 
   // Find an available port before spawning PinchTab
   const spawn = (await import("bun")).spawn
-  const headless = process.env.BRIDGE_HEADLESS ?? "true"
+  const headless = options.headless === undefined
+    ? (process.env.BRIDGE_HEADLESS ?? "false")
+    : (options.headless ? "true" : "false")
   const basePort = config.port
   const availablePort = await findAvailablePort(basePort)
   const profileName = getProjectProfileName() // Per-project profile with separate state
 
   const proc = spawn([config.binaryPath], {
+    detached: true,
     env: {
       ...process.env,
       BRIDGE_HEADLESS: headless,
+      BRIDGE_MODE: process.env.BRIDGE_MODE ?? "dashboard",
       BRIDGE_PORT: String(availablePort),
       BRIDGE_PROFILE: profileName,
       BRIDGE_USER_DATA_DIR: getTermlingsBrowserDir(),
     },
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: "ignore",
   })
+  proc.unref()
 
   const pid = proc.pid
 
@@ -426,6 +435,115 @@ export async function isBrowserRunning(): Promise<boolean> {
 }
 
 /**
+ * Get the directory for per-agent browser state files
+ */
+function getAgentBrowserStateDir(): string {
+  return join(getTermlingsBrowserDir(), "agents")
+}
+
+/**
+ * Update the per-agent browser state file
+ * Written on every browser command so the workspace knows which agent is using the browser
+ */
+export function updateAgentBrowserState(command: string, args: unknown[] = []): void {
+  const sessionId = process.env.TERMLINGS_SESSION_ID
+  if (!sessionId) return
+
+  const dir = getAgentBrowserStateDir()
+  try {
+    mkdirSync(dir, { recursive: true })
+  } catch {
+    return
+  }
+
+  // Extract URL from navigate commands
+  let url: string | undefined
+  if (command === "navigate" && args[0] && typeof args[0] === "string") {
+    url = args[0]
+  }
+
+  const state: AgentBrowserState = {
+    sessionId,
+    agentName: process.env.TERMLINGS_AGENT_NAME,
+    agentDna: process.env.TERMLINGS_AGENT_DNA,
+    url,
+    lastAction: command,
+    lastActionAt: Date.now(),
+  }
+
+  // Try to resolve agent slug from discovered agents
+  try {
+    const agentsDir = join(getTermlingsDir(), "agents")
+    if (existsSync(agentsDir)) {
+      const slugs = readdirSync(agentsDir)
+      for (const slug of slugs) {
+        const soulPath = join(agentsDir, slug, "SOUL.md")
+        if (existsSync(soulPath)) {
+          const content = readFileSync(soulPath, "utf-8")
+          const dnaMatch = content.match(/dna:\s*"?([a-f0-9]+)"?/i)
+          if (dnaMatch && dnaMatch[1] === state.agentDna) {
+            state.agentSlug = slug
+            break
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore slug resolution errors
+  }
+
+  // If this isn't a navigate, preserve the existing URL
+  if (!url) {
+    try {
+      const existingPath = join(dir, `${sessionId}.json`)
+      if (existsSync(existingPath)) {
+        const existing: AgentBrowserState = JSON.parse(readFileSync(existingPath, "utf-8"))
+        state.url = existing.url
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  try {
+    writeFileSync(join(dir, `${sessionId}.json`), JSON.stringify(state, null, 2) + "\n")
+  } catch {
+    // Ignore write errors
+  }
+}
+
+/**
+ * Read all active agent browser states
+ * Returns agents that have used the browser recently (within staleness window)
+ */
+export function readAgentBrowserStates(stalenessMs: number = 300_000): AgentBrowserState[] {
+  const dir = getAgentBrowserStateDir()
+  if (!existsSync(dir)) return []
+
+  const results: AgentBrowserState[] = []
+  const now = Date.now()
+
+  try {
+    const files = readdirSync(dir).filter((f: string) => f.endsWith(".json"))
+    for (const file of files) {
+      try {
+        const content = readFileSync(join(dir, file), "utf-8")
+        const state: AgentBrowserState = JSON.parse(content)
+        if (now - state.lastActionAt < stalenessMs) {
+          results.push(state)
+        }
+      } catch {
+        // Skip unreadable files
+      }
+    }
+  } catch {
+    // Ignore
+  }
+
+  return results.sort((a, b) => b.lastActionAt - a.lastActionAt)
+}
+
+/**
  * Log browser activity to history
  */
 export function logBrowserActivity(
@@ -449,6 +567,11 @@ export function logBrowserActivity(
     appendFileSync(getActivityHistoryPath(), JSON.stringify(entry) + "\n")
   } catch {
     // Ignore logging errors
+  }
+
+  // Also update per-agent browser state
+  if (result === "success") {
+    updateAgentBrowserState(command, args)
   }
 }
 
@@ -478,7 +601,7 @@ export async function requestOperatorIntervention(message: string): Promise<void
 
     console.log(`✓ Operator notified: ${message}`)
     console.log(`\nWaiting for operator to interact with browser...`)
-    console.log(`Operator can run: termlings browser <navigate|screenshot|type|click|extract>`)
+    console.log(`Operator can run: termlings browser tabs list (then use --tab with navigate/screenshot/type/click/extract)`)
   } catch (e) {
     console.error(`Could not notify operator: ${e}`)
   }
@@ -489,10 +612,11 @@ export async function requestOperatorIntervention(message: string): Promise<void
  * Looks for common login indicators
  */
 export async function checkIfLoginRequired(
-  client: any
+  client: { extractText: (options?: { tabId?: string }) => Promise<string> },
+  tabId?: string
 ): Promise<boolean> {
   try {
-    const text = await client.extractText()
+    const text = await client.extractText({ tabId })
     const loginIndicators = [
       /login/i,
       /sign in/i,
@@ -503,7 +627,7 @@ export async function checkIfLoginRequired(
     ]
 
     return loginIndicators.some((indicator) => indicator.test(text))
-  } catch {
-    return false
+  } catch (error) {
+    throw new Error(`Could not check login status: ${error}`)
   }
 }

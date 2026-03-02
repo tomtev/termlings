@@ -1,5 +1,7 @@
 import { checkAndNotifyCalendarEvents, getAllCalendarEvents } from "./calendar.js"
 import { writeMessages } from "./ipc.js"
+import { listSessions } from "../workspace/state.js"
+import { discoverLocalAgents } from "../agents/discover.js"
 
 export interface CalendarExecutionResult {
   eventId: string
@@ -19,19 +21,31 @@ export function executeScheduledCalendarEvents(): CalendarExecutionResult[] {
 
   for (const { event, shouldNotify } of toNotify) {
     if (shouldNotify) {
-      // Send message to each assigned agent
-      for (const agentId of event.assignedAgents) {
+      // Send message to each assigned agent (resolve slug to session)
+      const localAgents = discoverLocalAgents()
+      const sessions = listSessions()
+      for (const agentSlug of event.assignedAgents) {
         try {
-          writeMessages(agentId, [
-            {
-              from: "SCHEDULER",
-              fromName: "Scheduler",
-              text: `[CALENDAR] ${event.title}: ${event.description}`,
-              ts: Date.now(),
-            },
-          ])
+          // Resolve slug to DNA, then find active session
+          const agent = localAgents.find((a) => a.name === agentSlug)
+          const dna = agent?.soul?.dna
+          if (dna) {
+            const session = sessions
+              .filter((s) => s.dna === dna)
+              .sort((a, b) => b.lastSeenAt - a.lastSeenAt)[0]
+            if (session) {
+              writeMessages(session.sessionId, [
+                {
+                  from: "SCHEDULER",
+                  fromName: "Scheduler",
+                  text: `[CALENDAR] ${event.title}: ${event.description}`,
+                  ts: Date.now(),
+                },
+              ])
+            }
+          }
         } catch (e) {
-          console.error(`Failed to notify agent ${agentId} for event ${event.id}: ${e}`)
+          console.error(`Failed to notify agent ${agentSlug} for event ${event.id}: ${e}`)
         }
       }
 

@@ -36,14 +36,23 @@ export interface WorkspaceAgent {
   name: string
   dna: string
   title?: string
+  title_short?: string
+  role?: string
   online: boolean
   typing: boolean
-  activitySource?: "hook"
+  activitySource?: "terminal"
   sessionIds: string[]
   source: "saved" | "ephemeral"
 }
 
-interface Task {
+export interface WorkspaceHuman {
+  id: string
+  name: string
+  title?: string
+  description?: string
+}
+
+export interface Task {
   id: string
   title: string
   status: string
@@ -52,7 +61,7 @@ interface Task {
   updatedAt: number
 }
 
-interface CalendarEvent {
+export interface CalendarEvent {
   id: string
   title: string
   description: string
@@ -72,11 +81,12 @@ interface AgentInboxMessage {
 }
 
 const SESSION_STALE_MS = 35_000
-const HOOK_TYPING_STALE_MS = 8_000
+const TYPING_STALE_MS = 12_000
+const TYPING_MESSAGE_SUPPRESS_MS = 2_000
 
 interface SessionActivity {
   typing: boolean
-  source?: "hook"
+  source?: "terminal"
   updatedAt: number
 }
 
@@ -105,6 +115,10 @@ function sessionsDir(root?: string): string {
 
 function agentsDir(root?: string): string {
   return join(termlingsDir(root), "agents")
+}
+
+function humansDir(root?: string): string {
+  return join(termlingsDir(root), "humans")
 }
 
 function storeDir(root?: string): string {
@@ -171,44 +185,28 @@ export function loadRecentMessages(limit: number = 300, root?: string): Workspac
 
   // Try to load from new structure first
   if (existsSync(storageDir)) {
-    const indexPath = messageIndexPath(root)
-    const index = safeReadJson<{ channels?: any[]; dms?: any[] }>(indexPath, {})
-
-    // Load recent from each channel
+    // Load all channel messages and trim globally after merge.
     const channelsDir = join(storageDir, "channels")
     if (existsSync(channelsDir)) {
-      const channelLimit = Math.ceil((limit * 0.6) / Math.max((index.channels?.length || 1)))
       for (const file of readdirSync(channelsDir)) {
         if (!file.endsWith(".jsonl")) continue
-        const channelMsgs = safeReadJsonLines<WorkspaceMessage>(join(channelsDir, file))
-        if (channelMsgs.length > channelLimit) {
-          messages.push(...channelMsgs.slice(-channelLimit))
-        } else {
-          messages.push(...channelMsgs)
-        }
+        messages.push(...safeReadJsonLines<WorkspaceMessage>(join(channelsDir, file)))
       }
     }
 
-    // Load recent from DMs
+    // Load all DM messages and trim globally after merge.
     const dmsDir = join(storageDir, "dms")
     if (existsSync(dmsDir)) {
-      const dmLimit = Math.ceil((limit * 0.4) / Math.max((index.dms?.length || 1)))
       for (const file of readdirSync(dmsDir)) {
         if (!file.endsWith(".jsonl")) continue
-        const dmMsgs = safeReadJsonLines<WorkspaceMessage>(join(dmsDir, file))
-        if (dmMsgs.length > dmLimit) {
-          messages.push(...dmMsgs.slice(-dmLimit))
-        } else {
-          messages.push(...dmMsgs)
-        }
+        messages.push(...safeReadJsonLines<WorkspaceMessage>(join(dmsDir, file)))
       }
     }
 
     // Load system messages
     const systemPath = join(storageDir, "system.jsonl")
     if (existsSync(systemPath)) {
-      const sysMsgs = safeReadJsonLines<WorkspaceMessage>(systemPath)
-      messages.push(...sysMsgs.slice(-Math.ceil(limit * 0.1)))
+      messages.push(...safeReadJsonLines<WorkspaceMessage>(systemPath))
     }
   }
 
@@ -236,21 +234,37 @@ interface SavedAgent {
   name: string
   dna: string
   title?: string
+  title_short?: string
+  role?: string
 }
 
-function parseSoul(content: string): { name: string; dna: string; title?: string } | null {
+function parseSoul(content: string): { name: string; dna: string; title?: string; title_short?: string; role?: string } | null {
   const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)/)
   if (!frontmatterMatch) return null
   const yaml = frontmatterMatch[1] || ""
   const name = yaml.match(/^name:\s*(.+)$/m)?.[1]?.trim()
   const dna = yaml.match(/^dna:\s*(.+)$/m)?.[1]?.trim()
   const title = yaml.match(/^title:\s*(.+)$/m)?.[1]?.trim()
+  const title_short = yaml.match(/^title_short:\s*(.+)$/m)?.[1]?.trim()
+  const role = yaml.match(/^role:\s*(.+)$/m)?.[1]?.trim()
 
   if (!name || !dna) return null
-  return { name, dna, title }
+  return { name, dna, title, title_short, role }
 }
 
-function listSavedAgents(root?: string): SavedAgent[] {
+function parseHumanSoul(content: string): { name: string; title?: string; description?: string } | null {
+  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)/)
+  if (!frontmatterMatch) return null
+  const yaml = frontmatterMatch[1] || ""
+  const name = yaml.match(/^name:\s*(.+)$/m)?.[1]?.trim()
+  const title = yaml.match(/^title:\s*(.+)$/m)?.[1]?.trim()
+  const description = frontmatterMatch[2]?.trim()
+
+  if (!name) return null
+  return { name, title, ...(description && { description }) }
+}
+
+export function listSavedAgents(root?: string): SavedAgent[] {
   const currentRoot = projectRoot(root)
   const base = agentsDir(currentRoot)
   if (!existsSync(base)) return []
@@ -272,12 +286,61 @@ function listSavedAgents(root?: string): SavedAgent[] {
         name: parsed.name,
         dna: parsed.dna,
         title: parsed.title,
+        title_short: parsed.title_short,
+        role: parsed.role,
       })
     } catch {}
   }
 
   saved.sort((a, b) => a.name.localeCompare(b.name))
   return saved
+}
+
+function getDefaultHuman(root?: string): WorkspaceHuman | null {
+  const currentRoot = projectRoot(root)
+  const base = humansDir(currentRoot)
+  if (!existsSync(base)) return null
+
+  // Look for "default" human first
+  const defaultPath = join(base, "default", "SOUL.md")
+  if (existsSync(defaultPath)) {
+    try {
+      const content = readFileSync(defaultPath, "utf8")
+      const parsed = parseHumanSoul(content)
+      if (parsed) {
+        return {
+          id: "default",
+          name: parsed.name,
+          title: parsed.title,
+          description: parsed.description,
+        }
+      }
+    } catch {}
+  }
+
+  // Fallback to first human found
+  try {
+    for (const entry of readdirSync(base, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue
+      if (entry.name.startsWith(".")) continue
+
+      const soulPath = join(base, entry.name, "SOUL.md")
+      if (!existsSync(soulPath)) continue
+
+      const content = readFileSync(soulPath, "utf8")
+      const parsed = parseHumanSoul(content)
+      if (parsed) {
+        return {
+          id: entry.name,
+          name: parsed.name,
+          title: parsed.title,
+          description: parsed.description,
+        }
+      }
+    }
+  } catch {}
+
+  return null
 }
 
 function mergeAgentPresence(
@@ -294,6 +357,8 @@ function mergeAgentPresence(
       name: agent.name,
       dna: agent.dna,
       title: agent.title,
+      title_short: agent.title_short,
+      role: agent.role,
       online: false,
       typing: false,
       sessionIds: [],
@@ -334,39 +399,74 @@ function mergeAgentPresence(
   })
 }
 
-function resolveHookTyping(sessionId: string, root?: string): { typing: boolean; updatedAt: number } | null {
-  const direct = safeReadJson<{ typing?: unknown; updatedAt?: unknown } | null>(typingPath(sessionId, root), null)
+function resolveTypingState(sessionId: string, root?: string): { typing: boolean; source?: SessionActivity["source"]; updatedAt: number } | null {
+  const direct = safeReadJson<{ typing?: unknown; source?: unknown; updatedAt?: unknown } | null>(typingPath(sessionId, root), null)
   if (direct && typeof direct.typing === "boolean") {
+    const source = direct.source === "terminal" ? "terminal" : undefined
     return {
-      typing: direct.typing,
+      typing: source ? direct.typing : false,
+      source,
       updatedAt: typeof direct.updatedAt === "number" ? direct.updatedAt : 0,
     }
   }
   return null
 }
 
-function collectSessionActivity(sessions: WorkspaceSession[], root?: string): {
+function collectSessionActivity(
+  sessions: WorkspaceSession[],
+  messages: WorkspaceMessage[],
+  root?: string,
+): {
   bySessionId: Map<string, SessionActivity>
   updatedAt: number
 } {
   const bySessionId = new Map<string, SessionActivity>()
-  const now = Date.now()
   let maxUpdatedAt = 0
+  const now = Date.now()
+  const sessionDnaById = new Map(sessions.map((session) => [session.sessionId, session.dna]))
+  const latestMessageBySessionId = new Map<string, number>()
+  const latestMessageByDna = new Map<string, number>()
+
+  const trackLatest = (map: Map<string, number>, key: string | undefined, ts: number) => {
+    if (!key) return
+    const prev = map.get(key) ?? 0
+    if (ts > prev) {
+      map.set(key, ts)
+    }
+  }
+
+  for (const message of messages) {
+    if (!message || typeof message.ts !== "number") continue
+    const ts = message.ts
+    trackLatest(latestMessageBySessionId, message.from, ts)
+    trackLatest(latestMessageBySessionId, message.target, ts)
+    trackLatest(latestMessageByDna, message.fromDna ?? (message.from ? sessionDnaById.get(message.from) : undefined), ts)
+    trackLatest(latestMessageByDna, message.targetDna ?? (message.target ? sessionDnaById.get(message.target) : undefined), ts)
+  }
 
   for (const session of sessions) {
-    const hookTyping = resolveHookTyping(session.sessionId, root)
-    const hookUpdatedAt = hookTyping?.updatedAt ?? 0
-    const hookFresh = hookUpdatedAt > 0 && now - hookUpdatedAt <= HOOK_TYPING_STALE_MS
-    const hookTypingActive = hookFresh && hookTyping?.typing === true
+    const typingState = resolveTypingState(session.sessionId, root)
+    const updatedAt = typingState?.updatedAt ?? 0
+    const latestMessageTs = Math.max(
+      latestMessageBySessionId.get(session.sessionId) ?? 0,
+      latestMessageByDna.get(session.dna) ?? 0,
+    )
 
-    let typing = false
-    let source: SessionActivity["source"]
-    if (hookTypingActive) {
-      typing = true
-      source = "hook"
+    let typing = typingState?.typing === true
+    let source = typingState?.source
+    const isStale = updatedAt <= 0 || now - updatedAt > TYPING_STALE_MS
+    if (typing && isStale) {
+      typing = false
     }
-
-    const updatedAt = hookUpdatedAt
+    if (typing && latestMessageTs >= updatedAt) {
+      typing = false
+    }
+    if (typing && latestMessageTs > 0 && now - latestMessageTs <= TYPING_MESSAGE_SUPPRESS_MS) {
+      typing = false
+    }
+    if (!typing) {
+      source = undefined
+    }
 
     bySessionId.set(session.sessionId, { typing, source, updatedAt })
     if (updatedAt > maxUpdatedAt) maxUpdatedAt = updatedAt
@@ -478,10 +578,9 @@ export function loadWorkspaceSnapshot(root?: string): {
 
   const meta = safeReadJson<WorkspaceMeta | null>(workspaceMetaPath(currentRoot), null)
   const sessions = listSessions(currentRoot)
-  const activity = collectSessionActivity(sessions, currentRoot)
-  const agents = mergeAgentPresence(listSavedAgents(currentRoot), sessions, activity.bySessionId)
-
   const messages = loadRecentMessages(300, currentRoot)
+  const activity = collectSessionActivity(sessions, messages, currentRoot)
+  const agents = mergeAgentPresence(listSavedAgents(currentRoot), sessions, activity.bySessionId)
   const indexPath = messageIndexPath(currentRoot)
   const index = safeReadJson<{ channels?: any[]; dms?: any[] }>(indexPath, { channels: [], dms: [] })
   const channels = index.channels ?? []
