@@ -76,43 +76,29 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
   // TODO: Query sessions directory to get active DNAs
   // For now, all agents are available for selection
 
-  const { selectMenu } = await import("../interactive-menu.js");
-  const { decodeDNA, getTraitColors } = await import("../index.js");
+  const { selectAgentGrid } = await import("../interactive-menu.js");
+  const { renderTerminalSmall } = await import("../index.js");
 
-  // Build menu items for existing agents
-  const menuItems = [
+  // Build grid items for existing agents
+  const gridItems = [
     ...localAgents.map((a) => {
       const name = a.soul?.name || a.name;
-      const title = a.soul?.title ? ` — ${a.soul.title}` : "";
-
-      // Get body color from DNA
-      let faceColor = "";
-      if (a.soul?.dna) {
-        try {
-          const traits = decodeDNA(a.soul.dna);
-          const colors = getTraitColors(traits, false);
-          faceColor = `\x1b[38;2;${colors.faceRgb[0]};${colors.faceRgb[1]};${colors.faceRgb[2]}m█\x1b[0m`;
-        } catch {
-          faceColor = "●";
-        }
-      } else {
-        faceColor = " ";
-      }
+      const avatar = a.soul?.dna ? renderTerminalSmall(a.soul.dna, 0) : "?";
 
       return {
         value: JSON.stringify({ type: "existing", agent: a }),
-        label: `${name}${title}`,
-        description: `${faceColor}`,
+        label: name,
+        avatar,
       };
     }),
     {
       value: JSON.stringify({ type: "create", agent: null }),
-      label: "Spawn random agent",
-      description: "Create a new agent with random DNA",
+      label: "Random",
+      avatar: "🎲\n🎲\n🎲",
     },
   ];
 
-  const selected = await selectMenu(menuItems, "Select agent to launch:");
+  const selected = await selectAgentGrid(gridItems, "Select agent to launch:");
   const { type, agent } = JSON.parse(selected);
 
   if (type === "create") {
