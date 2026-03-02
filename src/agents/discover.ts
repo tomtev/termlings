@@ -80,33 +80,21 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
   const { renderTerminalSmall } = await import("../index.js");
 
   // Build grid items for existing agents
-  const gridItems = [
-    ...localAgents.map((a) => {
-      const name = a.soul?.name || a.name;
-      const title = a.soul?.title || "";
-      const avatar = a.soul?.dna ? renderTerminalSmall(a.soul.dna, 0) : "?";
+  const gridItems = localAgents.map((a) => {
+    const name = a.soul?.name || a.name;
+    const title = a.soul?.title || "";
+    const avatar = a.soul?.dna ? renderTerminalSmall(a.soul.dna, 0) : "?";
 
-      return {
-        value: JSON.stringify({ type: "existing", agent: a }),
-        label: name,
-        title,
-        avatar,
-      };
-    }),
-    {
-      value: JSON.stringify({ type: "create", agent: null }),
-      label: "Random",
-      title: "New agent",
-      avatar: "🎲\n🎲\n🎲",
-    },
-  ];
+    return {
+      value: JSON.stringify({ type: "existing", agent: a }),
+      label: name,
+      title,
+      avatar,
+    };
+  });
 
   const selected = await selectAgentGrid(gridItems, "Select agent to launch:");
   const { type, agent } = JSON.parse(selected);
-
-  if (type === "create") {
-    return "create-random";
-  }
 
   if (agent && agent.soul?.dna && activeAgentDnas.has(agent.soul.dna)) {
     console.log("\n⚠️  Warning: This agent is already active in this room.");
