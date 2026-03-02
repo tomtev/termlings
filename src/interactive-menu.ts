@@ -182,7 +182,7 @@ export async function selectAgentGrid(
           output.write("\n");
         }
 
-        // Add name/title row
+        // Add name row
         for (let col = 0; col < cols; col++) {
           const index = row * cols + col;
           if (index >= items.length) break;
@@ -191,13 +191,24 @@ export async function selectAgentGrid(
           const isSelected = index === selectedIndex;
           const nameColor = isSelected ? "\x1b[1;36m" : "\x1b[0m";
           const reset = "\x1b[0m";
+
+          const name = item.label.substring(0, 10).padEnd(10);
+          output.write(`${nameColor}${name}${reset}`);
+          output.write("  ");
+        }
+        output.write("\n");
+
+        // Add title row (muted)
+        for (let col = 0; col < cols; col++) {
+          const index = row * cols + col;
+          if (index >= items.length) break;
+
+          const item = items[index]!;
           const dimGray = "\x1b[90m";
+          const reset = "\x1b[0m";
 
-          const name = item.label.substring(0, 8);
-          const titleSuffix = item.title ? ` — ${item.title.substring(0, 15)}` : "";
-          const label = `${name}${titleSuffix}`.substring(0, 10).padEnd(10);
-
-          output.write(`${nameColor}${label}${reset}`);
+          const titleText = item.title ? item.title.substring(0, 10).padEnd(10) : "".padEnd(10);
+          output.write(`${dimGray}${titleText}${reset}`);
           output.write("  ");
         }
         output.write("\n\n");
