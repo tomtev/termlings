@@ -151,19 +151,19 @@ export async function selectAgentGrid(
   return new Promise<string>((resolve) => {
     let selectedIndex = 0;
 
+    // Get avatar lines for all items
+    const avatarLines: string[][] = items.map((item) => item.avatar.split("\n"));
+    const maxLines = Math.max(...avatarLines.map((lines) => lines.length));
+
+    // Calculate responsive columns based on terminal width
+    const termWidth = process.stdout.columns || 80;
+    const itemWidth = 12; // Avatar width + spacing
+    const cols = Math.max(1, Math.floor((termWidth - 4) / itemWidth));
+    const rows = Math.ceil(items.length / cols);
+
     const render = () => {
       output.write("\x1b[2J\x1b[H"); // Clear screen
       if (title) output.write(`${title}\n\n`);
-
-      // Get avatar lines for all items
-      const avatarLines: string[][] = items.map((item) => item.avatar.split("\n"));
-      const maxLines = Math.max(...avatarLines.map((lines) => lines.length));
-
-      // Calculate responsive columns based on terminal width
-      const termWidth = process.stdout.columns || 80;
-      const itemWidth = 12; // Avatar width + spacing
-      const cols = Math.max(1, Math.floor((termWidth - 4) / itemWidth));
-      const rows = Math.ceil(items.length / cols);
 
       // Render grid row by row
       for (let row = 0; row < rows; row++) {
