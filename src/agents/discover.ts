@@ -83,17 +83,20 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
   const gridItems = [
     ...localAgents.map((a) => {
       const name = a.soul?.name || a.name;
+      const title = a.soul?.title || "";
       const avatar = a.soul?.dna ? renderTerminalSmall(a.soul.dna, 0) : "?";
 
       return {
         value: JSON.stringify({ type: "existing", agent: a }),
         label: name,
+        title,
         avatar,
       };
     }),
     {
       value: JSON.stringify({ type: "create", agent: null }),
       label: "Random",
+      title: "New agent",
       avatar: "🎲\n🎲\n🎲",
     },
   ];

@@ -126,6 +126,7 @@ export async function confirm(
 
 export interface GridItem {
   label: string;
+  title?: string;
   value: string;
   avatar: string; // Terminal-rendered avatar
 }
@@ -166,29 +167,17 @@ export async function selectAgentGrid(
             const index = row * cols + col;
             if (index >= items.length) break;
 
-            const isSelected = index === selectedIndex;
             const item = items[index]!;
             const avatarLines_ = avatarLines[index]!;
             const avatarLine = avatarLines_[line] || "";
 
-            let displayLine = avatarLine;
-            if (line === Math.floor(maxLines / 2) && isSelected) {
-              displayLine = `\x1b[1;36m▶ ${avatarLine}\x1b[0m`; // Cyan arrow for selected
-            } else if (isSelected && line === 0) {
-              displayLine = `\x1b[1;36m╔${avatarLine}╗\x1b[0m`;
-            } else if (isSelected && line === avatarLines_.length - 1) {
-              displayLine = `\x1b[1;36m╚${avatarLine}╝\x1b[0m`;
-            } else if (isSelected) {
-              displayLine = `\x1b[1;36m║${avatarLine}║\x1b[0m`;
-            }
-
-            output.write(displayLine);
+            output.write(avatarLine);
             output.write("  "); // Spacing between columns
           }
           output.write("\n");
         }
 
-        // Add name/label row
+        // Add name/title row
         for (let col = 0; col < cols; col++) {
           const index = row * cols + col;
           if (index >= items.length) break;
@@ -197,9 +186,12 @@ export async function selectAgentGrid(
           const isSelected = index === selectedIndex;
           const nameColor = isSelected ? "\x1b[1;36m" : "\x1b[0m";
           const reset = "\x1b[0m";
+          const dimGray = "\x1b[90m";
 
-          const name = item.label.substring(0, 8).padEnd(8); // Max 8 chars
-          output.write(`${nameColor}${name}${reset}`);
+          const name = item.label.substring(0, 10).padEnd(10);
+          const titleText = item.title ? `\n${dimGray}${item.title.substring(0, 10)}${reset}` : "";
+
+          output.write(`${nameColor}${name}${reset}${titleText}`);
           output.write("  ");
         }
         output.write("\n\n");
