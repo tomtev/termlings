@@ -5,7 +5,7 @@
  * send only deltas (100 bytes) when files change
  */
 
-import { readFileSync, existsSync } from "fs"
+import { readFileSync, existsSync, readdirSync } from "fs"
 import { join } from "path"
 
 export interface WorkspaceMessage {
@@ -107,8 +107,7 @@ export class WorkspaceDeltaComputer {
         // Check channels
         const channelsDir = join(storageDir, "channels")
         if (existsSync(channelsDir)) {
-          const fs = require("fs")
-          for (const file of fs.readdirSync(channelsDir)) {
+          for (const file of readdirSync(channelsDir)) {
             if (file.endsWith(".jsonl")) {
               const channel = file.replace(".jsonl", "")
               messagesState.channels.add(channel)
@@ -130,8 +129,7 @@ export class WorkspaceDeltaComputer {
         // Check DMs
         const dmsDir = join(storageDir, "dms")
         if (existsSync(dmsDir)) {
-          const fs = require("fs")
-          for (const file of fs.readdirSync(dmsDir)) {
+          for (const file of readdirSync(dmsDir)) {
             if (file.endsWith(".jsonl")) {
               const target = file.replace(".jsonl", "")
               messagesState.dms.add(target)
@@ -207,7 +205,6 @@ export class WorkspaceDeltaComputer {
 
     // Load recent messages from changed channels/DMs
     const storageDir = join(root, ".termlings", "store", "messages")
-    const fs = require("fs")
 
     // Get new messages from changed channels
     for (const channel of changes.channels) {

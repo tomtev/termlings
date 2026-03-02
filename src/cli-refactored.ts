@@ -4,11 +4,8 @@
  * This is the new main CLI router that delegates to individual command modules
  */
 
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
-import { existsSync } from "fs";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { launchWorkspaceWeb } from "./workspace/web-launch.js";
+import { launchWorkspaceTui } from "./tui/workspace-tui.js";
 
 const args = process.argv.slice(2);
 const flags = new Set<string>();
@@ -88,10 +85,13 @@ try {
       process.exit(0);
     }
 
-    if (positional[0] === "workspace" || (!positional[0] && !flags.has("clear"))) {
-      // Start workspace UI - delegate to original cli.ts for now
-      const { launchWorkspaceWeb } = await import("./cli.js");
-      await launchWorkspaceWeb({});
+    if (positional[0] === "web" || positional[0] === "workspace") {
+      await launchWorkspaceWeb(opts);
+      process.exit(0);
+    }
+
+    if (positional[0] === "tui" || (!positional[0] && !flags.has("clear"))) {
+      await launchWorkspaceTui(process.cwd());
       process.exit(0);
     }
 
@@ -143,8 +143,11 @@ try {
        termlings avatar [dna|name] [options]
        termlings <agent> [options]
 
-Workspace (default):
-  termlings                Start the web workspace
+Workspace (default TUI):
+  termlings                Start the terminal workspace UI (current directory only)
+  termlings web            Start the web workspace
+  termlings workspace      Alias for web workspace startup
+  termlings tui            Explicit terminal workspace UI
   termlings init           Initialize .termlings in this project
   termlings --clear        Clear runtime IPC/session state
 
