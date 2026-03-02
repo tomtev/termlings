@@ -39,31 +39,8 @@ const VALUE_FLAGS = new Set([
   "host",
 ]);
 
-// Check if first arg is an agent name — if so, pass everything after it through raw
-const { agents: _agentRegistry } = await import("./agents/index.js");
-if (args[0] && _agentRegistry[args[0]]) {
-  positional.push(args[0]);
-  agentPassthrough = args.slice(1);
-
-  // Parse --name, --dna for the launcher (strip them from passthrough)
-  const filtered: string[] = [];
-  for (let i = 0; i < agentPassthrough.length; i++) {
-    const a = agentPassthrough[i]!;
-    if (a.startsWith("--name=")) {
-      opts.name = a.slice(7);
-    } else if (a.startsWith("--dna=")) {
-      opts.dna = a.slice(6);
-    } else if (a === "--name" && i + 1 < agentPassthrough.length) {
-      opts.name = agentPassthrough[++i]!;
-    } else if (a === "--dna" && i + 1 < agentPassthrough.length) {
-      opts.dna = agentPassthrough[++i]!;
-    } else {
-      filtered.push(a);
-    }
-  }
-  agentPassthrough = filtered;
-} else {
-  for (let i = 0; i < args.length; i++) {
+// Parse arguments
+for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg.startsWith("--")) {
       const eqIdx = arg.indexOf("=");
@@ -85,7 +62,6 @@ if (args[0] && _agentRegistry[args[0]]) {
       positional.push(arg);
       if (!input) input = arg;
     }
-  }
 }
 
 // --- Routing ---
@@ -110,8 +86,8 @@ if (flags.has("clear")) {
   process.exit(0);
 }
 
-// 1. Agent launcher: termlings <cli> [flags...]
-// If there are local agents, show picker. Otherwise launch CLI directly.
+// 1. Agent launcher: termlings claude [flags...]
+const { agents: _agentRegistry } = await import("./agents/index.js");
 let agentAdapter = _agentRegistry[positional[0] ?? ""];
 
 if (agentAdapter) {
@@ -1526,7 +1502,6 @@ Spectator (owner commands):
 
 Agents (shared task system):
   claude [flags...]        Start Claude Code as an agent
-  <name> [flags...]        Launch saved agent (e.g., "termlings my-agent")
   --name <name>            Agent display name
   --dna <hex>              Agent avatar DNA
 
