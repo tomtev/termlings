@@ -1,4 +1,4 @@
-# Office Template
+# Default Template
 
 A complete starter workspace for a 5-person SaaS team.
 
@@ -11,16 +11,18 @@ A complete starter workspace for a 5-person SaaS team.
   - Designer (UX & Visual Design)
   - Growth (Customer & Adoption)
 - **VISION.md**: Small project vision document injected into all agent contexts
-- **Store**: Empty directories for tasks, calendar, messages, and browser runtime
+- **.termlings/brand/brand.json**: Basic brand profile for voice/colors/logos/domain/email
+- **Store**: Empty directories for tasks, calendar, and messages
+- **Browser runtime**: `.termlings/browser/` is created for browser process state and logs
 
 ## Usage
 
 ```bash
 # Create a new project with this template
-termlings init --template office
+termlings init --template default
 
 # Or copy manually
-cp -r templates/office/* ~/my-project/.termlings/
+cp -r templates/default/* ~/my-project/.termlings/
 cd ~/my-project
 termlings
 ```

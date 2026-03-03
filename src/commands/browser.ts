@@ -37,7 +37,7 @@ function isTabActive(tab: { active?: boolean; current?: boolean; selected?: bool
 export async function handleBrowser(flags: Set<string>, positional: string[], opts: Record<string, string>) {
   const {
     initializeBrowserDirs,
-    getBrowserConfig,
+    getOrCreateProfileReference,
     startBrowser,
     stopBrowser,
     isBrowserRunning,
@@ -141,9 +141,10 @@ PROFILES:
       );
       const envHeadless = (process.env.BRIDGE_HEADLESS ?? "false").toLowerCase() !== "false";
       const effectiveHeadless = headlessMode ?? envHeadless;
+      const profileRef = getOrCreateProfileReference();
       console.log(`✓ Browser started (PID ${pid}, port ${port})`);
       console.log(`Mode: ${effectiveHeadless ? "headless" : "headed"}`);
-      console.log(`Profile: .termlings/browser/profile/`);
+      console.log(`Profile: ${profileRef.location}`);
       console.log(`Dashboard: http://127.0.0.1:${port}/dashboard`);
       return;
     } catch (e) {

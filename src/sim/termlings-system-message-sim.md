@@ -19,6 +19,7 @@ termlings sim gesture [wave|talk]
 
 - Keep normal task/messaging/calendar workflow exactly as-is.
 - Communicate via `termlings message ...` (same as TUI), not SIM-specific chat/send actions.
+- If unclear about recent context, run `termlings brief`, then `termlings conversation human:default --limit 120`, then `termlings conversation recent --limit 120` if needed.
 - Use `map` before moving so you can coordinate around active agents.
 - Include coordinates in teammate updates when movement matters.
 - If `map` reports no metadata, request that a sim runtime be started with:

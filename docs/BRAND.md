@@ -1,11 +1,11 @@
-# Brand Profiles (`brand/`)
+# Brand Profiles (`.termlings/brand/`)
 
 `termlings brand` manages canonical brand profiles for agents and tooling.
 Current default behavior uses the `default` profile.
 
 ```text
-brand/brand.json
-brand/profiles/<id>.json
+.termlings/brand/brand.json
+.termlings/brand/profiles/<id>.json
 ```
 
 Use this for public brand metadata only:

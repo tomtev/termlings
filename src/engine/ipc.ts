@@ -6,6 +6,8 @@ import { join } from "path"
  * This is `.termlings/` relative to the current working directory.
  */
 export function getTermlingsDir(): string {
+  const explicitIpcDir = process.env.TERMLINGS_IPC_DIR?.trim()
+  if (explicitIpcDir) return explicitIpcDir
   return join(process.cwd(), ".termlings")
 }
 

@@ -5,9 +5,9 @@ The browser service provides agents and operators with a shared persistent web b
 ## Overview
 
 - **Per-project isolation**: Each project has its own dedicated browser instance with isolated profile
-- **Agent tracking**: Agents automatically claim tabs with their names, visible in PinchTab dashboard
+- **Agent attribution**: Browser commands include agent/session identity and are logged locally
 - **Persistent state**: Cookies, login state, and history persist across restarts
-- **Tab locking**: Prevents conflicts between concurrent agents working on the same browser
+- **Tab targeting**: Use explicit tab IDs (`--tab`) for deterministic multi-agent runs
 - **Activity logging**: All interactions recorded with agent identity in audit trail
 - **Human-in-loop**: Agents can request operator help for tasks like login
 
@@ -41,7 +41,7 @@ Starts PinchTab server in **headed mode** (visible UI) by default for human-in-l
 
 ```
 ✓ Browser started (PID 6866, port 9867)
-Profile: .termlings/browser/profile/
+Profile: ~/.pinchtab/profiles/project-<project-name>
 ```
 
 Use headed mode explicitly:
@@ -176,15 +176,15 @@ Returns all cookies as JSON:
 ]
 ```
 
-## Agent Integration & Tab Locking
+## Agent Integration
 
 ### Automatic Agent Tracking
 
 When an agent runs browser commands, it automatically:
 
-1. **Claims a dedicated tab** - Each agent gets its own tab locked to their name
-2. **Shows in dashboard** - Agent name appears in PinchTab's activity feed and agents list
-3. **Prevents conflicts** - Tab locking ensures concurrent agents don't interfere
+1. **Attaches identity headers** - Session ID, agent name, and DNA are sent with browser API requests
+2. **Writes local audit logs** - Actions are appended to `.termlings/browser/history.jsonl`
+3. **Updates per-agent state** - Last action and URL are tracked in `.termlings/browser/agents/*.json`
 
 Access the PinchTab dashboard to see agent activity:
 
@@ -211,14 +211,7 @@ termlings browser navigate "https://other-site.com"
 termlings browser screenshot --tab <tab-id>
 ```
 
-Each agent's commands are tracked separately in the dashboard and activity log with their identity preserved.
-
-### Tab Locking Details
-
-- **Automatic**: Agents don't need to manually lock tabs
-- **Per-command**: Each browser command runs in the agent's tab context
-- **TTL**: Tab locks auto-expire after 1 hour of agent inactivity
-- **Owner**: PinchTab tracks which agent owns each tab via the owner field
+Use `termlings browser tabs list` and pass `--tab <tab-id>` to avoid agents stepping on each other in the active tab.
 
 ## Human-in-Loop Workflows
 
@@ -312,7 +305,7 @@ Browser configuration is stored in `.termlings/browser/config.json`:
   "port": 8222,
   "binaryPath": "pinchtab",
   "autoStart": false,
-  "profilePath": "/path/to/.termlings/browser/profile",
+  "profilePath": "/Users/you/.pinchtab/profiles/project-<project-name>",
   "timeout": 30000
 }
 ```
@@ -325,7 +318,7 @@ Browser configuration is stored in `.termlings/browser/config.json`:
 
 ## Shared Profile
 
-All agents and operators share the same Chrome profile at `~/.pinchtab/profiles/termlings/Default/` (managed automatically by PinchTab). This enables:
+All agents and operators in the same project share one project-scoped profile at `~/.pinchtab/profiles/project-<project-name>/` (managed by PinchTab). This enables:
 
 - **Persistent authentication**: Log in once, all agents can access authenticated content
 - **Shared cookies**: Session cookies and tracking persist across agent transitions and restarts
@@ -335,12 +328,18 @@ All agents and operators share the same Chrome profile at `~/.pinchtab/profiles/
 
 ## Headed Mode
 
-The browser always runs in **headed mode** (visible UI). This allows:
+The browser runs in **headed mode by default** (visible UI). This allows:
 
 - **Operator visibility**: Operators can see exactly what's happening
 - **Quick intervention**: Operators can take over when needed
 - **Debugging**: Visual inspection helps troubleshoot issues
 - **Security**: Less chance of unexpected behavior going unnoticed
+
+You can still run headless mode when needed:
+
+```bash
+termlings browser start --headless
+```
 
 See: https://pinchtab.com/docs/headless-vs-headed/
 

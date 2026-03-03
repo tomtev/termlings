@@ -49,7 +49,7 @@ Perfect for:
 - Team coordination messages
 
 ### Web (in UI)
-The web workspace automatically displays avatars:
+The workspace interfaces automatically display avatars:
 
 1. **Agent cards** - Shows avatar in agent list
 2. **Message streams** - Avatar next to each message

@@ -73,6 +73,11 @@ OPERATOR EXPECTATIONS:
   2. Give next step + ETA
   3. State blockers clearly if stuck
   4. High priority: human messages get immediate attention
+
+HISTORY:
+  termlings conversation human:default
+  termlings conversation agent:developer --limit 120
+  termlings conversation recent --limit 200
 `);
     return;
   }

@@ -31,9 +31,9 @@ USAGE:
   termlings brand schema [--json]
 
 FILES:
-  brand/brand.json          Default brand profile
-  brand/profiles/<id>.json  Additional profiles (future multi-brand support)
-  brand/logo.svg            Optional logo asset (recommended)
+  .termlings/brand/brand.json          Default brand profile
+  .termlings/brand/profiles/<id>.json  Additional profiles (future multi-brand support)
+  .termlings/brand/logo.svg            Optional logo asset (recommended)
 
 COMMANDS:
   show      Print current brand profile (default command)
@@ -56,7 +56,7 @@ FIELD NOTES:
   identity.email.*            Public sender/contact emails (non-secret).
   sources                     Files used by extraction (audit/debug aid).
 
-SCHEMA STRUCTURE (brand/brand.json):
+SCHEMA STRUCTURE (.termlings/brand/brand.json):
 {
   "schemaVersion": 1,
   "name": "Termlings",

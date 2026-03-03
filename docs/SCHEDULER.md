@@ -67,7 +67,7 @@ termlings scheduler --daemon
    - Sends notifications when events start
 
 3. **Agents receive notifications**
-   - See in web UI
+   - See in workspace TUI
    - Can check calendar for details
    ```bash
    termlings calendar show <event-id>

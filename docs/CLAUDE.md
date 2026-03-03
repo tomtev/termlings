@@ -103,8 +103,9 @@ Session state is stored in `.termlings/sessions/` and persists across restarts.
 If you get connection errors:
 
 ```bash
-# Clear runtime state
-termlings --clear
+# Remove stale presence/session files if needed
+rm -f .termlings/sessions/*.json
+rm -f .termlings/*.typing.json
 
 # Re-initialize if needed
 termlings init --force

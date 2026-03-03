@@ -148,8 +148,7 @@ export function ensureWorkspaceDirs(root = process.cwd()): void {
   mkdirSync(join(base, "humans"), { recursive: true })
   mkdirSync(sessionsDir(root), { recursive: true })
   mkdirSync(storeDir(root), { recursive: true })
-  mkdirSync(join(storeDir(root), "browser"), { recursive: true })
-  mkdirSync(join(base, "browser", "profile"), { recursive: true })
+  mkdirSync(join(base, "browser"), { recursive: true })
   msgStorage.initializeMessageDirs(root)
   touchWorkspace(root)
 }

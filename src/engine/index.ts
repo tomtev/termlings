@@ -25,3 +25,4 @@ export * from "./agent-listing.js"
 // Utilities
 export * from "./query-patterns.js"
 export * from "./brand.js"
+export * from "./skills.js"

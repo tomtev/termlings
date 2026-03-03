@@ -15,6 +15,8 @@ import { handleRequest } from "./request.js";
 import { handleOrgChart } from "./org-chart.js";
 import { handleBrief } from "./brief.js";
 import { handleBrand } from "./brand.js";
+import { handleConversation } from "./conversation.js";
+import { handleSkills } from "./skills.js";
 
 export async function routeCommand(
   positional: string[],
@@ -40,6 +42,10 @@ export async function routeCommand(
       await handleMessage(flags, positional);
       return true;
 
+    case "conversation":
+      await handleConversation(flags, positional, opts);
+      return true;
+
     case "task":
       await handleTask(flags, positional);
       return true;
@@ -50,6 +56,10 @@ export async function routeCommand(
 
     case "brand":
       await handleBrand(flags, positional, opts);
+      return true;
+
+    case "skills":
+      await handleSkills(flags, positional);
       return true;
 
     case "browser":

@@ -69,7 +69,7 @@ When you initialize a Termlings workspace with `termlings init`, you'll be promp
 $ termlings init
 🚀 Initializing Termlings workspace
 Select template [1]: 1
-✓ Initialized .termlings using template: office
+✓ Initialized .termlings using template: default
 What's your name? [tommy]
 ✓ Your name: Tommy
 ```
@@ -331,7 +331,7 @@ termlings human delegate alice --for "2 hours" --actions "approve_deploys,manage
 cat .termlings/humans/default/SOUL.md
 
 # See who's messaging you
-# Check workspace TUI or web UI
+# Check workspace TUI
 ```
 
 ### Update Your Info

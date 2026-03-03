@@ -19,7 +19,7 @@ Every termling has:
 - Used in file paths: `.termlings/agents/alice/`
 
 ### 2. Display Name (optional)
-- What appears in messages and web UI
+- What appears in messages and TUI
 - Can differ from folder name
 - Example: folder `alice` → display name `"Alice The Great"`
 

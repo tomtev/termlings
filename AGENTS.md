@@ -24,13 +24,15 @@ termlings (CLI)
   ├─ termlings claude         # launch agent session
   ├─ termlings org-chart      # discover org structure + active status
   ├─ termlings message ...    # direct messaging
+  ├─ termlings conversation   # read conversation history
   ├─ termlings task ...       # task management
   ├─ termlings calendar ...   # calendar viewing
-  └─ termlings web            # local workspace UI server
+  ├─ termlings --server       # secure local HTTP API server
+  └─ termlings                # terminal workspace UI (default)
 
 Workspace state: <project>/.termlings/
   sessions/*.json
-  store/messages.jsonl
+  store/messages/*
   store/tasks/tasks.json
   store/calendar/calendar.json
   agents/<agent-id>/SOUL.md
@@ -85,7 +87,18 @@ termlings <agent-id>
 ```bash
 termlings brief                    # Session startup snapshot
 termlings org-chart                # See org structure + who's online
+termlings skills list              # List available SKILL.md skills
 termlings message <target> <text>  # Send a direct message
+termlings conversation <target>    # Read recent DM/channel history
+```
+
+### Skills
+```bash
+termlings skills --help                                # Full skills usage
+termlings skills list                                  # Local skill visibility (.agents/.claude)
+termlings skills install <source> [options...]         # Wraps: npx skills add
+termlings skills check                                 # Wraps: npx skills check
+termlings skills update                                # Wraps: npx skills update
 ```
 
 ### Task management
@@ -170,7 +183,7 @@ Typing presence is terminal-first.
 - Source of truth: launcher PTY activity + terminal busy detection.
 - State file: `.termlings/<sessionId>.typing.json` with `source: "terminal"`.
 - Auto-clear on inactivity is handled by the launcher.
-- Freshness and message-based stale clearing are enforced by workspace server and TUI.
+- Freshness and message-based stale clearing are enforced by local runtime + TUI.
 - Legacy Claude hooks are no longer used; startup cleans old hook registration if present.
 
 ## CLI architecture
@@ -204,7 +217,7 @@ termlings browser --help       # Browser automation guide
 ## Persistence and realtime
 
 - CLI writes JSON files into `.termlings/`.
-- Web app reads snapshots and streams updates from filesystem change watchers.
+- TUI and automation processes read snapshots from filesystem-backed state.
 - Session online/offline comes from `.termlings/sessions/*.json`.
 
 ## Usage examples
@@ -351,6 +364,7 @@ termlings calendar enable evt-001
 ## Docs
 
 - [docs/HOOKS.md](docs/HOOKS.md)
+- [docs/SKILLS.md](docs/SKILLS.md)
 - [src/termlings-system-message.md](src/termlings-system-message.md)
 - [docs/team-coordination.md](docs/team-coordination.md)
 - [docs/browser.md](docs/browser.md)

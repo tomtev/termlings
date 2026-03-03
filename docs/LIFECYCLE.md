@@ -129,7 +129,7 @@ Runtime behavior:
 
 - messaging appends to `store/messages.jsonl`
 - task/calendar commands update JSON stores
-- browser actions log into `.termlings/store/browser/history.jsonl`
+- browser actions log into `.termlings/browser/history.jsonl`
 
 ## Session End
 

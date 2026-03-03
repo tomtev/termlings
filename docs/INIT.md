@@ -17,19 +17,18 @@ This creates `.termlings/` directory with all necessary files and folders.
 ├── VISION.md                     # Project vision (template-provided)
 ├── sessions/                     # Active agent sessions
 ├── store/
-│   ├── messages.jsonl           # Message history
+│   ├── messages/                # Message history (channels/dms/system + index)
 │   ├── tasks/
 │   │   └── tasks.json           # Task definitions
 │   ├── calendar/
 │   │   └── calendar.json        # Calendar events
-│   └── browser/
-│       ├── config.json
-│       ├── process.json
-│       └── history.jsonl
 ├── agents/                       # Saved agent definitions
 │   └── [your agents here]
-└── browser/                      # Browser automation files
-    └── [profile and config]
+└── browser/                      # Browser automation runtime state
+    ├── config.json              # Browser settings (created on browser init/start)
+    ├── process.json             # Running process info (when browser is started)
+    ├── history.jsonl            # Browser action log
+    └── profile.json             # Profile reference for this project
 ```
 
 ## Running Initialization
@@ -53,46 +52,32 @@ Re-runs initialization even if `.termlings/` already exists. Useful for:
 - Updating to new Termlings version
 - Adding missing directories
 
+### Choose explicit template
+```bash
+termlings init --template default
+termlings init --template https://github.com/your-org/termlings-template.git#main
+```
+
+For template formats and layout requirements, see [TEMPLATES.md](TEMPLATES.md).
+
 ## First Time Setup
 
 When you first run `termlings` in a project:
 
 1. It checks for `.termlings/`
-2. If missing, runs `termlings init` automatically
-3. Creates workspace and registers project
-4. Launches web UI at `http://localhost:4173`
+2. If missing, it shows the init banner and creates minimal workspace directories
+3. Launches the terminal workspace UI
 
-## Project Registration
+For full template setup, run `termlings init --template default`.
 
-Your project is automatically registered in:
-```
-~/.termlings/hub/projects.json
-```
+## Reset Runtime Files
 
-This allows the web UI to:
-- Find all your projects
-- Switch between them via tabs
-- Share a single web server across projects
-
-## Reset Workspace
-
-Clear all runtime state but keep project structure:
+To clear stale runtime presence without touching tasks/calendar/agents:
 
 ```bash
-termlings --clear
+rm -f .termlings/sessions/*.json
+rm -f .termlings/*.typing.json
 ```
-
-This removes:
-- Active sessions
-- IPC queue files
-- Message queue
-- Typing state
-
-But preserves:
-- Agents (`.termlings/agents/`)
-- Tasks
-- Calendar
-- Settings
 
 ## Troubleshooting
 
@@ -123,15 +108,11 @@ Make sure you're in the project root where you want the workspace.
 ├── sessions/
 │   └── [sessionId].json  # Per-agent session state
 ├── store/
-│   ├── messages.jsonl    # Chat history (JSONL)
+│   ├── messages/         # Chat/DM/system history
 │   ├── tasks/
 │   │   └── tasks.json    # All tasks
 │   ├── calendar/
 │   │   └── calendar.json # Calendar events
-│   └── browser/
-│       ├── config.json   # Browser settings
-│       ├── process.json  # Running process info
-│       └── history.jsonl # Browser automation log
 ├── agents/
 │   ├── [agent-name]/
 │   │   ├── SOUL.md       # Personality/role
@@ -139,6 +120,8 @@ Make sure you're in the project root where you want the workspace.
 │   └── [other agents]
 └── browser/
     ├── config.json       # Browser config
+    ├── process.json      # Running process state
+    ├── history.jsonl     # Browser automation log
     └── profile.json      # Profile reference
 ```
 
@@ -148,7 +131,7 @@ After initialization, you can customize:
 
 1. **Agents** - Create agents with `termlings create`
 2. **Calendar** - Set up events with `termlings calendar create`
-3. **Tasks** - Add tasks via web UI or programmatically
+3. **Tasks** - Add tasks via CLI or programmatically
 
 ## Best Practices
 
@@ -165,6 +148,5 @@ After initialization, you can customize:
 
 ## Related
 
-- [WEB.md](WEB.md) - How web workspace UI works
 - [CREATE.md](CREATE.md) - Creating agents
 - [CLAUDE.md](CLAUDE.md) - Getting started with Claude

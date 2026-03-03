@@ -9,13 +9,13 @@ function projectObjectsDir(): string {
 }
 
 /**
- * Load optional starter objects from templates/office/objects/
+ * Load optional starter objects from templates/default/objects/
  * (may be empty/absent in lightweight workspace templates).
  */
 export function loadStarterObjects(): Record<string, ObjectDef> {
   try {
     const dir = dirname(fileURLToPath(import.meta.url))
-    const starterPath = join(dir, "..", "..", "templates", "office", "objects", "starter.json")
+    const starterPath = join(dir, "..", "..", "templates", "default", "objects", "starter.json")
 
     if (!existsSync(starterPath)) {
       return {}
@@ -78,8 +78,9 @@ export function loadCustomObjects(): Record<string, ObjectDef> {
 
 export function saveCustomObjects(objects: Record<string, ObjectDef>): void {
   try {
-    mkdirSync(customObjectsDir, { recursive: true })
-    const file = customObjectsFile
+    const dir = projectObjectsDir()
+    mkdirSync(dir, { recursive: true })
+    const file = join(dir, "custom-objects.json")
     writeFileSync(file, JSON.stringify(objects, null, 2) + "\n")
     const count = Object.keys(objects).length
     console.log(`✓ Saved ${count} custom object(s) to ${file}`)

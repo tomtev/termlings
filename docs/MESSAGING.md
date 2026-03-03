@@ -27,6 +27,27 @@ Tells you:
 termlings message <target> <text>
 ```
 
+## Read Conversations
+
+```bash
+termlings conversation <target>
+```
+
+Examples:
+```bash
+# Most important context thread (operator/human)
+termlings conversation human:default
+
+# Specific agent thread
+termlings conversation agent:developer --limit 150
+
+# Channel history
+termlings conversation channel:workspace --limit 100
+
+# Cross-thread recent timeline (secondary context pass)
+termlings conversation recent --limit 200
+```
+
 ### Message Targets
 
 **1. Session ID** (current session only)
@@ -87,7 +108,11 @@ termlings message human:default "Stuck on CORS issue - need to pair with someone
 
 ## Message History
 
-All messages are logged to `.termlings/store/messages.jsonl` (JSONL format).
+Messages are logged under `.termlings/store/messages/`:
+- Channel logs: `.termlings/store/messages/channels/*.jsonl`
+- DM logs: `.termlings/store/messages/dms/*.jsonl`
+- System logs: `.termlings/store/messages/system.jsonl`
+- Thread index: `.termlings/store/messages/index.json`
 
 Each entry includes:
 - Timestamp
@@ -95,7 +120,7 @@ Each entry includes:
 - Message text
 - Metadata (agent slug, etc.)
 
-Access history programmatically or view in web UI.
+Use `termlings conversation ...` for terminal history.
 
 ## Integration with Tasks
 

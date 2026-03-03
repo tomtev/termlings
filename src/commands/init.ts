@@ -12,32 +12,40 @@ Set up a new Termlings project with agents, tasks, calendar, and storage.
 USAGE:
   termlings init              Initialize new workspace (interactive)
   termlings init --force      Re-run setup and template selection
+  termlings init --template <name|git-url>
 
 CREATES:
   .termlings/
   ├── agents/                Saved agents (avatar + metadata)
   ├── sessions/              Active agent sessions
   ├── store/                 Persistent data
-  ├── browser/               Browser automation profile
+  ├── brand/                 Brand profile data
+  ├── browser/               Browser runtime state (history, process, config)
   └── VISION.md              Project vision injected into agent context (template-provided)
 
 TEMPLATES:
   Currently available:
-  • office - Corporate setting with 5 default agents
+  • default - Corporate setting with 5 default agents
   (More templates coming)
 
 EXAMPLES:
   $ termlings init
   🚀 Initializing Termlings workspace
-  Select a template: office
+  Select a template: default
   ✓ Workspace created
+
+  $ termlings init --template default
+  ✓ Initialized .termlings using template: default
+
+  $ termlings init --template https://github.com/org/template-repo.git#main
+  ✓ Initialized .termlings using template: https://github.com/org/template-repo.git#main
 
   $ termlings init --force
   🚀 Re-initializing Termlings workspace
   (Keeps existing data, re-runs setup)
 
 NEXT STEPS:
-  1. termlings             Start the workspace web UI
+  1. termlings             Start the workspace TUI
   2. termlings claude      Launch Claude Code as an agent
   3. termlings org-chart   See team hierarchy
   4. termlings task list   Check available tasks
@@ -60,8 +68,15 @@ NEXT STEPS:
   const { printInitBanner, printPostInitBanner } = await import("../banner.js");
   printInitBanner();
 
-  const { ensureWorkspaceInitializedForLaunch } = await import("../workspace/web-launch.js");
-  const ready = await ensureWorkspaceInitializedForLaunch(forceSetup);
+  const { ensureWorkspaceInitialized } = await import("../workspace/initialize.js");
+  let ready = false;
+  try {
+    ready = await ensureWorkspaceInitialized(forceSetup, process.cwd(), opts.template);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(message);
+    process.exit(1);
+  }
   if (ready) {
     // Count agents for post-init banner
     const { discoverLocalAgents } = await import("../agents/discover.js");

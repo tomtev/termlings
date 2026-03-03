@@ -352,7 +352,7 @@ function mergeString(base: string, next: unknown): string {
 }
 
 export function getBrandDir(root = process.cwd()): string {
-  return join(root, "brand");
+  return join(root, ".termlings", "brand");
 }
 
 export function normalizeBrandProfile(profile?: string): string {
@@ -393,8 +393,8 @@ export function createBrandTemplate(root = process.cwd()): BrandData {
       palette: [],
     },
     logos: {
-      main: firstExistingRelative(root, ["brand/logo.svg", "brand/logo.png", "public/logo.svg", "public/logo.png"]),
-      mark: firstExistingRelative(root, ["brand/mark.svg", "brand/mark.png", "public/mark.svg", "public/mark.png"]),
+      main: firstExistingRelative(root, [".termlings/brand/logo.svg", ".termlings/brand/logo.png", "public/logo.svg", "public/logo.png"]),
+      mark: firstExistingRelative(root, [".termlings/brand/mark.svg", ".termlings/brand/mark.png", "public/mark.svg", "public/mark.png"]),
       favicon: firstExistingRelative(root, ["public/favicon.svg", "public/favicon.png", "public/favicon.ico"]),
     },
     identity: {
@@ -709,8 +709,8 @@ export function extractBrand(root = process.cwd(), fromRaw?: string): BrandExtra
   }
 
   if (from.includes("logos")) {
-    const main = firstExistingRelative(root, ["brand/logo.svg", "brand/logo.png", "public/logo.svg", "public/logo.png"]);
-    const mark = firstExistingRelative(root, ["brand/mark.svg", "brand/mark.png", "public/mark.svg", "public/mark.png"]);
+    const main = firstExistingRelative(root, [".termlings/brand/logo.svg", ".termlings/brand/logo.png", "public/logo.svg", "public/logo.png"]);
+    const mark = firstExistingRelative(root, [".termlings/brand/mark.svg", ".termlings/brand/mark.png", "public/mark.svg", "public/mark.png"]);
     const favicon = firstExistingRelative(root, ["public/favicon.svg", "public/favicon.png", "public/favicon.ico"]);
     if (main || mark || favicon) {
       extracted.logos = {

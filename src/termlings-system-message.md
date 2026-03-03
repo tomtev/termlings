@@ -64,9 +64,11 @@ termlings --help                       # Full CLI reference
 termlings brief                        # Session startup snapshot
 termlings org-chart --help             # Team discovery
 termlings message --help               # Messaging guide
+termlings conversation --help          # Read recent conversation history
 termlings request --help               # Request inputs/decisions/env vars
 termlings task --help                  # Task management
 termlings calendar --help              # Calendar events
+termlings skills --help                # Skills discovery/install/update (skills.sh wrapper)
 termlings brand --help                 # Brand CLI
 termlings browser --help               # Browser (browsing, testing, automation)
 ```
@@ -78,6 +80,8 @@ termlings browser --help               # Browser (browsing, testing, automation)
 termlings brief                                    # First command at session start
 termlings org-chart                                # See team hierarchy + status
 termlings message agent:growth "hello"             # Message teammate by slug
+termlings conversation human:default --limit 120   # Human/operator DM thread
+termlings conversation recent --limit 120          # Cross-thread recent context (secondary)
 termlings message human:default "help needed"      # Message operator
 termlings request env VAR_NAME "reason" "url"      # Request env var from operator
 termlings request confirm "Deploy to production?"  # Ask yes/no question
@@ -113,6 +117,34 @@ termlings brand extract --write                    # Try auto-extract from proje
 termlings brand validate --strict                  # Validate profile shape + paths
 ```
 
+**Skills (skills.sh wrapper + local discovery):**
+```bash
+termlings skills list                               # List skills currently accessible to this workspace
+termlings skills install <source> [options...]      # Install from skills.sh source (wraps: npx skills add)
+termlings skills check                              # Show installed skills managed by skills.sh
+termlings skills update                             # Update installed skills
+termlings skills find <query>                       # Search skills in registry/catalog
+termlings skills remove <skill...>                  # Remove installed skills
+```
+
+**Common install examples:**
+```bash
+termlings skills install vercel-labs/agent-skills --skill find-skills --yes
+termlings skills install https://github.com/org/repo --yes
+```
+
+**Skills docs workflow (required when adding/updating skills):**
+1. Inspect current accessible skills: `termlings skills list`
+2. Inspect skills.sh-managed installs: `termlings skills check`
+3. Find candidates: `termlings skills find <query>`
+4. Install selected skill(s): `termlings skills install <source> [options]`
+5. Re-verify access in this workspace: `termlings skills list`
+6. Update periodically: `termlings skills update`
+
+**Official skills.sh docs:**
+- CLI reference: `https://skills.sh/docs/cli`
+- Source formats: `https://skills.sh/docs/cli/sources`
+
 **Browser (PinchTab root endpoints + tab targeting):**
 ```bash
 termlings browser tabs list                         # discover tab IDs
@@ -140,6 +172,16 @@ termlings browser click "button.submit" --tab <tab-id>
   - Maps to `.termlings/humans/default/` folder
   - Messages queued if operator offline
   - Use for blockers, decisions, and resource requests
+
+## Context Recovery (Required When Unsure)
+
+If you are unsure what someone is referring to (for example "did you fix this?" or "status?"), do not guess.
+
+1. Run `termlings brief` for a workspace snapshot.
+2. Run `termlings conversation human:default --limit 120` first.
+3. If needed, run `termlings conversation recent --limit 120` for cross-thread context.
+4. If needed, run `termlings conversation agent:<slug> --limit 120`.
+5. Then reply with `termlings message ...` including concrete status.
 
 ## Reporting Chain Policy
 

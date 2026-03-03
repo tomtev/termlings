@@ -4,7 +4,6 @@
  * This is the new main CLI router that delegates to individual command modules
  */
 
-import { launchWorkspaceWeb } from "./workspace/web-launch.js";
 import { launchWorkspaceTui } from "./tui/tui.js";
 import { getUpdateNotice } from "./update-check.js";
 import { runSimCommand } from "./sim/index.js";
@@ -21,8 +20,10 @@ const VALUE_FLAGS = new Set([
   "name", "dna", "owner", "purpose", "dangerous-skip-confirmation",
   "slug", "title", "title-short", "title_short", "role", "team", "reports-to", "reports_to",
   "port", "host", "color", "size", "padding", "bg", "fps", "duration", "out",
-  "headed", "headless", "depth", "max-tokens", "maxTokens", "tab", "tab-id", "tabId",
-  "from", "primary", "logo", "domain", "email", "website", "profile",
+  "headed", "headless", "depth", "max-tokens", "maxTokens", "tab", "tab-id", "tabId", "limit",
+  "from", "primary", "logo", "domain", "email", "website", "profile", "template",
+  "token", "cors-origin", "cors_origin", "allowed-projects", "allowed_projects",
+  "max-body-kb", "max_body_kb", "rate-limit", "rate_limit", "sse-max", "sse_max",
 ]);
 
 // Check if first arg is an agent name
@@ -80,7 +81,7 @@ import { routeCommand } from "./commands/index.js";
 
 try {
   const command = positional[0];
-  const isDefaultTuiLaunch = !command && !flags.has("clear");
+  const isDefaultTuiLaunch = !command;
   const isSpawnPicker = command === "spawn" && positional.length <= 1 && !flags.has("help");
   const updateNotice = await getUpdateNotice({ command, flags });
 
@@ -102,11 +103,9 @@ try {
   const handled = await routeCommand(positional, flags, opts);
 
   if (!handled) {
-    // Handle workspace/default commands
-    if (flags.has("clear")) {
-      const { clearWorkspaceIPC } = await import("./workspace/state.js");
-      clearWorkspaceIPC();
-      console.log("Cleared workspace runtime state");
+    if (flags.has("server") && !flags.has("help") && !flags.has("h")) {
+      const { startServer } = await import("./server/index.js");
+      await startServer(opts, process.cwd());
       process.exit(0);
     }
 
@@ -117,15 +116,16 @@ try {
 
 Workspace:
   termlings                Start the terminal workspace UI
-  termlings web            Start the web workspace
   termlings init           Initialize .termlings in this project
-  termlings --clear        Clear runtime IPC/session state
+  termlings --server       Run secure HTTP server mode
 
 Agent System:
   termlings brief          Full workspace snapshot (run at session start)
   termlings org-chart      Show org chart (list-agents alias)
   termlings list-agents    Legacy alias for org-chart
+  termlings skills <cmd>   List/install/update skills (skills.sh wrapper)
   termlings message <target> <text>  Send DM
+  termlings conversation <target>     Read message history
   termlings request <type> Request decision/env var from operator
   termlings task <cmd>     Task management
   termlings calendar <cmd> Calendar management
@@ -133,6 +133,11 @@ Agent System:
 
 Browser Automation:
   termlings browser --help Show browser commands
+
+Server:
+  termlings --server [--host <host>] [--port <port>]
+  --token <token>           API token (or TERMLINGS_API_TOKEN)
+  --cors-origin <origin>    Allow browser origin (repeat via CSV)
 
 Scheduler:
   termlings scheduler      Run calendar scheduler
@@ -162,12 +167,15 @@ Sim (optional):
       process.exit(0);
     }
 
-    if (positional[0] === "web") {
-      await launchWorkspaceWeb(opts);
-      process.exit(0);
-    }
+    if (!positional[0]) {
+      const allowedTopLevelFlags = new Set(["help", "h", "server", "sim"]);
+      const unsupportedFlags = Array.from(flags).filter((flag) => !allowedTopLevelFlags.has(flag));
+      if (unsupportedFlags.length > 0) {
+        console.error(`Unknown option(s): ${unsupportedFlags.map((flag) => `--${flag}`).join(", ")}`);
+        console.error("Run: termlings --help");
+        process.exit(1);
+      }
 
-    if (!positional[0] && !flags.has("clear")) {
       // Show init banner if no workspace exists yet
       const { existsSync } = await import("fs");
       const { join } = await import("path");

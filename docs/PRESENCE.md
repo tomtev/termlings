@@ -59,9 +59,10 @@ If presence appears stuck or noisy:
    ```bash
    ls .termlings/sessions
    ```
-4. Clear runtime state if needed:
+4. Remove stale runtime files if needed:
    ```bash
-   termlings --clear
+   rm -f .termlings/sessions/*.json
+   rm -f .termlings/*.typing.json
    ```
 
 ## Legacy hooks

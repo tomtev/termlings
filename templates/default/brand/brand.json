@@ -8,15 +8,7 @@
     "accent": "#F4F4F5",
     "background": "#FFFFFF",
     "foreground": "#09090B",
-    "palette": [
-      "#574747",
-      "#F4F4F5",
-      "#FFFFFF",
-      "#09090B",
-      "#D32F2F",
-      "#008032",
-      "#A65B00"
-    ]
+    "palette": []
   },
   "logos": {
     "main": "",
@@ -25,8 +17,8 @@
   },
   "identity": {
     "domain": {
-      "primary": "termlings.com",
-      "website": "https://termlings.com",
+      "primary": "",
+      "website": "",
       "app": "",
       "docs": "",
       "api": ""
@@ -42,8 +34,7 @@
     }
   },
   "sources": [
-    "manual",
-    "package.json"
+    "template:default"
   ],
   "updatedAt": "2026-03-03T00:00:00.000Z"
 }

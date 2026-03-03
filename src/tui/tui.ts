@@ -168,6 +168,12 @@ class WorkspaceTui {
 
   private messageScrollOffset = 0
   private messageScrollMax = 0
+  private taskScrollOffset = 0
+  private taskScrollMax = 0
+  private taskFilterIndex = 0
+  private calendarScrollOffset = 0
+  private calendarScrollMax = 0
+  private calendarFilterIndex = 0
 
   private inputFocused = true
 
@@ -299,6 +305,8 @@ class WorkspaceTui {
     this.stdout.write("\x1b[?1049h") // alternate screen
     this.stdout.write("\x1b[2J\x1b[H")
     this.stdout.write("\x1b[?2004h") // enable bracketed paste mode
+    this.stdout.write("\x1b[?1000h") // enable mouse button + wheel tracking
+    this.stdout.write("\x1b[?1006h") // enable SGR mouse mode
     this.stdout.write("\x1b[?25l") // hide cursor
     this.stdin.setRawMode(true)
     this.stdin.resume()
@@ -307,6 +315,8 @@ class WorkspaceTui {
 
   private leaveScreen(): void {
     try {
+      this.stdout.write("\x1b[?1006l") // disable SGR mouse mode
+      this.stdout.write("\x1b[?1000l") // disable mouse tracking
       this.stdout.write("\x1b[?2004l") // disable bracketed paste mode
       this.stdout.write("\x1b[?25h") // show cursor
       this.stdout.write("\x1b[?1049l") // leave alternate screen
@@ -426,6 +436,13 @@ class WorkspaceTui {
     const isArrowLeft = normalizedInput === "\u001b[D" || normalizedInput === "\u001bOD"
     const isArrowRight = normalizedInput === "\u001b[C" || normalizedInput === "\u001bOC"
     const mentionState = this.getMentionMenuState()
+    const mouseWheelDirection = this.parseMouseWheelDirection(normalizedInput)
+
+    if (mouseWheelDirection !== null) {
+      this.handleMouseWheel(mouseWheelDirection)
+      this.render()
+      return
+    }
 
     if (isArrowUp || isArrowDown) {
       if (mentionState && mentionState.candidates.length > 0 && this.inputFocused) {
@@ -451,6 +468,18 @@ class WorkspaceTui {
         this.render()
         return
       }
+
+      if (this.view === "tasks") {
+        this.scrollTasks(isArrowUp ? -MESSAGE_SCROLL_STEP : MESSAGE_SCROLL_STEP)
+        this.render()
+        return
+      }
+
+      if (this.view === "calendar") {
+        this.scrollCalendar(isArrowUp ? -MESSAGE_SCROLL_STEP : MESSAGE_SCROLL_STEP)
+        this.render()
+        return
+      }
     }
 
     if ((isArrowLeft || isArrowRight) && this.view === "messages") {
@@ -464,6 +493,18 @@ class WorkspaceTui {
       return
     }
 
+    if ((isArrowLeft || isArrowRight) && this.view === "tasks") {
+      this.stepTaskFilter(isArrowRight ? 1 : -1)
+      this.render()
+      return
+    }
+
+    if ((isArrowLeft || isArrowRight) && this.view === "calendar") {
+      this.stepCalendarFilter(isArrowRight ? 1 : -1)
+      this.render()
+      return
+    }
+
     if (normalizedInput === "\u001b[5~" && this.view === "messages") {
       const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
       this.scrollMessages(page)
@@ -471,9 +512,37 @@ class WorkspaceTui {
       return
     }
 
+    if (normalizedInput === "\u001b[5~" && this.view === "tasks") {
+      const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
+      this.scrollTasks(-page)
+      this.render()
+      return
+    }
+
+    if (normalizedInput === "\u001b[5~" && this.view === "calendar") {
+      const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
+      this.scrollCalendar(-page)
+      this.render()
+      return
+    }
+
     if (normalizedInput === "\u001b[6~" && this.view === "messages") {
       const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
       this.scrollMessages(-page)
+      this.render()
+      return
+    }
+
+    if (normalizedInput === "\u001b[6~" && this.view === "tasks") {
+      const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
+      this.scrollTasks(page)
+      this.render()
+      return
+    }
+
+    if (normalizedInput === "\u001b[6~" && this.view === "calendar") {
+      const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
+      this.scrollCalendar(page)
       this.render()
       return
     }
@@ -575,6 +644,16 @@ class WorkspaceTui {
 
         if (lower === "b" && this.view === "messages" && this.messageScrollOffset > 0) {
           this.messageScrollOffset = 0
+          continue
+        }
+
+        if (lower === "b" && this.view === "tasks" && this.taskScrollMax > 0) {
+          this.taskScrollOffset = this.taskScrollMax
+          continue
+        }
+
+        if (lower === "b" && this.view === "calendar" && this.calendarScrollMax > 0) {
+          this.calendarScrollOffset = this.calendarScrollMax
           continue
         }
 
@@ -983,6 +1062,45 @@ class WorkspaceTui {
     if (this.view !== "messages") return
     const next = this.messageScrollOffset + delta
     this.messageScrollOffset = Math.max(0, next)
+  }
+
+  private scrollTasks(delta: number): void {
+    if (this.view !== "tasks") return
+    const next = this.taskScrollOffset + delta
+    this.taskScrollOffset = Math.max(0, next)
+  }
+
+  private scrollCalendar(delta: number): void {
+    if (this.view !== "calendar") return
+    const next = this.calendarScrollOffset + delta
+    this.calendarScrollOffset = Math.max(0, next)
+  }
+
+  private parseMouseWheelDirection(input: string): -1 | 1 | null {
+    const match = input.match(/\u001b\[<(\d+);\d+;\d+[mM]/)
+    if (!match) return null
+    const code = Number.parseInt(match[1] || "", 10)
+    if (!Number.isFinite(code)) return null
+    if ((code & 64) === 0) return null
+    const button = code & 0b11
+    if (button === 0) return -1 // wheel up
+    if (button === 1) return 1 // wheel down
+    return null
+  }
+
+  private handleMouseWheel(direction: -1 | 1): void {
+    const step = MESSAGE_SCROLL_STEP
+    if (this.view === "messages") {
+      this.scrollMessages(direction < 0 ? step : -step)
+      return
+    }
+    if (this.view === "tasks") {
+      this.scrollTasks(direction < 0 ? -step : step)
+      return
+    }
+    if (this.view === "calendar") {
+      this.scrollCalendar(direction < 0 ? -step : step)
+    }
   }
 
   private async submitDraft(): Promise<void> {
@@ -2721,6 +2839,56 @@ class WorkspaceTui {
     return "\x1b[38;5;180m"
   }
 
+  private taskFilters(): Array<{ id: string; label: string; predicate: (task: Task) => boolean }> {
+    return [
+      { id: "all", label: "All", predicate: () => true },
+      { id: "open", label: "Open", predicate: (task) => task.status === "open" },
+      { id: "claimed", label: "Claimed", predicate: (task) => task.status === "claimed" },
+      { id: "in-progress", label: "In-progress", predicate: (task) => task.status === "in-progress" },
+      { id: "blocked", label: "Blocked", predicate: (task) => task.status === "blocked" },
+      { id: "completed", label: "Completed", predicate: (task) => task.status === "completed" },
+    ]
+  }
+
+  private calendarFilters(): Array<{ id: string; label: string; predicate: (event: CalendarEvent) => boolean }> {
+    return [
+      { id: "all", label: "All", predicate: () => true },
+      { id: "enabled", label: "Enabled", predicate: (event) => event.enabled },
+      { id: "disabled", label: "Disabled", predicate: (event) => !event.enabled },
+      { id: "upcoming", label: "Upcoming", predicate: (event) => event.endTime >= Date.now() },
+      { id: "past", label: "Past", predicate: (event) => event.endTime < Date.now() },
+    ]
+  }
+
+  private stepTaskFilter(delta: number): void {
+    if (this.view !== "tasks") return
+    const filters = this.taskFilters()
+    if (filters.length <= 1) return
+    const next = this.taskFilterIndex + delta
+    this.taskFilterIndex = ((next % filters.length) + filters.length) % filters.length
+    this.taskScrollOffset = 0
+  }
+
+  private stepCalendarFilter(delta: number): void {
+    if (this.view !== "calendar") return
+    const filters = this.calendarFilters()
+    if (filters.length <= 1) return
+    const next = this.calendarFilterIndex + delta
+    this.calendarFilterIndex = ((next % filters.length) + filters.length) % filters.length
+    this.calendarScrollOffset = 0
+  }
+
+  private renderFilterLine(filters: Array<{ label: string }>, selectedIndex: number): string {
+    const separator = `${FG_SUBTLE_HINT} · ${ANSI_RESET}`
+    const chips = filters.map((filter, index) => {
+      if (index === selectedIndex) {
+        return `${FG_SELECTED}[${filter.label}]${ANSI_RESET}`
+      }
+      return `${FG_META}${filter.label}${ANSI_RESET}`
+    })
+    return `${FG_META}Filter:${ANSI_RESET} ${chips.join(separator)}`
+  }
+
   private elapsedSince(ts: number): string {
     const seconds = Math.max(0, Math.floor((Date.now() - ts) / 1000))
     if (seconds < 60) return `${seconds}s`
@@ -2843,43 +3011,64 @@ class WorkspaceTui {
 
   private renderTasksView(height: number, width: number): string[] {
     const out: string[] = []
-    const tasks = [...this.snapshot.tasks].sort((a, b) => b.updatedAt - a.updatedAt)
-    const taskById = new Map(tasks.map(task => [task.id, task]))
+    const allTasks = [...this.snapshot.tasks].sort((a, b) => b.updatedAt - a.updatedAt)
+    const taskById = new Map(allTasks.map(task => [task.id, task]))
+    const filters = this.taskFilters()
+    const safeFilterIndex = Math.max(0, Math.min(this.taskFilterIndex, filters.length - 1))
+    this.taskFilterIndex = safeFilterIndex
+    const activeFilter = filters[safeFilterIndex] ?? filters[0]
+    const tasks = activeFilter ? allTasks.filter(activeFilter.predicate) : allTasks
 
-    if (tasks.length === 0) {
+    if (allTasks.length === 0) {
       out.push("No tasks created.")
       return out
     }
 
     const counts = {
-      open: tasks.filter(task => task.status === "open").length,
-      claimed: tasks.filter(task => task.status === "claimed").length,
-      inProgress: tasks.filter(task => task.status === "in-progress").length,
-      blocked: tasks.filter(task => task.status === "blocked").length,
-      completed: tasks.filter(task => task.status === "completed").length,
+      open: allTasks.filter(task => task.status === "open").length,
+      claimed: allTasks.filter(task => task.status === "claimed").length,
+      inProgress: allTasks.filter(task => task.status === "in-progress").length,
+      blocked: allTasks.filter(task => task.status === "blocked").length,
+      completed: allTasks.filter(task => task.status === "completed").length,
     }
     const summary = `Open ${counts.open} · Claimed ${counts.claimed} · In-progress ${counts.inProgress} · Blocked ${counts.blocked} · Completed ${counts.completed}`
-    out.push(...this.renderHeaderFrame([`${FG_META}${summary}${ANSI_RESET}`], width))
+    out.push(
+      ...this.renderHeaderFrame(
+        [
+          this.renderFilterLine(filters, safeFilterIndex),
+          `${FG_META}${summary}${ANSI_RESET}`,
+          `${FG_META}Showing ${tasks.length}/${allTasks.length}${ANSI_RESET}`,
+        ],
+        width,
+      ),
+    )
     out.push("")
 
     const cardWidth = Math.max(28, Math.min(width - 2, 96))
-    let rendered = 0
+    const bodyLines: string[] = []
+    if (tasks.length === 0) {
+      bodyLines.push(`${FG_META}No tasks for this filter.${ANSI_RESET}`)
+    }
+
     for (const task of tasks) {
       const cardLines = this.renderTaskCard(task, cardWidth, taskById)
-      const needsSpacer = rendered < tasks.length - 1 ? 1 : 0
-      if (out.length + cardLines.length + needsSpacer > height) {
-        break
-      }
-      out.push(...cardLines)
-      rendered += 1
-      if (needsSpacer > 0) {
-        out.push("")
+      bodyLines.push(...cardLines)
+      if (task !== tasks[tasks.length - 1]) {
+        bodyLines.push("")
       }
     }
 
-    const remaining = tasks.length - rendered
-    if (remaining > 0 && out.length < height) {
-      out.push(`${FG_META}+${remaining} more task${remaining === 1 ? "" : "s"}${ANSI_RESET}`)
+    const bodyHeight = Math.max(1, height - out.length)
+    const maxOffset = Math.max(0, bodyLines.length - bodyHeight)
+    this.taskScrollMax = maxOffset
+    if (this.taskScrollOffset > maxOffset) this.taskScrollOffset = maxOffset
+    if (this.taskScrollOffset < 0) this.taskScrollOffset = 0
+    const start = Math.max(0, this.taskScrollOffset)
+    const end = Math.min(bodyLines.length, start + bodyHeight)
+    out.push(...bodyLines.slice(start, end))
+
+    while (out.length < height) {
+      out.push("")
     }
 
     return out
@@ -3007,9 +3196,14 @@ class WorkspaceTui {
 
   private renderCalendarView(height: number, width: number): string[] {
     const out: string[] = []
-    const events = [...this.snapshot.calendarEvents].sort((a, b) => a.startTime - b.startTime)
+    const allEvents = [...this.snapshot.calendarEvents].sort((a, b) => a.startTime - b.startTime)
+    const filters = this.calendarFilters()
+    const safeFilterIndex = Math.max(0, Math.min(this.calendarFilterIndex, filters.length - 1))
+    this.calendarFilterIndex = safeFilterIndex
+    const activeFilter = filters[safeFilterIndex] ?? filters[0]
+    const events = activeFilter ? allEvents.filter(activeFilter.predicate) : allEvents
 
-    if (events.length === 0) {
+    if (allEvents.length === 0) {
       out.push("No calendar events scheduled.")
       return out
     }
@@ -3021,30 +3215,47 @@ class WorkspaceTui {
     const schedulerColor = this.calendarSchedulerRunning ? "\x1b[38;5;71m" : FG_META
     const schedulerLine = `${schedulerColor}● ${schedulerPlain}${ANSI_RESET}`
 
-    const enabled = events.filter(event => event.enabled).length
-    const upcoming = events.filter(event => event.endTime >= now).length
-    const summary = `Enabled ${enabled}/${events.length} · Upcoming ${upcoming} · Past ${Math.max(0, events.length - upcoming)}`
-    out.push(...this.renderHeaderFrame([schedulerLine, `${FG_META}${summary}${ANSI_RESET}`], width))
+    const enabled = allEvents.filter(event => event.enabled).length
+    const upcoming = allEvents.filter(event => event.endTime >= now).length
+    const summary = `Enabled ${enabled}/${allEvents.length} · Upcoming ${upcoming} · Past ${Math.max(0, allEvents.length - upcoming)}`
+    out.push(
+      ...this.renderHeaderFrame(
+        [
+          this.renderFilterLine(filters, safeFilterIndex),
+          schedulerLine,
+          `${FG_META}${summary}${ANSI_RESET}`,
+          `${FG_META}Showing ${events.length}/${allEvents.length}${ANSI_RESET}`,
+        ],
+        width,
+      ),
+    )
     out.push("")
 
     const cardWidth = Math.max(28, Math.min(width - 2, 96))
-    let rendered = 0
+    const bodyLines: string[] = []
+    if (events.length === 0) {
+      bodyLines.push(`${FG_META}No events for this filter.${ANSI_RESET}`)
+    }
+
     for (const event of events) {
       const cardLines = this.renderCalendarCard(event, cardWidth)
-      const needsSpacer = rendered < events.length - 1 ? 1 : 0
-      if (out.length + cardLines.length + needsSpacer > height) {
-        break
-      }
-      out.push(...cardLines)
-      rendered += 1
-      if (needsSpacer > 0) {
-        out.push("")
+      bodyLines.push(...cardLines)
+      if (event !== events[events.length - 1]) {
+        bodyLines.push("")
       }
     }
 
-    const remaining = events.length - rendered
-    if (remaining > 0 && out.length < height) {
-      out.push(`${FG_META}+${remaining} more event${remaining === 1 ? "" : "s"}${ANSI_RESET}`)
+    const bodyHeight = Math.max(1, height - out.length)
+    const maxOffset = Math.max(0, bodyLines.length - bodyHeight)
+    this.calendarScrollMax = maxOffset
+    if (this.calendarScrollOffset > maxOffset) this.calendarScrollOffset = maxOffset
+    if (this.calendarScrollOffset < 0) this.calendarScrollOffset = 0
+    const start = Math.max(0, this.calendarScrollOffset)
+    const end = Math.min(bodyLines.length, start + bodyHeight)
+    out.push(...bodyLines.slice(start, end))
+
+    while (out.length < height) {
+      out.push("")
     }
 
     return out
@@ -3263,21 +3474,7 @@ class WorkspaceTui {
 
     // Standard layout (small/tiny): single row with "All" inline
     const blocks: AvatarBlock[] = [allActivityBlock, ...agentBlocks]
-
-    const shown: AvatarBlock[] = []
-    let usedWidth = 0
-    for (const block of blocks) {
-      const needed = block.width + (shown.length > 0 ? 2 : 0)
-      if (shown.length > 0 && usedWidth + needed > width) {
-        break
-      }
-      shown.push(block)
-      usedWidth += needed
-    }
-
-    if (shown.length === 0) {
-      shown.push(blocks[0]!)
-    }
+    const shown = this.computeAvatarViewport(blocks, width)
 
     const avatarHeight = Math.max(...shown.map((block) => block.lines.length), 1)
     const lines: string[] = []
@@ -3326,6 +3523,61 @@ class WorkspaceTui {
     lines.push(subtitles)
 
     return lines
+  }
+
+  private computeAvatarViewport(blocks: AvatarBlock[], width: number): AvatarBlock[] {
+    if (blocks.length === 0) return []
+
+    const gap = 2
+    const selectedIndex = Math.max(0, blocks.findIndex((block) => block.selected))
+    let left = selectedIndex
+    let right = selectedIndex
+    let usedWidth = blocks[selectedIndex]!.width
+    let leftSpan = usedWidth / 2
+    let rightSpan = usedWidth / 2
+
+    while (true) {
+      const leftCandidate = left - 1
+      const rightCandidate = right + 1
+
+      const canAddLeft = leftCandidate >= 0 && usedWidth + gap + blocks[leftCandidate]!.width <= width
+      const canAddRight = rightCandidate < blocks.length && usedWidth + gap + blocks[rightCandidate]!.width <= width
+
+      if (!canAddLeft && !canAddRight) break
+
+      if (canAddLeft && !canAddRight) {
+        const nextWidth = gap + blocks[leftCandidate]!.width
+        usedWidth += nextWidth
+        leftSpan += nextWidth
+        left = leftCandidate
+        continue
+      }
+
+      if (!canAddLeft && canAddRight) {
+        const nextWidth = gap + blocks[rightCandidate]!.width
+        usedWidth += nextWidth
+        rightSpan += nextWidth
+        right = rightCandidate
+        continue
+      }
+
+      const nextLeftWidth = gap + blocks[leftCandidate]!.width
+      const nextRightWidth = gap + blocks[rightCandidate]!.width
+      const leftImbalance = Math.abs((leftSpan + nextLeftWidth) - rightSpan)
+      const rightImbalance = Math.abs(leftSpan - (rightSpan + nextRightWidth))
+
+      if (leftImbalance <= rightImbalance) {
+        usedWidth += nextLeftWidth
+        leftSpan += nextLeftWidth
+        left = leftCandidate
+      } else {
+        usedWidth += nextRightWidth
+        rightSpan += nextRightWidth
+        right = rightCandidate
+      }
+    }
+
+    return blocks.slice(left, right + 1)
   }
 
   private renderBody(height: number, width: number): string[] {
@@ -3503,11 +3755,11 @@ class WorkspaceTui {
     }
 
     if (this.view === "tasks") {
-      return `${this.snapshot.tasks.length} tasks | card view`
+      return `${this.taskScrollOffset}/${this.taskScrollMax} ↑/↓`
     }
 
     if (this.view === "calendar") {
-      return `${this.snapshot.calendarEvents.length} events | ${this.calendarSchedulerRunning ? "scheduler on" : "scheduler off"}`
+      return `${this.calendarScrollOffset}/${this.calendarScrollMax} ↑/↓`
     }
 
     return ""
