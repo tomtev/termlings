@@ -80,10 +80,10 @@ EXAMPLES:
   (Keeps existing data, re-runs setup)
 
 NEXT STEPS:
-  1. termlings             Start the workspace TUI
-  2. termlings spawn       Launch an agent runtime (Claude/Codex)
-  3. termlings org-chart   See team hierarchy
-  4. termlings task list   Check available tasks
+  1. termlings             Start the workspace control plane
+  2. Press s               Launch team agent terminals
+  3. Press p               Peek an agent terminal
+  4. termlings org-chart   See team hierarchy
 `);
     return;
   }

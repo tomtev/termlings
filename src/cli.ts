@@ -24,6 +24,7 @@ const VALUE_FLAGS = new Set([
   "from", "primary", "logo", "domain", "email", "website", "profile", "template",
   "token", "cors-origin", "cors_origin", "allowed-projects", "allowed_projects",
   "max-body-kb", "max_body_kb", "rate-limit", "rate_limit", "sse-max", "sse_max",
+  "agent",
 ]);
 
 // Check if first arg is an agent name
@@ -123,6 +124,8 @@ Agent System:
   termlings brief          Full workspace snapshot (run at session start)
   termlings org-chart      Show org chart (list-agents alias)
   termlings list-agents    Legacy alias for org-chart
+  termlings peek [agent]   Jump to an agent terminal window
+  termlings control        Jump back to workspace control window
   termlings skills <cmd>   List/install/update skills (skills.sh wrapper)
   termlings message <target> <text>  Send DM
   termlings conversation <target>     Read message history
@@ -149,8 +152,9 @@ Avatar & Creation:
   termlings create         Create new agent
 
 Spawn:
-  termlings spawn              Pick agent + preset, then launch
-  termlings spawn <preset>     Pick agent, launch with preset
+  termlings spawn --all                Launch all agents in tmux windows
+  termlings spawn --agent=<slug> ...   Launch one agent in a tmux window
+  termlings spawn ... --inline         Launch in current terminal
 
 Upgrade:
   npm install -g termlings@latest
@@ -168,7 +172,17 @@ Sim (optional):
     }
 
     if (!positional[0]) {
-      const allowedTopLevelFlags = new Set(["help", "h", "server", "sim"]);
+      if (!process.env.TMUX && !flags.has("inside-tmux")) {
+        const { attachControlSession } = await import("./engine/tmux.js");
+        const attached = attachControlSession(process.cwd());
+        if (!attached.ok) {
+          console.error(attached.error || "Failed to start tmux control session.");
+          process.exit(1);
+        }
+        process.exit(0);
+      }
+
+      const allowedTopLevelFlags = new Set(["help", "h", "server", "sim", "inside-tmux"]);
       const unsupportedFlags = Array.from(flags).filter((flag) => !allowedTopLevelFlags.has(flag));
       if (unsupportedFlags.length > 0) {
         console.error(`Unknown option(s): ${unsupportedFlags.map((flag) => `--${flag}`).join(", ")}`);

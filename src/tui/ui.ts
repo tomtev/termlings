@@ -26,7 +26,6 @@ export const FG_OFFLINE_TEXT = "\x1b[38;5;252m"
 export const FG_IMAGE_TOKEN = "\x1b[38;5;216m"
 export const FG_MENTION_TOKEN = "\x1b[38;5;117m"
 
-export const OFFLINE_JOIN_COMMAND = "termlings claude --dangerously-skip-permissions"
 export const MESSAGE_SCROLL_STEP = 3
 export const CARD_SPACER_LINES = 0
 

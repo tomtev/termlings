@@ -6,7 +6,7 @@ import { getAllTasks, type Task, type TaskPriority, type TaskStatus } from "../e
 import { listRequests, resolveRequest, dismissRequest, type AgentRequest } from "../engine/requests.js"
 import { decodeDNA, getTraitColors, renderTerminal, renderTerminalSmall, renderTermlingsLogo } from "../index.js"
 import { basename, join } from "path"
-import { execSync } from "child_process"
+import { execSync, spawnSync } from "child_process"
 import {
   appendWorkspaceMessage,
   ensureWorkspaceDirs,
@@ -58,7 +58,6 @@ import {
   HEARTBEAT_MS,
   JOIN_WAVE_MS,
   MESSAGE_SCROLL_STEP,
-  OFFLINE_JOIN_COMMAND,
   REFRESH_MS,
   TALK_ANIM_MS,
   boxAnsiLine,
@@ -684,6 +683,16 @@ class WorkspaceTui {
           return
         }
 
+        if (lower === "s" && this.view === "messages") {
+          this.launchTeamWindows()
+          continue
+        }
+
+        if (lower === "p" && this.view === "messages") {
+          this.peekAgentWindow()
+          continue
+        }
+
         if (lower === "b" && this.view === "messages" && this.messageScrollOffset > 0) {
           this.messageScrollOffset = 0
           continue
@@ -732,6 +741,53 @@ class WorkspaceTui {
 
     this.syncMentionSelection()
     this.render()
+  }
+
+  private launchTeamWindows(): void {
+    const proc = spawnSync("termlings", ["spawn", "--all"], {
+      cwd: this.root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+    if ((proc.status ?? 1) !== 0) {
+      const err = (proc.stderr || proc.stdout || "").trim()
+      this.statusMessage = err ? `Launch failed: ${err}` : "Launch failed."
+      return
+    }
+
+    const output = (proc.stdout || "").trim()
+    this.statusMessage = output ? output.split("\n").slice(-1)[0] || "Launched team windows." : "Launched team windows."
+  }
+
+  private peekTargetSlug(): string | null {
+    const selected = this.selectedDmThread()
+    if (selected?.slug) return selected.slug
+
+    for (const agent of this.snapshot.agents) {
+      if (agent.online && agent.slug) return agent.slug
+    }
+
+    for (const agent of this.snapshot.agents) {
+      if (agent.slug) return agent.slug
+    }
+
+    return null
+  }
+
+  private peekAgentWindow(): void {
+    const slug = this.peekTargetSlug()
+    const args = slug ? ["peek", slug] : ["peek"]
+    const proc = spawnSync("termlings", args, {
+      cwd: this.root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+    if ((proc.status ?? 1) !== 0) {
+      const err = (proc.stderr || proc.stdout || "").trim()
+      this.statusMessage = err ? `Peek failed: ${err}` : "Peek failed."
+      return
+    }
+    this.statusMessage = slug ? `Switched to ${slug}. Run termlings control to return.` : "Switched to agent window."
   }
 
   private unwrapBracketedPaste(input: string): string | null {
@@ -1273,7 +1329,7 @@ class WorkspaceTui {
 
     const selectedDmThread = this.selectedDmThread()
     if (selectedDmThread && !selectedDmThread.online) {
-      this.statusMessage = `${selectedDmThread.label} is offline. Ask them to run: ${OFFLINE_JOIN_COMMAND}`
+      this.statusMessage = `${selectedDmThread.label} is offline. Press s to launch them or p to peek another terminal.`
       return
     }
 
@@ -2725,8 +2781,8 @@ class WorkspaceTui {
     if (visible.length === 0) {
       if (noAgentsOnline) {
         const bannerLines = [
-          "Looks like no agent is online yet!",
-          "Run `termlings spawn` in another terminal.",
+          "Looks like no agent terminal is online yet.",
+          "Press s to launch team terminals, or p to peek.",
         ]
         const topPadding = Math.max(0, Math.floor((height - bannerLines.length) / 2))
         const bannerWidth = Math.max(1, width)
@@ -3926,7 +3982,7 @@ class WorkspaceTui {
 
   private renderFooterRightMeta(): string {
     if (this.view === "messages") {
-      return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓`
+      return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓ | s launch | p peek | Ctrl-g control`
     }
 
     if (this.view === "requests") {
@@ -4107,7 +4163,7 @@ class WorkspaceTui {
         lines.push(grayBar("", width, promptBg))
       }
       if (showOfflineJoinHint && selectedDmThread) {
-        lines.push(offlineBar(` ${selectedDmThread.label} is offline. Run "termlings spawn" in another terminal.`, width))
+        lines.push(offlineBar(` ${selectedDmThread.label} is offline. Press s to launch or p to peek active terminals.`, width))
       } else if (showComposer) {
         if (showTypingHint && selectedDmThread) {
           lines.push(`${BG_INPUT_PANEL}${FG_META}${fitPlain(` ${selectedDmThread.label} is typing...`, width)}${ANSI_RESET}`)

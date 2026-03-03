@@ -17,6 +17,8 @@ import { handleBrief } from "./brief.js";
 import { handleBrand } from "./brand.js";
 import { handleConversation } from "./conversation.js";
 import { handleSkills } from "./skills.js";
+import { handlePeek } from "./peek.js";
+import { handleControl } from "./control.js";
 
 export async function routeCommand(
   positional: string[],
@@ -83,7 +85,15 @@ export async function routeCommand(
       return true;
 
     case "spawn":
-      await handleSpawn(flags, positional);
+      await handleSpawn(flags, positional, opts);
+      return true;
+
+    case "peek":
+      await handlePeek(flags, positional);
+      return true;
+
+    case "control":
+      await handleControl(flags, positional);
       return true;
 
     case "request":
