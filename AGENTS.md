@@ -43,14 +43,15 @@ Workspace state: <project>/.termlings/
 The template includes a 5-person bootstrapped team structure:
 
 ```
-Operator (Founder - You)
-└── PM (Vision & Prioritization)
-    ├── Developer (Build & Ship)
+Founder (Human Owner - You)
+└── PM (Vision & Prioritization, day-to-day lead)
     ├── Designer (UX & Visual Design)
-    └── Growth (Customer & Adoption)
+    ├── Developer (Build & Ship)
+    ├── Growth (Customer & Adoption)
+    └── Support (Operations)
 ```
 
-Each role has specific responsibilities and reports to the PM, who reports to you (the Operator).
+Each agent role has specific responsibilities and reports to the PM, who reports to you (`human:default`).
 
 ## Agent identity
 

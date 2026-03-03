@@ -41,6 +41,17 @@ termlings
 termlings spawn
 ```
 
+## Default Org Chart
+
+```text
+Operator (Human Owner - You) [human:default]
+└── PM (Vision & Prioritization)
+    ├── Designer (UX & Visual Design)
+    ├── Developer (Build & Ship)
+    ├── Growth (Customer & Adoption)
+    └── Support (Operations)
+```
+
 ## Core Commands
 
 ### Operator-first commands

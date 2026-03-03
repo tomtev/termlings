@@ -1,7 +1,7 @@
 ---
 name: David
 title: Designer
-title_short: UX
+title_short: Design
 role: Design and user experience
 team: Product
 reports_to: agent:pm
