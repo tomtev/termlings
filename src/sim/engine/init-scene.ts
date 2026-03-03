@@ -1,7 +1,7 @@
 import type { Scene, Cell, TileDef, RGB, Entity, RoomRegion } from "./types.js"
 import { DEFAULT_TILE_DEFS, stampTiles } from "./tilemap-core.js"
 import { DEFAULT_CONFIG } from "./types.js"
-import { renderTerminalSmall, generateRandomDNA } from "../../src/index.js"
+import { renderTerminalSmall, generateRandomDNA } from "../../index.js"
 import { makeEntity, updateAnimations } from "./entity.js"
 import { buildWalkGrid, createNpcAIState, stepNpc, createPathfinderState, type NpcAIState, type WalkGrid } from "./npc-ai.js"
 import { stampEntity } from "./renderer.js"

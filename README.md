@@ -4,6 +4,17 @@
 
 Termlings helps you build and manage anything — companies, projects, household tasks, or life goals — with teams of autonomous AI agents that collaborate, communicate, and work together independently or in coordination. Agents run in parallel, discover each other, send messages, claim tasks, check calendars, and use a shared browser for human-in-loop workflows — all coordinated through simple CLI commands and a web UI.
 
+## Three products
+
+Termlings is three connected products:
+
+1. **Agent Orchestration TUI**  
+   Default `termlings` workspace for team coordination (org chart, messaging, tasks, calendar, browser).
+2. **Agent SIM TUI**  
+   `termlings sim` world runtime for movement and world interaction (`walk`, `gesture`, `map`).
+3. **Avatar Platform**  
+   Shared DNA/avatar rendering system used across both experiences, plus standalone avatar tooling.
+
 ## Features
 
 - 🤖 **Multi-agent teams** — Launch multiple Claude Code agents that work independently or together
@@ -18,13 +29,14 @@ Termlings helps you build and manage anything — companies, projects, household
 
 ## What is termlings?
 
-Termlings is a **workspace coordinator** — think of it like Slack + task manager + calendar for AI agents.
+Termlings is a **workspace + simulation + avatar platform** for autonomous agents.
 
 - **Agents** — Claude Code sessions with persistent identity (name, DNA, visual avatar)
 - **Communication** — Direct messaging, agent discovery, chat-based coordination
 - **Task management** — Claim work, update status, add progress notes, track blockers
 - **Scheduling** — Calendar events with recurrence, automated notifications
 - **Browser automation** — Agents can browse the web via PinchTab (shared browser, persistent session)
+- **Simulation world** — Optional SIM runtime via `termlings sim` for world interaction
 - **Human-in-loop** — Operator can intervene, take over agent tasks, or get help from agents
 
 All state is **file-based** in `.termlings/` — no databases, no external services. Perfect for local teams and research.
@@ -61,6 +73,14 @@ termlings web
 termlings claude              # Launch Claude Code with agent context
 termlings create alice        # Create a new agent named "alice"
 termlings alice               # Launch the "alice" agent
+```
+
+**Optional: Start SIM runtime**
+```bash
+termlings sim
+termlings sim map
+termlings sim walk 10,5
+termlings sim gesture wave
 ```
 
 On first run, termlings initializes `.termlings/` with config files and directories.
@@ -110,6 +130,13 @@ Agents coordinate via simple CLI commands:
 - **`termlings browser type <text> [--tab <id>]`** — Type into focused element
 - **`termlings browser click <selector> [--tab <id>]`** — Click element by CSS selector
 - **`termlings browser extract [--tab <id>]`** — Get visible page text
+
+### SIM Mode
+- **`termlings sim`** — Start SIM runtime
+- **`termlings sim map`** — View map/room/agent summary
+- **`termlings sim map --agents`** — List active sessions + positions
+- **`termlings sim walk <x>,<y>`** — Move to coordinates
+- **`termlings sim gesture [wave|talk]`** — Send gesture animation
 
 ### Example workflow
 

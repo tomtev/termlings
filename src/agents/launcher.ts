@@ -27,27 +27,67 @@ const TERMINAL_TYPING_IDLE_MS = 3500
 const TERMINAL_TYPING_WRITE_THROTTLE_MS = 1500
 const INJECT_WHEN_IDLE_MS = 1200
 const RESIZE_ACTIVITY_SUPPRESS_MS = 1500
+type ContextProfile = "default" | "sim"
 
 function pickRandomName(): string {
   const idx = Math.floor(Math.random() * RANDOM_NAMES.length)
   return RANDOM_NAMES[idx]!
 }
 
-function loadContext(): string {
-  // Load framework context (termlings-system-message.md)
-  let context = ""
+function isTruthyEnv(value?: string): boolean {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on"
+}
 
-  // Try sibling file first (installed / built layout)
-  const siblingPath = joinPath(__dirname, "..", "termlings-system-message.md")
-  try {
-    context = readFileSync(siblingPath, "utf8")
-  } catch {}
+function detectContextProfile(): ContextProfile {
+  const forcedProfile = (process.env.TERMLINGS_CONTEXT_PROFILE || "").trim().toLowerCase()
+  if (forcedProfile === "sim") return "sim"
+  if (forcedProfile === "default") return "default"
 
-  // Fallback: dev mode with ts runner
-  if (!context) {
+  if (isTruthyEnv(process.env.TERMLINGS_SIM_MODE) || isTruthyEnv(process.env.TERMLINGS_SIM)) {
+    return "sim"
+  }
+
+  const mapMetadataPath = resolvePath(".termlings", "map-metadata.json")
+  if (existsSync(mapMetadataPath)) {
+    return "sim"
+  }
+
+  return "default"
+}
+
+function readFirstContextFile(paths: string[]): string {
+  for (const path of paths) {
     try {
-      context = readFileSync(resolvePath("src/termlings-system-message.md"), "utf8")
+      return readFileSync(path, "utf8")
     } catch {}
+  }
+  return ""
+}
+
+function loadContext(profile: ContextProfile): string {
+  // Load framework context (termlings-system-message.md)
+  const baseContext = readFirstContextFile([
+    // Installed / built layout
+    joinPath(__dirname, "..", "termlings-system-message.md"),
+    // Dev mode
+    resolvePath("src/termlings-system-message.md"),
+  ])
+
+  let context = baseContext
+
+  if (profile === "sim") {
+    const simAddendum = readFirstContextFile([
+      // Installed / built layout
+      joinPath(__dirname, "..", "sim", "termlings-system-message-sim.md"),
+      // Dev mode
+      resolvePath("src/sim/termlings-system-message-sim.md"),
+    ]).trim()
+
+    if (simAddendum) {
+      context = context ? `${context}\n\n${simAddendum}\n` : `${simAddendum}\n`
+    }
   }
 
   // Append project vision addendum if present.
@@ -132,7 +172,8 @@ export async function launchAgent(
   soulData?: { name: string; description: string; dna: string; title?: string; title_short?: string; role?: string },
 ): Promise<never> {
   const sessionId = `tl-${randomBytes(4).toString("hex")}`
-  const context = loadContext()
+  const contextProfile = detectContextProfile()
+  const context = loadContext(contextProfile)
   const soul = soulData || parseSoul()
 
   const agentName = termlingOpts.name || soul.name || pickRandomName()
@@ -231,6 +272,8 @@ export async function launchAgent(
     TERMLINGS_AGENT_TITLE_SHORT: agentTitleShort || "",
     TERMLINGS_AGENT_ROLE: agentRole || "",
     TERMLINGS_IPC_DIR: ipcDir,
+    TERMLINGS_CONTEXT_PROFILE: contextProfile,
+    TERMLINGS_SIM_MODE: contextProfile === "sim" ? "1" : "0",
   }
   const typingPath = joinPath(ipcDir, `${sessionId}.typing.json`)
   let typingIdleTimer: ReturnType<typeof setTimeout> | null = null

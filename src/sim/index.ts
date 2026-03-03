@@ -13,7 +13,7 @@ function ensureSimMap(): void {
   const dir = dirname(fileURLToPath(import.meta.url))
   const bundledMap = join(dir, "default-map", "map.json")
   if (!existsSync(bundledMap)) {
-    throw new Error("Bundled sim map missing at sim/default-map/map.json")
+    throw new Error("Bundled sim map missing at src/sim/default-map/map.json")
   }
   copyFileSync(bundledMap, mapPath)
 }
@@ -25,12 +25,12 @@ USAGE:
   termlings --sim                 Start sim runtime
   termlings sim                   Start sim runtime
   termlings --sim play <map-dir>  Start sim with custom map directory
-  termlings --sim action <cmd>    Run sim-specific action command
+  termlings sim <walk|gesture|map> ...   Run sim action directly
 
 SIM ACTIONS:
-  termlings --sim action walk <x>,<y>
-  termlings --sim action gesture [wave|talk]
-  termlings --sim action map [--agents|--ascii]
+  termlings sim walk <x>,<y>
+  termlings sim gesture [wave|talk]
+  termlings sim map [--agents|--ascii]
 `)
 }
 
@@ -49,8 +49,9 @@ export async function runSimCommand(
     return
   }
 
-  if (args[0] === "action") {
-    await handleSimAction(args.slice(1), simFlags)
+  const directVerb = args[0]
+  if (directVerb === "walk" || directVerb === "gesture" || directVerb === "map") {
+    await handleSimAction(args, simFlags)
     return
   }
 

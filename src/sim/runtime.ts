@@ -5,7 +5,7 @@ import {
   traitsFromName,
   HATS,
   type DecodedDNA,
-} from "../src/index.js"
+} from "../index.js"
 import {
   createParticleSystem,
   updateParticles,
@@ -90,6 +90,7 @@ import {
   type ChunkEntity,
 } from "./engine/chunk-system.js"
 import { writeSessionState } from "./engine/ipc.js"
+import { listSessions, readWorkspaceMessages } from "../workspace/state.js"
 
 // --- CLI args ---
 
@@ -148,6 +149,10 @@ function ensureProjectDirs() {
 
 ensureIpcDir()
 ensureProjectDirs()
+
+function isSimPresenceSession(sessionId: string): boolean {
+  return sessionId.startsWith("tl-") && !sessionId.startsWith("tl-tui-")
+}
 
 function loadPersistedPlacements() {
   // Load all persisted chunks and merge placements
@@ -340,10 +345,12 @@ function loadAgentSessions() {
   } catch {}
 }
 
-loadAgentSessions()
+// Presence is sourced from workspace sessions (same model as TUI).
+// Keep persisted loader available for future migrations, but do not restore from it now.
+// loadAgentSessions()
 
 // --- Title screen return state ---
-let hadAgents = agentSessions.size > 0
+let hadAgents = listSessions(process.cwd()).some((s) => isSimPresenceSession(s.sessionId))
 let simPaused = false
 
 // --- Terminal setup ---
@@ -357,7 +364,6 @@ stdout.write("\x1b[2J\x1b[3J\x1b[H")
 stdout.write("\x1b[?1049h\x1b[?25l")
 
 function cleanup() {
-  saveAgentSessions()
   cleanupIpc()
   stdout.write("\x1b[?25h\x1b[?1049l")
   process.exit(0)
@@ -639,6 +645,45 @@ function chat(name: string, text: string, fg: RGB) {
 let chatMode = false
 let chatBuffer = ""
 const chatMessages: ChatMessage[] = loadChatLog()
+const seenWorkspaceMessageIds = new Set<string>(
+  readWorkspaceMessages({ limit: 2000 }, process.cwd()).map((m) => m.id),
+)
+
+function processWorkspaceMessages() {
+  if (tick % 30 !== 0) return
+
+  const messages = readWorkspaceMessages({ limit: 300 }, process.cwd())
+  for (const message of messages) {
+    if (seenWorkspaceMessageIds.has(message.id)) continue
+    seenWorkspaceMessageIds.add(message.id)
+
+    if (message.kind !== "chat" && message.kind !== "dm" && message.kind !== "system") continue
+
+    const senderSession = typeof message.from === "string" ? agentSessions.get(message.from) : undefined
+    const sender = senderSession?.entity
+    const color: RGB = sender?.faceRgb ?? [180, 180, 180]
+    const senderName = message.fromName || message.from || "agent"
+
+    if (message.kind === "system") {
+      chat("system", message.text, [120, 120, 120])
+    } else if (message.kind === "chat") {
+      chat(senderName, message.text, color)
+    } else {
+      const target =
+        message.targetName
+        || (typeof message.target === "string"
+          ? message.target.replace(/^agent:/, "")
+          : "unknown")
+      chat(`${senderName} → ${target}`, message.text, color)
+    }
+
+    if (message.kind !== "system" && sender && senderSession) {
+      npcBubbles.set(sender, { text: message.text, expiresAt: Date.now() + 4000 })
+      sender.talking = true
+      senderSession.gestureExpiry = Math.max(senderSession.gestureExpiry, tick + 120)
+    }
+  }
+}
 
 // --- Input ---
 
@@ -843,15 +888,15 @@ function updateNpcAI() {
 
 // --- Agent IPC polling ---
 
-function spawnAgentEntity(sessionId: string, cmd: AgentCommand): Entity {
+function spawnAgentEntity(sessionId: string, identity: { name?: string; dna?: string }): Entity {
   // Use DNA from command if provided, otherwise derive from session ID
-  const dna = cmd.dna && /^[0-9a-f]{6,7}$/i.test(cmd.dna)
-    ? cmd.dna.toLowerCase()
+  const dna = identity.dna && /^[0-9a-f]{6,7}$/i.test(identity.dna)
+    ? identity.dna.toLowerCase()
     : encodeDNA(traitsFromName(sessionId))
   const sprH = spriteHeight(dna)
   const h = entityHeight(decodeDNA(dna), zoomLevel)
 
-  const agentName = cmd.name || sessionId.slice(0, 12)
+  const agentName = identity.name || sessionId.slice(0, 12)
 
   // Find first available spawn point or fallback to center
   const spawn = npcSpawns[0] || { x: mapWidth / 2, y: mapHeight / 2 }
@@ -879,6 +924,51 @@ function spawnAgentEntity(sessionId: string, cmd: AgentCommand): Entity {
   addEntityToChunk(chunkX, chunkY, chunkEntity)
 
   return entity
+}
+
+function removeAgentSession(sessionId: string): void {
+  const session = agentSessions.get(sessionId)
+  if (!session) return
+
+  const dna = session.entity.dna
+  const { x, y } = session.entity
+  const { chunkX, chunkY } = worldToChunk(x, y)
+
+  agentSessions.delete(sessionId)
+  removeEntityFromChunk(chunkX, chunkY, sessionId)
+
+  // Remove from persistence file if present.
+  try {
+    const data = readFileSync(AGENTS_FILE, "utf8")
+    const agents = JSON.parse(data) as PersistedAgents
+    delete agents[dna]
+    writeFileSync(AGENTS_FILE, JSON.stringify(agents) + "\n")
+  } catch {}
+
+}
+
+function syncPresenceFromWorkspace(force = false): void {
+  if (!force && tick % 30 !== 0) return // ~0.5s cadence
+
+  const active = listSessions(process.cwd()).filter((s) => isSimPresenceSession(s.sessionId))
+  const activeById = new Map(active.map((s) => [s.sessionId, s]))
+
+  for (const session of active) {
+    const existing = agentSessions.get(session.sessionId)
+    if (existing) {
+      const nextName = session.name || existing.entity.name
+      if (nextName && nextName !== existing.entity.name) {
+        existing.entity.name = nextName
+      }
+      continue
+    }
+    spawnAgentEntity(session.sessionId, { name: session.name, dna: session.dna })
+  }
+
+  for (const sessionId of Array.from(agentSessions.keys())) {
+    if (activeById.has(sessionId)) continue
+    removeAgentSession(sessionId)
+  }
 }
 
 function stampParticles(
@@ -925,59 +1015,13 @@ function processAgentCommands() {
 
   const commands = pollCommands()
   for (const { sessionId, cmd } of commands) {
-    // Handle agent disconnect
+    // Presence is sourced from workspace sessions, same as TUI.
+    // Ignore explicit leave commands and let session removal drive disconnects.
     if (cmd.action === "leave") {
-      const session = agentSessions.get(sessionId)
-      if (session) {
-        const name = session.entity.name || sessionId
-        const dna = session.entity.dna
-        const { x, y } = session.entity
-        const { chunkX, chunkY } = worldToChunk(x, y)
-        agentSessions.delete(sessionId)
-        // Remove from chunk system
-        removeEntityFromChunk(chunkX, chunkY, sessionId)
-        // Remove from persistence
-        try {
-          const data = readFileSync(AGENTS_FILE, "utf8")
-          const agents = JSON.parse(data) as PersistedAgents
-          delete agents[dna]
-          writeFileSync(AGENTS_FILE, JSON.stringify(agents) + "\n")
-        } catch {}
-        chat("system", `${name} disconnected`, [120, 120, 120])
-      }
       continue
     }
-
-    // Check if agent with this DNA already exists (resuming)
-    const dna = cmd.dna && /^[0-9a-f]{6,7}$/i.test(cmd.dna)
-      ? cmd.dna.toLowerCase()
-      : encodeDNA(traitsFromName(sessionId))
-
-    let session = agentSessions.get(sessionId)
-    let isResuming = false
-
-    if (!session) {
-      // Check if agent with same DNA already exists
-      for (const [oldSessionId, oldSession] of agentSessions) {
-        if (oldSession.entity.dna === dna) {
-          // Resume existing agent - update session ID
-          agentSessions.delete(oldSessionId)
-          agentSessions.set(sessionId, oldSession)
-          session = oldSession
-          isResuming = true
-          break
-        }
-      }
-    }
-
-    if (!session) {
-      // New agent - spawn entity
-      const entity = spawnAgentEntity(sessionId, cmd)
-      chat("system", `${entity.name} connected (${sessionId})`, [120, 120, 120])
-      session = agentSessions.get(sessionId)!
-    } else if (isResuming) {
-      chat("system", `${session.entity.name} reconnected (${sessionId})`, [120, 180, 120])
-    }
+    const session = agentSessions.get(sessionId)
+    if (!session) continue
 
     const { entity, ai } = session
 
@@ -1036,32 +1080,6 @@ function processAgentCommands() {
       entity.waveFrame = 0
       entity.talkFrame = 0
       entity.idle = true
-    }
-
-    if (cmd.action === "send" && cmd.text && cmd.target) {
-      // Direct message to a specific agent session
-      const fromName = entity.name || sessionId
-      const targetSession = agentSessions.get(cmd.target)
-      const targetName = targetSession?.entity.name || cmd.target
-      if (targetSession) {
-        writeMessages(cmd.target, [{ from: sessionId, fromName, text: cmd.text, ts: Date.now() }])
-      }
-
-      // Show in sim chat log as a DM
-      chat(`${fromName} → ${targetName}`, cmd.text, entity.faceRgb)
-
-      // Show as a chat bubble on the sender
-      npcBubbles.set(entity, { text: cmd.text, expiresAt: Date.now() + 4000 })
-
-      // Briefly toggle talk animation
-      entity.talking = true
-      session.gestureExpiry = tick + 120
-    }
-
-    if (cmd.action === "chat" && cmd.text) {
-      // Chat message: sim-only, visible in the chat log but no IPC delivery
-      const fromName = entity.name || sessionId
-      chat(fromName, cmd.text, entity.faceRgb)
     }
 
     if (cmd.action === "place" && cmd.objectType) {
@@ -1283,7 +1301,6 @@ function updateEntitiesInChunks() {
 
 function writeSimState() {
   if (tick % 120 !== 0) return // Every ~2s
-  saveAgentSessions()
   updateEntitiesInChunks()
 
   // Write map metadata for CLI map action
@@ -1402,6 +1419,8 @@ function frame() {
     fpsCounter = 0
     fpsLastTime = now
   }
+  syncPresenceFromWorkspace()
+  processWorkspaceMessages()
   updateNpcAI()
   processAgentCommands()
   processHookEvents()

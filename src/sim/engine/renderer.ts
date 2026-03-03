@@ -2,7 +2,7 @@ import {
   generateGrid,
   generateGridSmall,
   type Pixel,
-} from "../../src/index.js"
+} from "../../index.js"
 import type { RGB, Cell, Entity } from "./types.js"
 
 export type { Cell }

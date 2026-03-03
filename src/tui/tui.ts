@@ -4,7 +4,7 @@ import { getAllCalendarEvents, type CalendarEvent, type CalendarRecurrence } fro
 import { writeMessages } from "../engine/ipc.js"
 import { getAllTasks, type Task, type TaskPriority, type TaskStatus } from "../engine/tasks.js"
 import { listRequests, resolveRequest, dismissRequest, type AgentRequest } from "../engine/requests.js"
-import { decodeDNA, getTraitColors, renderTerminal, renderTerminalSmall } from "../index.js"
+import { decodeDNA, getTraitColors, renderTerminal, renderTerminalSmall, renderTermlingsLogo } from "../index.js"
 import { join } from "path"
 import { execSync } from "child_process"
 import {
@@ -3012,6 +3012,15 @@ class WorkspaceTui {
     const tinyAvatars = this.avatarSizeMode === "tiny"
 
     const skeletonColor = "\x1b[38;5;244m"
+    const anyTyping = agents.some((a) => a.online && a.typing)
+    const now = Date.now()
+    const anyTalking = Array.from(this.talkUntilByDna.values()).some((until) => until > now)
+    const logoAnimating = anyTyping || anyTalking
+    const logoAnimFrame = logoAnimating ? Math.floor(Date.now() / AVATAR_ANIM_MS) % 2 : 0
+    const logoTalkFrame = logoAnimating ? logoAnimFrame + 1 : 0
+    const logoWalkFrame = logoAnimating ? logoAnimFrame : 0
+    const logoBw = !this.selectedThreadId || this.selectedThreadId !== "activity"
+    const logoLines = renderTermlingsLogo(logoBw, logoTalkFrame, logoWalkFrame).split("\n")
     const allActivityBlock: AvatarBlock = {
       label: "All",
       displayLabel: "All",
@@ -3027,12 +3036,8 @@ class WorkspaceTui {
               `${skeletonColor}██  ████████████${ANSI_RESET}`,
               `${skeletonColor}██  ████████████${ANSI_RESET}`,
             ]
-          : [
-              `${skeletonColor}■ ■■■■■${ANSI_RESET}`,
-              `${skeletonColor}■ ■■■■ ${ANSI_RESET}`,
-              `${skeletonColor}■ ■■■■■${ANSI_RESET}`,
-            ],
-      width: Math.max(7, "All".length, "Activity".length),
+          : logoLines,
+      width: Math.max(...logoLines.map((l) => visibleLength(l)), "All".length, "Activity".length),
       selected: this.selectedThreadId === "activity",
     }
 

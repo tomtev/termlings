@@ -7,7 +7,7 @@
 import { launchWorkspaceWeb } from "./workspace/web-launch.js";
 import { launchWorkspaceTui } from "./tui/tui.js";
 import { getUpdateNotice, printUpdateNotice } from "./update-check.js";
-import { runSimCommand } from "../sim/index.js";
+import { runSimCommand } from "./sim/index.js";
 
 const args = process.argv.slice(2);
 const flags = new Set<string>();
@@ -146,9 +146,10 @@ Upgrade:
 Sim (optional):
   termlings --sim                     Start sim runtime
   termlings sim                       Start sim runtime
-  termlings --sim action walk <x>,<y>
-  termlings --sim action gesture [wave|talk]
-  termlings --sim action map [--agents|--ascii]
+  termlings sim walk <x>,<y>
+  termlings sim gesture [wave|talk]
+  termlings sim map [--agents|--ascii]
+  termlings sim --help                Show sim command details
 `);
       process.exit(0);
     }
@@ -210,7 +211,7 @@ Sim (optional):
 
     if (positional[0] === "action") {
       console.error("`action` commands are sim-specific.")
-      console.error("Run: termlings --sim action <walk|gesture|map> ...")
+      console.error("Run: termlings sim <walk|gesture|map> ...")
       process.exit(1)
     }
 

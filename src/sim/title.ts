@@ -9,7 +9,7 @@ import {
   buildWalkGrid, createPathfinderState, createNpcAIState, stepNpc,
   type WalkGrid, type NpcAIState, type PathfinderState,
 } from "./engine/npc-ai.js"
-import { generateRandomDNA } from "../src/index.js"
+import { generateRandomDNA } from "../index.js"
 import { composeText, applyPadding, applyShadow, lerpRgb } from "termfont"
 import { readFileSync, readdirSync, existsSync } from "fs"
 import { join } from "path"

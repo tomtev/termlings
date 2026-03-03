@@ -64,7 +64,13 @@ function loadSessions(): SessionState[] {
     try {
       const raw = readFileSync(join(dir, file), "utf8")
       const parsed = JSON.parse(raw) as SessionState
-      if (parsed && typeof parsed.sessionId === "string") {
+      if (
+        parsed
+        && typeof parsed.sessionId === "string"
+        && typeof parsed.x === "number"
+        && typeof parsed.y === "number"
+        && typeof parsed.footY === "number"
+      ) {
         out.push(parsed)
       }
     } catch {
@@ -86,7 +92,7 @@ function handleActionWalk(actionPositional: string[]): void {
   const sessionId = requireSessionId()
   const coord = parseCoord(actionPositional[1])
   if (!coord) {
-    console.error("Usage: termlings --sim action walk <x>,<y>")
+    console.error("Usage: termlings sim walk <x>,<y>")
     process.exit(1)
   }
   writeCommand(sessionId, {
@@ -135,12 +141,12 @@ function handleActionMap(flags: Set<string>): void {
 
   if (flags.has("ascii")) {
     console.log("ASCII map is unavailable in workspace mode (metadata does not include tiles).")
-    console.log("Use: termlings --sim action map")
+    console.log("Use: termlings sim map")
     return
   }
 
   if (!map) {
-    console.error("No sim metadata found. Is `termlings --sim` running?")
+    console.error("No sim metadata found. Is `termlings sim` running?")
     process.exit(1)
   }
 
@@ -190,7 +196,7 @@ function handleActionMap(flags: Set<string>): void {
 export async function handleSimAction(actionPositional: string[], flags: Set<string>): Promise<void> {
   const verb = actionPositional[0]
   if (!verb || verb === "--help" || verb === "-h") {
-    console.log(`Usage: termlings --sim action <command>
+    console.log(`Usage: termlings sim <command>
 
 Commands:
   walk <x>,<y>                Walk avatar to coordinates

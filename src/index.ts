@@ -887,6 +887,128 @@ export function renderTerminalSmall(
   return lines.join("\n");
 }
 
+// ─── Termlings Logo (👾 space invader) ───
+
+type LogoPixel = "b" | "d" | "_";
+
+const LOGO_GRID: LogoPixel[][] = [
+  ["_","_","b","_","_","_","b","_","_"],  // 0: antennae
+  ["_","b","b","b","b","b","b","b","_"],  // 1: head top
+  ["b","b","d","b","b","b","d","b","b"],  // 2: eyes top
+  ["b","b","d","b","b","b","d","b","b"],  // 3: eyes bottom
+  ["b","b","b","b","b","b","b","b","b"],  // 4: body
+  ["b","b","b","d","d","d","b","b","b"],  // 5: mouth
+  ["_","b","b","b","b","b","b","b","_"],  // 6: lower body
+  ["_","_","b","_","b","_","b","_","_"],  // 7: teeth/legs
+  ["_","b","_","_","_","_","_","b","_"],  // 8: feet
+];
+
+// Mouth talk frame — row 5 narrowed (1-wide dark instead of 3)
+const LOGO_MOUTH_TALK: LogoPixel[] = ["b","b","b","b","d","b","b","b","b"];
+
+// Walk frames for row 8 only (feet)
+const LOGO_FEET: LogoPixel[][] = [
+  ["_","b","_","_","_","_","_","b","_"],  // frame 0: spread
+  ["_","_","b","_","_","_","b","_","_"],  // frame 1: inward
+];
+
+// Mouth row index in the grid
+const LOGO_MOUTH_ROW = 5;
+
+// Feet row index in the grid
+const LOGO_FEET_ROW = 8;
+
+// Row-pair index where ▂ arms are drawn on each side (rows 4-5 = pair 2)
+const LOGO_ARM_ROW = 2;
+
+const LOGO_BODY_RGB: [number, number, number] = [138, 43, 226]; // purple
+const LOGO_DARK_RGB: [number, number, number] = [50, 13, 87];   // dark purple (same hue, L=0.18)
+
+/**
+ * Render the Termlings 👾 logo in small half-block terminal style.
+ * 9-col grid with ▂ arms on the sides. Dark eyes and mouth like regular avatars.
+ * @param bw Grayscale mode.
+ * @param talkFrame 0 = normal (mouth open), 1+ = talking (mouth toggles).
+ * @param walkFrame 0 = standing, 1+ = walking (legs toggle).
+ */
+export function renderTermlingsLogo(bw = false, talkFrame = 0, walkFrame = 0): string {
+  const bodyRgb: [number, number, number] = bw ? [140, 140, 140] : LOGO_BODY_RGB;
+  const darkRgb: [number, number, number] = bw ? [77, 77, 77] : LOGO_DARK_RGB;
+  const mouthOpen = talkFrame === 0 || talkFrame % 2 === 0;
+  const feetRow = LOGO_FEET[walkFrame % LOGO_FEET.length]!;
+
+  function cellRgb(c: LogoPixel): [number, number, number] | null {
+    if (c === "b") return bodyRgb;
+    if (c === "d") return darkRgb;
+    return null;
+  }
+
+  const reset = "\x1b[0m";
+  const lines: string[] = [];
+
+  for (let r = 0; r < LOGO_GRID.length; r += 2) {
+    function getRow(idx: number): LogoPixel[] {
+      if (idx === LOGO_MOUTH_ROW && !mouthOpen) return LOGO_MOUTH_TALK;
+      if (idx === LOGO_FEET_ROW) return feetRow;
+      return LOGO_GRID[idx]!;
+    }
+    const topRow = getRow(r);
+    const botIdx = r + 1;
+    const botRow = botIdx < LOGO_GRID.length ? getRow(botIdx) : null;
+    let line = "";
+    for (let c = 0; c < topRow.length; c++) {
+      const top = cellRgb(topRow[c]!);
+      const bot = botRow ? cellRgb(botRow[c]!) : null;
+      if (top && bot) {
+        line += `\x1b[38;2;${top[0]};${top[1]};${top[2]}m\x1b[48;2;${bot[0]};${bot[1]};${bot[2]}m▀${reset}`;
+      } else if (top) {
+        line += `\x1b[38;2;${top[0]};${top[1]};${top[2]}m▀${reset}`;
+      } else if (bot) {
+        line += `\x1b[38;2;${bot[0]};${bot[1]};${bot[2]}m▄${reset}`;
+      } else {
+        line += " ";
+      }
+    }
+    const pairIdx = r / 2;
+    const arm = `\x1b[38;2;${bodyRgb[0]};${bodyRgb[1]};${bodyRgb[2]}m▂${reset}`;
+    if (pairIdx === LOGO_ARM_ROW) {
+      line = arm + line + arm;
+    } else {
+      line = " " + line + " ";
+    }
+    lines.push(line);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Render the Termlings 👾 logo as SVG pixel art.
+ * @param pixelSize Size of each pixel in the grid (default 10).
+ */
+export function renderTermlingsLogoSVG(pixelSize = 10): string {
+  const cols = 9;
+  const rows = LOGO_GRID.length;
+  const w = cols * pixelSize;
+  const h = rows * pixelSize;
+
+  function cellColor(c: "b" | "_"): string | null {
+    if (c === "b") return "#8a2be2";
+    return null;
+  }
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n`;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const color = cellColor(LOGO_GRID[r]![c]!);
+      if (color) {
+        svg += `<rect x="${c * pixelSize}" y="${r * pixelSize}" width="${pixelSize}" height="${pixelSize}" fill="${color}"/>\n`;
+      }
+    }
+  }
+  svg += `</svg>`;
+  return svg;
+}
+
 /**
  * Map a hue index (0-11) to a gray value in the safe range (89-166).
  * All values are visible on both light and dark terminals.

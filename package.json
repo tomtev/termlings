@@ -31,7 +31,6 @@
   "description": "Framework for building autonomous AI agents & teams in the terminal",
   "files": [
     "src",
-    "sim",
     "bin",
     "templates",
     "web"

@@ -216,7 +216,15 @@ export function writeSessionState(sessionId: string, state: Omit<SessionState, '
   const file = join(IPC_DIR, `sessions`, `${sessionId}.json`)
   try {
     mkdirSync(join(IPC_DIR, `sessions`), { recursive: true })
-    writeFileSync(file, JSON.stringify({ sessionId, ...state }) + "\n")
+    let existing: Record<string, unknown> = {}
+    try {
+      const data = readFileSync(file, "utf8")
+      const parsed = JSON.parse(data) as Record<string, unknown>
+      if (parsed && typeof parsed === "object") {
+        existing = parsed
+      }
+    } catch {}
+    writeFileSync(file, JSON.stringify({ ...existing, sessionId, ...state }) + "\n")
   } catch (e) {
     // Silently fail - not critical
   }

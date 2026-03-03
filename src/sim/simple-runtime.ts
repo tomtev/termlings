@@ -2,7 +2,7 @@ import {
   decodeDNA,
   encodeDNA,
   traitsFromName,
-} from "../src/index.js"
+} from "../index.js"
 import {
   type RGB,
   type Cell,
