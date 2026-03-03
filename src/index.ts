@@ -409,10 +409,35 @@ export function generateGridSmall(traits: DecodedDNA, frame = 0, talkFrame = 0, 
     ];
   }
 
-  const mouthRows = talkFrame === 0
-    ? MOUTHS[traits.mouth]!
-    : TALK_FRAMES[(talkFrame - 1) % TALK_FRAMES.length]!;
-  const mouthRow = mouthRows[mouthRows.length - 1]!;
+  // Small avatars only render one mouth row. For "talking", shrink that row
+  // and alternate back to the normal mouth on the next frame.
+  const baseMouthRow = MOUTHS[traits.mouth]![MOUTHS[traits.mouth]!.length - 1]!
+  const mouthRow = talkFrame === 0
+    ? baseMouthRow
+    : (() => {
+      const isMouthPixel = (cell: Pixel): boolean => cell === "m" || cell === "d"
+      const darkCols: number[] = []
+      for (let col = 0; col < baseMouthRow.length; col++) {
+        if (isMouthPixel(baseMouthRow[col]!)) {
+          darkCols.push(col)
+        }
+      }
+      if (darkCols.length === 0) {
+        return baseMouthRow
+      }
+
+      const shrunk = baseMouthRow.map((cell) => (isMouthPixel(cell) ? "f" : cell)) as Pixel[]
+      const center = Math.round(darkCols.reduce((sum, col) => sum + col, 0) / darkCols.length)
+      const targetCount = darkCols.length === 1 ? 0 : Math.max(1, Math.floor(darkCols.length / 2))
+      const start = center - Math.floor(targetCount / 2)
+      for (let i = 0; i < targetCount; i++) {
+        const col = start + i
+        if (col >= 0 && col < shrunk.length) {
+          shrunk[col] = "d"
+        }
+      }
+      return shrunk
+    })()
 
   return [
     ...HATS[traits.hat]!,

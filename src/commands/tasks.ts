@@ -2,12 +2,51 @@
  * Task management commands
  */
 
+function creatorFromEnvironment(agentName: string): { createdBy: string; createdByName: string } {
+  const slug = process.env.TERMLINGS_AGENT_SLUG?.trim();
+  if (slug) {
+    return {
+      createdBy: `agent:${slug}`,
+      createdByName: agentName || slug,
+    };
+  }
+
+  return {
+    createdBy: "human:default",
+    createdByName: "Owner",
+  };
+}
+
+function normalizeTaskCreatorTarget(createdBy: string | undefined): string {
+  const raw = (createdBy || "OWNER").trim();
+  if (!raw) return "human:default";
+
+  const lower = raw.toLowerCase();
+  if (
+    lower === "owner" ||
+    lower === "operator" ||
+    lower === "human" ||
+    lower === "human:owner" ||
+    lower === "human:operator" ||
+    lower === "human:default"
+  ) {
+    return "human:default";
+  }
+  if (raw.startsWith("human:") || raw.startsWith("agent:")) {
+    return raw;
+  }
+
+  // Legacy task creator format stored plain slug.
+  return `agent:${raw}`;
+}
+
 export async function handleTask(flags: Set<string>, positional: string[]) {
   const { createTask, getTask, getAllTasks, claimTask, updateTaskStatus, addTaskNote, addTaskDependency, removeTaskDependency, getUnresolvedDeps, formatTask, formatAgentTaskList } =
     await import("../engine/tasks.js");
   const sessionId = process.env.TERMLINGS_SESSION_ID;
   const agentSlug = process.env.TERMLINGS_AGENT_SLUG || process.env.TERMLINGS_SESSION_ID || "";
   const agentName = process.env.TERMLINGS_AGENT_NAME || "Agent";
+  const agentDna = process.env.TERMLINGS_AGENT_DNA || process.env.TERMLINGS_SESSION_ID || "0000000";
 
   const subcommand = positional[1];
 
@@ -119,7 +158,12 @@ BEST PRACTICES:
       process.exit(1);
     }
 
-    const task = createTask(title, description || "", priority || "medium");
+    const creator = creatorFromEnvironment(agentName);
+    const task = createTask(title, description || "", priority || "medium", undefined, creator);
+    if (!task) {
+      console.error("Failed to create task due to concurrent updates. Please try again.");
+      process.exit(1);
+    }
     console.log(`✓ Task created: ${task.id} (${task.title})`);
     return;
   }
@@ -180,6 +224,23 @@ BEST PRACTICES:
       console.error(`Task not found: ${taskId}`);
       process.exit(1);
     }
+
+    const reporterTarget = process.env.TERMLINGS_AGENT_SLUG
+      ? `agent:${process.env.TERMLINGS_AGENT_SLUG}`
+      : "human:default";
+    const creatorTarget = normalizeTaskCreatorTarget(task.createdBy);
+    if (creatorTarget !== reporterTarget) {
+      const reportMessage = `Task update: ${task.id} (${task.title}) is now ${task.status}${note ? ` — ${note}` : ""}`;
+      try {
+        const { sendMessage } = await import("../engine/messaging-util.js");
+        await sendMessage(creatorTarget, reportMessage, sessionId!, agentName, agentDna);
+      } catch (error) {
+        console.error(
+          `Warning: status updated, but failed to report to ${creatorTarget}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
     console.log(`✓ Status updated: ${newStatus}`);
     return;
   }

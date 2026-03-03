@@ -3,6 +3,7 @@ import { join } from "path"
 
 export type TaskStatus = "open" | "claimed" | "in-progress" | "completed" | "blocked"
 export type TaskPriority = "low" | "medium" | "high"
+const TASK_OCC_MAX_RETRIES = 6
 
 export interface Task {
   id: string
@@ -11,8 +12,10 @@ export interface Task {
   status: TaskStatus
   priority: TaskPriority
   createdAt: number
-  createdBy: string // "OWNER" or agent slug
+  createdBy: string // "OWNER", "human:*", "agent:*", or legacy agent slug
+  createdByName?: string
   updatedAt: number
+  version?: number // optimistic concurrency version
   assignedTo?: string // agent slug (e.g. "developer", "alice")
   assignedAt?: number
   dueDate?: number // optional deadline
@@ -40,6 +43,90 @@ function generateTaskId(): string {
   return `task_${Date.now()}_${Math.random().toString(36).substring(7)}`
 }
 
+function parseTasksRaw(raw: string): Task[] {
+  if (!raw.trim()) return []
+  const parsed = JSON.parse(raw)
+  if (!Array.isArray(parsed)) return []
+  return parsed.map((task) => ({
+    ...task,
+    createdBy: (task?.createdBy || "human:default").toString(),
+    createdByName: typeof task?.createdByName === "string" ? task.createdByName : undefined,
+    version: typeof task?.version === "number" && Number.isFinite(task.version)
+      ? task.version
+      : 1,
+    notes: Array.isArray(task?.notes) ? task.notes : [],
+  })) as Task[]
+}
+
+function readTasksSnapshot(): { tasks: Task[]; raw: string } {
+  const file = tasksFile()
+  if (!existsSync(file)) {
+    return { tasks: [], raw: "" }
+  }
+
+  try {
+    const raw = readFileSync(file, "utf-8")
+    return { tasks: parseTasksRaw(raw), raw }
+  } catch (e) {
+    console.error(`Error reading tasks: ${e}`)
+    return { tasks: [], raw: "" }
+  }
+}
+
+function tryWriteTasks(tasks: Task[], expectedRaw: string): boolean {
+  const file = tasksFile()
+  mkdirSync(tasksDir(), { recursive: true })
+
+  let currentRaw = ""
+  if (existsSync(file)) {
+    try {
+      currentRaw = readFileSync(file, "utf-8")
+    } catch {
+      return false
+    }
+  }
+
+  if (currentRaw !== expectedRaw) {
+    return false
+  }
+
+  writeFileSync(file, JSON.stringify(tasks, null, 2) + "\n")
+  return true
+}
+
+function mutateTasksWithRetry<T>(
+  mutator: (tasks: Task[]) => { changed: boolean; result: T },
+): T | null {
+  for (let attempt = 0; attempt < TASK_OCC_MAX_RETRIES; attempt++) {
+    const snapshot = readTasksSnapshot()
+    const working = snapshot.tasks.map((task) => ({
+      ...task,
+      notes: task.notes.map((note) => ({ ...note })),
+      blockedBy: task.blockedBy ? [...task.blockedBy] : undefined,
+    }))
+
+    const { changed, result } = mutator(working)
+    if (!changed) return result
+    if (tryWriteTasks(working, snapshot.raw)) return result
+  }
+
+  return null
+}
+
+function unresolvedDepsFromTasks(task: Task, allTasks: Task[]): string[] {
+  if (!task.blockedBy || task.blockedBy.length === 0) return []
+  const taskMap = new Map(allTasks.map(t => [t.id, t]))
+  return task.blockedBy.filter(depId => {
+    const dep = taskMap.get(depId)
+    return !dep || dep.status !== "completed"
+  })
+}
+
+function bumpTaskVersion(task: Task): void {
+  const current = typeof task.version === "number" && Number.isFinite(task.version) ? task.version : 1
+  task.version = current + 1
+}
+
 /**
  * Create a new task
  */
@@ -47,9 +134,11 @@ export function createTask(
   title: string,
   description: string,
   priority: TaskPriority = "medium",
-  dueDate?: number
-): Task {
+  dueDate?: number,
+  creator: { createdBy: string; createdByName?: string } = { createdBy: "human:default", createdByName: "Owner" },
+): Task | null {
   mkdirSync(tasksDir(), { recursive: true })
+  const now = Date.now()
 
   const task: Task = {
     id: generateTaskId(),
@@ -57,32 +146,28 @@ export function createTask(
     description,
     status: "open",
     priority,
-    createdAt: Date.now(),
-    createdBy: "OWNER",
-    updatedAt: Date.now(),
+    createdAt: now,
+    createdBy: creator.createdBy || "human:default",
+    createdByName: creator.createdByName,
+    updatedAt: now,
+    version: 1,
     notes: [],
     dueDate,
   }
 
-  saveTasks([...getAllTasks(), task])
-  return task
+  const created = mutateTasksWithRetry<Task>((tasks) => {
+    tasks.push(task)
+    return { changed: true, result: task }
+  })
+
+  return created
 }
 
 /**
  * Get all tasks
  */
 export function getAllTasks(): Task[] {
-  const file = tasksFile()
-  try {
-    if (!existsSync(file)) {
-      return []
-    }
-    const data = readFileSync(file, "utf-8")
-    return JSON.parse(data) as Task[]
-  } catch (e) {
-    console.error(`Error reading tasks: ${e}`)
-    return []
-  }
+  return readTasksSnapshot().tasks
 }
 
 /**
@@ -114,86 +199,87 @@ export function getAgentTasks(agentSlug: string): Task[] {
  * Returns task IDs from blockedBy that are not yet completed
  */
 export function getUnresolvedDeps(task: Task): string[] {
-  if (!task.blockedBy || task.blockedBy.length === 0) return []
-  const allTasks = getAllTasks()
-  const taskMap = new Map(allTasks.map(t => [t.id, t]))
-  return task.blockedBy.filter(depId => {
-    const dep = taskMap.get(depId)
-    return !dep || dep.status !== "completed"
-  })
+  return unresolvedDepsFromTasks(task, getAllTasks())
 }
 
 /**
  * Add a dependency: taskId is blocked by depTaskId
  */
 export function addTaskDependency(taskId: string, depTaskId: string): Task | null {
-  const tasks = getAllTasks()
-  const task = tasks.find(t => t.id === taskId)
-  const dep = tasks.find(t => t.id === depTaskId)
+  return mutateTasksWithRetry<Task | null>((tasks) => {
+    const task = tasks.find(t => t.id === taskId)
+    const dep = tasks.find(t => t.id === depTaskId)
 
-  if (!task || !dep) return null
-  if (taskId === depTaskId) return null
+    if (!task || !dep) return { changed: false, result: null }
+    if (taskId === depTaskId) return { changed: false, result: null }
 
-  if (!task.blockedBy) task.blockedBy = []
-  if (task.blockedBy.includes(depTaskId)) return task // already added
+    if (!task.blockedBy) task.blockedBy = []
+    if (task.blockedBy.includes(depTaskId)) return { changed: false, result: task }
 
-  task.blockedBy.push(depTaskId)
-  task.updatedAt = Date.now()
-  task.notes.push({
-    by: "OWNER",
-    byName: "System",
-    text: `Dependency added: blocked by ${dep.title} (${depTaskId})`,
-    at: Date.now(),
+    const now = Date.now()
+    task.blockedBy.push(depTaskId)
+    task.updatedAt = now
+    bumpTaskVersion(task)
+    task.notes.push({
+      by: "OWNER",
+      byName: "System",
+      text: `Dependency added: blocked by ${dep.title} (${depTaskId})`,
+      at: now,
+    })
+
+    return { changed: true, result: task }
   })
-
-  saveTasks(tasks)
-  return task
+    ?? null
 }
 
 /**
  * Remove a dependency
  */
 export function removeTaskDependency(taskId: string, depTaskId: string): Task | null {
-  const tasks = getAllTasks()
-  const task = tasks.find(t => t.id === taskId)
+  return mutateTasksWithRetry<Task | null>((tasks) => {
+    const task = tasks.find(t => t.id === taskId)
 
-  if (!task || !task.blockedBy) return null
+    if (!task || !task.blockedBy) return { changed: false, result: null }
+    if (!task.blockedBy.includes(depTaskId)) return { changed: false, result: task }
 
-  task.blockedBy = task.blockedBy.filter(id => id !== depTaskId)
-  if (task.blockedBy.length === 0) delete task.blockedBy
-  task.updatedAt = Date.now()
+    task.blockedBy = task.blockedBy.filter(id => id !== depTaskId)
+    if (task.blockedBy.length === 0) delete task.blockedBy
+    task.updatedAt = Date.now()
+    bumpTaskVersion(task)
 
-  saveTasks(tasks)
-  return task
+    return { changed: true, result: task }
+  })
+    ?? null
 }
 
 /**
  * Claim a task (assign to agent by slug)
  */
 export function claimTask(taskId: string, agentSlug: string, agentName: string): Task | null {
-  const tasks = getAllTasks()
-  const task = tasks.find(t => t.id === taskId)
+  return mutateTasksWithRetry<Task | null>((tasks) => {
+    const task = tasks.find(t => t.id === taskId)
+    if (!task) return { changed: false, result: null }
+    if (task.status !== "open" && task.status !== "claimed") return { changed: false, result: null }
 
-  if (!task) return null
-  if (task.status !== "open" && task.status !== "claimed") return null
+    const unresolved = unresolvedDepsFromTasks(task, tasks)
+    if (unresolved.length > 0) return { changed: false, result: null }
 
-  // Check dependencies — can't claim if blocked by unfinished tasks
-  const unresolved = getUnresolvedDeps(task)
-  if (unresolved.length > 0) return null
+    const now = Date.now()
+    task.assignedTo = agentSlug
+    task.assignedAt = now
+    task.status = "claimed"
+    task.updatedAt = now
+    bumpTaskVersion(task)
+    task.notes.push({
+      by: agentSlug,
+      byName: agentName,
+      text: "Claimed this task",
+      at: now,
+    })
 
-  task.assignedTo = agentSlug
-  task.assignedAt = Date.now()
-  task.status = "claimed"
-  task.updatedAt = Date.now()
-  task.notes.push({
-    by: agentSlug,
-    byName: agentName,
-    text: "Claimed this task",
-    at: Date.now(),
+    return { changed: true, result: task }
   })
-
-  saveTasks(tasks)
-  return task
+    ?? null
 }
 
 /**
@@ -205,30 +291,34 @@ export function updateTaskStatus(
   agentSlug: string,
   agentName: string,
   note?: string,
-  room = "default"
+  room = "default",
 ): Task | null {
-  const tasks = getAllTasks()
-  const task = tasks.find(t => t.id === taskId)
+  return mutateTasksWithRetry<Task | null>((tasks) => {
+    const task = tasks.find(t => t.id === taskId)
+    if (!task) return { changed: false, result: null }
 
-  if (!task) return null
+    const now = Date.now()
+    task.status = status
+    task.updatedAt = now
+    bumpTaskVersion(task)
 
-  task.status = status
-  task.updatedAt = Date.now()
+    const noteText = note || `Status updated to ${status}`
+    task.notes.push({
+      by: agentSlug,
+      byName: agentName,
+      text: noteText,
+      at: now,
+    })
 
-  const noteText = note || `Status updated to ${status}`
-  task.notes.push({
-    by: agentSlug,
-    byName: agentName,
-    text: noteText,
-    at: Date.now(),
+    if (status === "blocked" && note) {
+      task.blockedOn = note
+    } else if (status !== "blocked") {
+      delete task.blockedOn
+    }
+
+    return { changed: true, result: task }
   })
-
-  if (status === "blocked" && note) {
-    task.blockedOn = note
-  }
-
-  saveTasks(tasks)
-  return task
+    ?? null
 }
 
 /**
@@ -239,76 +329,66 @@ export function addTaskNote(
   text: string,
   agentSlug: string,
   agentName: string,
-  room = "default"
+  room = "default",
 ): Task | null {
-  const tasks = getAllTasks()
-  const task = tasks.find(t => t.id === taskId)
+  return mutateTasksWithRetry<Task | null>((tasks) => {
+    const task = tasks.find(t => t.id === taskId)
+    if (!task) return { changed: false, result: null }
 
-  if (!task) return null
+    const now = Date.now()
+    task.notes.push({
+      by: agentSlug,
+      byName: agentName,
+      text,
+      at: now,
+    })
+    task.updatedAt = now
+    bumpTaskVersion(task)
 
-  task.notes.push({
-    by: agentSlug,
-    byName: agentName,
-    text,
-    at: Date.now(),
+    return { changed: true, result: task }
   })
-  task.updatedAt = Date.now()
-
-  saveTasks(tasks)
-  return task
+    ?? null
 }
 
 /**
  * Assign task to agent
  */
 export function assignTask(taskId: string, agentSlug: string, agentName: string): Task | null {
-  const tasks = getAllTasks()
-  const task = tasks.find(t => t.id === taskId)
+  return mutateTasksWithRetry<Task | null>((tasks) => {
+    const task = tasks.find(t => t.id === taskId)
+    if (!task) return { changed: false, result: null }
 
-  if (!task) return null
+    const now = Date.now()
+    task.assignedTo = agentSlug
+    task.assignedAt = now
+    task.updatedAt = now
+    bumpTaskVersion(task)
+    task.notes.push({
+      by: "OWNER",
+      byName: "Owner",
+      text: `Assigned to ${agentName}`,
+      at: now,
+    })
 
-  task.assignedTo = agentSlug
-  task.assignedAt = Date.now()
-  task.updatedAt = Date.now()
-  task.notes.push({
-    by: "OWNER",
-    byName: "Owner",
-    text: `Assigned to ${agentName}`,
-    at: Date.now(),
+    return { changed: true, result: task }
   })
-
-  saveTasks(tasks)
-  return task
+    ?? null
 }
 
 /**
  * Delete a task
  */
 export function deleteTask(taskId: string): boolean {
-  const tasks = getAllTasks()
-  const filtered = tasks.filter(t => t.id !== taskId)
-
-  if (filtered.length === tasks.length) return false // Task not found
-
-  if (filtered.length === 0) {
-    // Delete file if no tasks left
-    try {
-      require("fs").unlinkSync(tasksFile())
-    } catch {}
-  } else {
-    saveTasks(filtered)
-  }
-
-  return true
-}
-
-/**
- * Save tasks to disk
- */
-function saveTasks(tasks: Task[]): void {
-  const file = tasksFile()
-  mkdirSync(tasksDir(), { recursive: true })
-  writeFileSync(file, JSON.stringify(tasks, null, 2) + "\n")
+  const deleted = mutateTasksWithRetry<boolean>((tasks) => {
+    const filtered = tasks.filter(t => t.id !== taskId)
+    if (filtered.length === tasks.length) {
+      return { changed: false, result: false }
+    }
+    tasks.length = 0
+    tasks.push(...filtered)
+    return { changed: true, result: true }
+  })
+  return deleted === true
 }
 
 /**

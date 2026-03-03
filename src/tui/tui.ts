@@ -303,7 +303,8 @@ class WorkspaceTui {
 
   private enterScreen(): void {
     this.stdout.write("\x1b[?1049h") // alternate screen
-    this.stdout.write("\x1b[2J\x1b[H")
+    // Clear screen + scrollback so the TUI owns the full viewport cleanly.
+    this.stdout.write("\x1b[2J\x1b[3J\x1b[H")
     this.stdout.write("\x1b[?2004h") // enable bracketed paste mode
     // Keep native terminal selection/copy behavior by not enabling mouse tracking.
     this.stdout.write("\x1b[?25l") // hide cursor
@@ -2823,7 +2824,8 @@ class WorkspaceTui {
       const req = pending[i]!
       const selected = i === selectedIndex
       const from = this.requestSenderName(req)
-      const senderChip = this.colorChipForDna(this.requestSenderDna(req))
+      const senderDna = this.requestSenderDna(req)
+      const senderChip = this.colorChipForDna(senderDna)
       const ago = Math.floor((Date.now() - req.ts) / 1000)
       const agoStr = ago < 60 ? `${ago}s` : ago < 3600 ? `${Math.floor(ago / 60)}m` : `${Math.floor(ago / 3600)}h`
       const borderColor = selected ? FG_SELECTED : FG_FRAME
@@ -2875,7 +2877,7 @@ class WorkspaceTui {
         } else {
           const maxNameWidth = Math.max(0, leftBudget - chipPrefixWidth)
           headerLeft = maxNameWidth > 0
-            ? `${chipPrefix}${truncatePlain(from, maxNameWidth)}`
+            ? `${chipPrefix}${this.formatNameWithShortTitle(from, senderDna, maxNameWidth)}`
             : senderChip
         }
       }
@@ -3873,22 +3875,24 @@ class WorkspaceTui {
       { view: "settings", label: "Settings" },
     ]
 
-    const separator = `${FG_SUBTLE_HINT} | ${ANSI_RESET}`
+    const leftBracket = `${FG_META}[${ANSI_RESET}`
+    const rightBracket = `${FG_META}]${ANSI_RESET}`
     const rendered = tabs
       .map((tab, index) => {
         const selected = this.view === tab.view
         const shortcut = selected
           ? `\x1b[38;5;255m${index + 1}${ANSI_RESET}`
           : `\x1b[38;5;244m${index + 1}${ANSI_RESET}`
+        const numberToken = `${leftBracket}${shortcut}${rightBracket}`
         const requestBadge = tab.view === "requests" && reqCount > 0
           ? ` \x1b[48;5;160m\x1b[38;5;231m ${reqCount} ${ANSI_RESET}`
           : ""
         if (selected) {
-          return `${shortcut} ${FG_ACTIVE}\x1b[1m${tab.label}\x1b[22m${ANSI_RESET}${requestBadge}`
+          return `${numberToken} ${FG_ACTIVE}\x1b[1m${tab.label}\x1b[22m${ANSI_RESET}${requestBadge}`
         }
-        return `${shortcut} ${FG_SUBTLE_HINT}${tab.label}${ANSI_RESET}${requestBadge}`
+        return `${numberToken} ${FG_SUBTLE_HINT}${tab.label}${ANSI_RESET}${requestBadge}`
       })
-      .join(separator)
+      .join("  ")
     const left = `${leftPad}${rendered}`
     return padAnsi(left, width)
   }
@@ -3986,7 +3990,7 @@ class WorkspaceTui {
     const width = Math.max(this.stdout.columns || 120, 40)
     const height = Math.max(this.stdout.rows || 30, 18)
 
-    const topPadRows = 1
+    const topPadRows = 0
     const headerLines: string[] = []
     for (let index = 0; index < topPadRows; index++) {
       headerLines.push(" ".repeat(Math.max(0, width)))
