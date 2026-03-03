@@ -1,8 +1,9 @@
-import { createReadStream, createWriteStream, existsSync, openSync, closeSync, writeFileSync, readFileSync } from "fs"
+import { createReadStream, createWriteStream, existsSync, openSync, closeSync, writeFileSync, readFileSync, unlinkSync } from "fs"
 import { createInterface } from "readline/promises"
 import { join } from "path"
 import { spawnSync } from "child_process"
 import { userInfo } from "os"
+import type { Readable, Writable } from "stream"
 
 import { ensureWorkspaceDirs } from "./state.js"
 import { initializeWorkspaceFromTemplate, listWorkspaceTemplates } from "./setup.js"
@@ -33,10 +34,15 @@ function getDefaultHumanName(): string {
  * Prompt user for their name and update default human.
  */
 async function setupDefaultHuman(
-  rl: any,
+  input: Readable,
+  output: Writable,
   projectRoot: string,
 ): Promise<void> {
   const humanPath = join(projectRoot, ".termlings", "humans", "default", "SOUL.md")
+  const rl = createInterface({
+    input,
+    output,
+  })
 
   try {
     const defaultName = getDefaultHumanName()
@@ -54,6 +60,90 @@ async function setupDefaultHuman(
       console.log(`✓ Your name: ${name}`)
     }
   } catch {}
+  finally {
+    rl.close()
+  }
+}
+
+type GitIgnoreMode = "all" | "messages" | "none"
+
+function parseGitIgnoreMode(input: string): GitIgnoreMode {
+  const value = input.trim().toLowerCase()
+  if (!value || value === "2" || value === "messages" || value === "ignore messages") return "messages"
+  if (value === "1" || value === "all" || value === "ignore all") return "all"
+  if (value === "3" || value === "none" || value === "no" || value === "no ignore") return "none"
+  return "messages"
+}
+
+async function setupGitIgnore(
+  input: Readable,
+  output: Writable,
+  projectRoot: string,
+): Promise<void> {
+  const rl = createInterface({
+    input,
+    output,
+  })
+
+  try {
+    console.log("")
+    console.log("Git ignore for .termlings:")
+    console.log("  1. Ignore all")
+    console.log("     Ignore all .termlings files (except .termlings/.gitignore)")
+    console.log("  2. Ignore messages (recommended)")
+    console.log("     Ignore only message history under .termlings/store/messages/")
+    console.log("  3. No ignore")
+    console.log("     Keep .termlings files fully visible to git")
+
+    const mode = parseGitIgnoreMode(await rl.question("Git ignore option [2]: "))
+    const gitignorePath = join(projectRoot, ".termlings", ".gitignore")
+
+    if (mode === "all") {
+      writeFileSync(
+        gitignorePath,
+        [
+          "# Managed by termlings init",
+          "*",
+          "!.gitignore",
+          "",
+        ].join("\n"),
+        "utf8",
+      )
+      console.log("✓ Git ignore mode: all .termlings files")
+      return
+    }
+
+    if (mode === "messages") {
+      writeFileSync(
+        gitignorePath,
+        [
+          "# Managed by termlings init",
+          "store/messages/",
+          "",
+        ].join("\n"),
+        "utf8",
+      )
+      console.log("✓ Git ignore mode: messages only")
+      return
+    }
+
+    if (existsSync(gitignorePath)) {
+      try {
+        unlinkSync(gitignorePath)
+      } catch {}
+    }
+    console.log("✓ Git ignore mode: no ignore rules")
+  } catch {}
+  finally {
+    rl.close()
+  }
+}
+
+function templateDescription(template: string): string {
+  if (template === "default") {
+    return "PM-led startup team: PM, Designer, Developer, Growth, Support."
+  }
+  return "Local workspace template."
 }
 
 export async function ensureWorkspaceInitialized(
@@ -105,19 +195,19 @@ export async function ensureWorkspaceInitialized(
     }
   }
 
-  const rl = createInterface({
+  let rl = createInterface({
     input: rlInput,
     output: rlOutput,
   })
 
   try {
     const setupPrompt = workspaceExists
-      ? ".termlings already exists. Re-run setup and template selection? [Y/n] "
-      : "No .termlings folder found. Set up Termlings in this project? [Y/n] "
+      ? "Start setup wizard for this existing workspace? [Y/n] "
+      : "Create a new Termlings workspace in this folder? [Y/n] "
 
     const setupAnswer = (await rl.question(setupPrompt)).trim().toLowerCase()
     if (setupAnswer === "n" || setupAnswer === "no") {
-      console.log("Setup cancelled.")
+      console.log("Setup cancelled. No files were changed.")
       return false
     }
 
@@ -126,13 +216,19 @@ export async function ensureWorkspaceInitialized(
       console.log("")
       console.log(`Using template from --template: ${template}`)
     } else {
+      const muted = "\x1b[38;5;245m"
+      const reset = "\x1b[0m"
       console.log("")
-      console.log("Available templates:")
+      console.log("Select a workspace template:")
       templateOptions.forEach((localTemplate, index) => {
-        console.log(`  ${index + 1}. ${localTemplate}`)
+        const label = localTemplate === defaultTemplate
+          ? `${localTemplate} (recommended)`
+          : localTemplate
+        console.log(`  ${index + 1}. ${label}`)
+        console.log(`     ${muted}${templateDescription(localTemplate)}${reset}`)
       })
 
-      const templateAnswer = (await rl.question("Select template [1]: ")).trim()
+      const templateAnswer = (await rl.question("Template [1]: ")).trim()
       template = defaultTemplate
 
       if (templateAnswer.length > 0) {
@@ -150,11 +246,15 @@ export async function ensureWorkspaceInitialized(
     const result = initializeWorkspaceFromTemplate(template, projectRoot)
     console.log(`✓ Initialized .termlings using template: ${result.templateName}`)
 
-    await setupDefaultHuman(rl, projectRoot)
+    rl.close()
+    await setupDefaultHuman(rlInput, rlOutput, projectRoot)
+    await setupGitIgnore(rlInput, rlOutput, projectRoot)
 
     return true
   } finally {
-    rl.close()
+    try {
+      rl.close()
+    } catch {}
     if (ttyFd !== null) {
       try {
         closeSync(ttyFd)

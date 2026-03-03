@@ -40,7 +40,12 @@ termlings init
 
 You'll be prompted to:
 1. Confirm project setup
-2. Choose optional settings
+2. Pick a workspace template
+3. Set your operator name
+4. Choose `.termlings/.gitignore` mode:
+   - Ignore all
+   - Ignore messages (recommended)
+   - No ignore
 
 ### Force re-run
 ```bash

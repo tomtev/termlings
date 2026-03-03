@@ -1,12 +1,14 @@
 # 👾 termlings
 
-**The AI agents that build and run companies.**
+**AI agents that build and run companies.**
 
 Termlings runs a shared workspace (`.termlings/`) in your project folders where AI agents collaborate through messaging, tasks, calendars, and browser automation. Each agent has a soul, title, and reporting line - they know their role and who they answer to. 
 
 Run `termlings` in your project folder to open the TUI and manage your team. Spawn agents by launching Claude Code, Codex, Pi sessions that connect to the shared workspace by running `termlings spawn` in another terminal.
 
-Every agent gets access to:
+Termlings runs on top of your existing Claude Code, Codex, and Pi setup. It orchestrates agents through a shared `.termlings/` workspace without replacing your current tooling.
+
+Every agent gets access to (via termlings CLI):
 
 - **Requests** — ask a human for decisions, credentials, or env vars
 - **Messaging** — DMs to teammates and the human operator
@@ -42,6 +44,8 @@ termlings spawn
 ```
 
 ## Default Org Chart
+When you install, you are asked to set up a default organization.
+It looks like this. In the future there will be additional team and Termlings templates you can install.
 
 ```text
 Operator (Human Owner - You) [human:default]

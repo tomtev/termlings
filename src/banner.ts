@@ -4,13 +4,22 @@
 
 import { readFileSync } from "fs";
 import { execSync } from "child_process";
-import { renderTermlingsLogo } from "./index.js";
+import { renderTerminalSmall, renderTermlingsLogo } from "./index.js";
 import type { UpdateNotice } from "./update-check.js";
 
 const ANSI_PATTERN = /\x1b\[[0-9;]*m/g;
 
 function stripAnsi(s: string): string {
   return s.replace(ANSI_PATTERN, "");
+}
+
+function padAnsi(input: string, width: number): string {
+  const missing = Math.max(0, width - stripAnsi(input).length);
+  return `${input}${" ".repeat(missing)}`;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function readVersion(): string {
@@ -93,6 +102,36 @@ export function printInitBanner(): void {
 }
 
 /**
+ * Print the interactive setup wizard banner for `termlings init`.
+ */
+export function printSetupWizardBanner(force = false): void {
+  const version = readVersion();
+  const reset = "\x1b[0m";
+  const bold = "\x1b[1m";
+  const muted = "\x1b[38;5;245m";
+  const purple = "\x1b[38;2;138;43;226m";
+  const green = "\x1b[38;5;121m";
+
+  const subtitle = force
+    ? `${muted}Let's re-run your workspace setup wizard.${reset}`
+    : `${muted}Welcome to the Termlings setup wizard.${reset}`;
+  const action = force
+    ? `${green}We'll refresh template + profile settings.${reset}`
+    : `${green}We'll create your workspace, team, and profile.${reset}`;
+
+  const lines = [
+    `${purple}${bold}termlings${reset} ${muted}v${version}${reset}`,
+    "",
+    subtitle,
+    action,
+  ];
+
+  console.log("");
+  console.log(renderBanner(lines));
+  console.log("");
+}
+
+/**
  * Print the post-init success banner.
  */
 export function printPostInitBanner(agentCount: number): void {
@@ -112,6 +151,70 @@ export function printPostInitBanner(agentCount: number): void {
 
   console.log("");
   console.log(renderBanner(lines));
+  console.log("");
+}
+
+export interface TeamWaveAgent {
+  dna: string;
+  label: string;
+}
+
+function centerLabel(label: string, width: number): string {
+  const text = label.length > width ? label.slice(0, width) : label;
+  const totalPad = Math.max(0, width - text.length);
+  const left = Math.floor(totalPad / 2);
+  const right = totalPad - left;
+  return `${" ".repeat(left)}${text}${" ".repeat(right)}`;
+}
+
+function renderTeamWaveFrame(agents: TeamWaveAgent[], waveFrame: number): { frame: string; lines: number } {
+  const avatarBlocks = agents.map((agent) => renderTerminalSmall(agent.dna, 0, false, 0, waveFrame).split("\n"));
+  const rows = Math.max(...avatarBlocks.map((block) => block.length));
+  const slotWidths = avatarBlocks.map((block) => Math.max(...block.map((line) => stripAnsi(line).length), 8));
+  const gap = "  ";
+
+  const lines: string[] = [];
+  for (let row = 0; row < rows; row++) {
+    const parts = avatarBlocks.map((block, index) => {
+      const line = block[row] || "";
+      return padAnsi(line, slotWidths[index]!);
+    });
+    lines.push(parts.join(gap));
+  }
+
+  const muted = "\x1b[38;5;245m";
+  const reset = "\x1b[0m";
+  const labelParts = agents.map((agent, index) => centerLabel(agent.label, slotWidths[index]!));
+  lines.push(`${muted}${labelParts.join(gap)}${reset}`);
+
+  return { frame: lines.join("\n"), lines: lines.length };
+}
+
+/**
+ * Print a short one-row waving animation of initialized agents.
+ */
+export async function printPostInitTeamWave(agents: TeamWaveAgent[]): Promise<void> {
+  if (!process.stdout.isTTY) return;
+  if (agents.length === 0) return;
+
+  const waveAgents = agents.slice(0, 8);
+  const frames = [1, 2, 1, 2, 1, 0];
+  const frameDelayMs = 130;
+
+  const muted = "\x1b[38;5;245m";
+  const reset = "\x1b[0m";
+  console.log(`${muted}Team wave:${reset}`);
+
+  let previousLines = 0;
+  for (const waveFrame of frames) {
+    if (previousLines > 0) {
+      process.stdout.write(`\x1b[${previousLines}A`);
+    }
+    const rendered = renderTeamWaveFrame(waveAgents, waveFrame);
+    process.stdout.write(`${rendered.frame}\n`);
+    previousLines = rendered.lines;
+    await sleep(frameDelayMs);
+  }
   console.log("");
 }
 

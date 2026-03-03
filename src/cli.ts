@@ -180,8 +180,17 @@ Sim (optional):
       const { existsSync } = await import("fs");
       const { join } = await import("path");
       if (!existsSync(join(process.cwd(), ".termlings"))) {
-        const { printInitBanner } = await import("./banner.js");
-        printInitBanner();
+        const { handleInit } = await import("./commands/init.js");
+        await handleInit(new Set(), ["init"], {});
+        process.exit(0);
+      }
+
+      const { discoverLocalAgents } = await import("./agents/discover.js");
+      const agents = discoverLocalAgents();
+      if (agents.length === 0) {
+        const { handleInit } = await import("./commands/init.js");
+        await handleInit(new Set(["force"]), ["init"], {});
+        process.exit(0);
       }
 
       await launchWorkspaceTui(process.cwd(), {});

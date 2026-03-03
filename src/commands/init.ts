@@ -2,6 +2,41 @@
  * Workspace initialization command
  */
 
+async function maybeAutoExtractShadcnBrand(root = process.cwd()): Promise<void> {
+  const { existsSync } = await import("fs");
+  const { join } = await import("path");
+  const hasShadcn = existsSync(join(root, "components.json")) || existsSync(join(root, "web", "components.json"));
+  if (!hasShadcn) return;
+
+  try {
+    const {
+      createBrandTemplate,
+      extractBrand,
+      mergeBrandData,
+      readBrand,
+      relativeBrandFilePath,
+      writeBrand,
+    } = await import("../engine/brand.js");
+
+    const result = extractBrand(root, "shadcn");
+    const base = readBrand(root, "default") || createBrandTemplate(root);
+    const merged = mergeBrandData(base, result.extracted, false);
+    merged.sources = Array.from(new Set([...(base.sources || []), ...result.sources]));
+    merged.updatedAt = new Date().toISOString();
+    writeBrand(merged, root, "default");
+
+    console.log(`Auto brand extract (shadcn) -> ${relativeBrandFilePath(root, "default")}`);
+    if (result.notes.length > 0) {
+      for (const note of result.notes) {
+        console.log(`Note: ${note}`);
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.log(`Note: Skipped shadcn brand extract (${message})`);
+  }
+}
+
 export async function handleInit(flags: Set<string>, positional: string[], opts: Record<string, string>) {
   if (flags.has("help")) {
     console.log(`
@@ -65,8 +100,8 @@ NEXT STEPS:
   }
 
   // Show logo banner before init prompts
-  const { printInitBanner, printPostInitBanner } = await import("../banner.js");
-  printInitBanner();
+  const { printSetupWizardBanner, printPostInitBanner, printPostInitTeamWave } = await import("../banner.js");
+  printSetupWizardBanner(forceSetup);
 
   const { ensureWorkspaceInitialized } = await import("../workspace/initialize.js");
   let ready = false;
@@ -78,10 +113,23 @@ NEXT STEPS:
     process.exit(1);
   }
   if (ready) {
+    await maybeAutoExtractShadcnBrand(process.cwd());
+
     // Count agents for post-init banner
     const { discoverLocalAgents } = await import("../agents/discover.js");
     const agents = discoverLocalAgents();
     printPostInitBanner(agents.length);
+    const clean = (value?: string) => (value || "").trim().replace(/^['"]|['"]$/g, "");
+    const waveAgents = agents
+      .map((agent) => ({
+        dna: clean(agent.soul?.dna),
+        label: clean(agent.soul?.title_short)
+          || clean(agent.soul?.title)
+          || clean(agent.soul?.name)
+          || agent.name,
+      }))
+      .filter((agent) => /^[0-9a-f]{7}$/i.test(agent.dna));
+    await printPostInitTeamWave(waveAgents);
   }
   process.exit(0);
 }
