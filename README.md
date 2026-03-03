@@ -51,22 +51,14 @@ Termlings adds an agent coordination layer in `.termlings/` on top of your exist
 
 Each Termling agent gets role-specific context derived from its `SOUL.md` plus shared workspace context.
    
-## Default Org Chart
-When you install, you are asked to set up a default organization.
-It looks like this. In the future there will be additional team and Termlings templates you can install.
+## Why Termlings? 
+There are many ways to orchestrate AI agents — but Termlings makes it feel like running a real company. Agents have roles, personalities, and report to each other through a natural org chart. 
 
-```text
-Operator (Human Owner - You) [human:default]
-└── PM (Vision & Prioritization)
-    ├── Designer (UX & Visual Design)
-    ├── Developer (Build & Ship)
-    ├── Growth (Customer & Adoption)
-    └── Support (Operations)
-```
+The built-in terminal UI is like an AI-native Slack: chat with your agents, track tasks, and manage scheduled events — all from your terminal.
 
 ## Core Commands
 
-### Operator-first commands
+### Operator-first (Human) commands
 
 | Command | What it does | Docs |
 | --- | --- | --- |
@@ -76,12 +68,12 @@ Operator (Human Owner - You) [human:default]
 | `termlings init` | Initialize `.termlings/` in current project | [docs/INIT.md](docs/INIT.md) |
 | `termlings avatar <dna|name>` | Render avatar identity | [docs/AVATARS.md](docs/AVATARS.md) |
 | `termlings --help` | Full command reference | CLI help |
-| `termlings scheduler --deamon` | Run cron jobs for calendear | [docs/SCHEDULER.md](docs/SCHEDULER.md) |
 | `termlings --server` | Run secure HTTP API server [WIP] | [docs/SERVER.md](docs/SERVER.md) |
+| `termlings scheduler --deamon` | Run cron jobs for calendear | [docs/SCHEDULER.md](docs/SCHEDULER.md) |
 
-### Mostly agent-facing commands
-
+### Agent-facing commands
 These are primarily for agents running inside sessions. You can run them manually when needed.
+You should not run these commands since they mostly work inside a agent session.
 
 | Command | What it does | Docs |
 | --- | --- | --- |
