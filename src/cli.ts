@@ -8,6 +8,12 @@ import { launchWorkspaceTui } from "./tui/tui.js";
 import { getUpdateNotice } from "./update-check.js";
 import { runSimCommand } from "./sim/index.js";
 
+function isTruthyEnv(value?: string): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
 const args = process.argv.slice(2);
 const flags = new Set<string>();
 const opts: Record<string, string> = {};
@@ -205,6 +211,16 @@ Sim (optional):
         const { handleInit } = await import("./commands/init.js");
         await handleInit(new Set(["force"]), ["init"], {});
         process.exit(0);
+      }
+
+      if (flags.has("inside-tmux") && isTruthyEnv(process.env.TERMLINGS_CONTROL_PANEL)) {
+        try {
+          const { handleSpawn } = await import("./commands/spawn.js");
+          await handleSpawn(new Set(["all", "quiet"]), ["spawn"], {});
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.error(`Warning: failed to auto-launch team terminals: ${msg}`);
+        }
       }
 
       await launchWorkspaceTui(process.cwd(), {});

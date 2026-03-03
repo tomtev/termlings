@@ -81,7 +81,7 @@ EXAMPLES:
 
 NEXT STEPS:
   1. termlings             Start the workspace control plane
-  2. Press s               Launch team agent terminals
+  2. Team terminals        Auto-launch inside tmux
   3. Press p               Peek an agent terminal
   4. termlings org-chart   See team hierarchy
 `);

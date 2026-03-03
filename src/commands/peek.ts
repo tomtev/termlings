@@ -44,7 +44,7 @@ DESCRIPTION:
   const agentWindows = windows.filter((window) => window.name.startsWith("agent:"))
   if (agentWindows.length === 0) {
     console.error("No agent windows found in tmux session.")
-    console.error("Launch agents from the workspace (press 's' in termlings).")
+    console.error("Open termlings control and wait for team terminals to auto-launch.")
     process.exit(1)
   }
 

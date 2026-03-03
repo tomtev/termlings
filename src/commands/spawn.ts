@@ -168,6 +168,7 @@ async function spawnAgentWindows(
   presetName: string,
   agentSlugs: string[],
   extraArgs: string[],
+  quiet = false,
 ): Promise<void> {
   if (!isTmuxAvailable()) {
     console.error("tmux is required for batch spawn.")
@@ -198,10 +199,10 @@ async function spawnAgentWindows(
     }
   }
 
-  if (created.length > 0) {
+  if (!quiet && created.length > 0) {
     console.log(`Launched ${created.length} agent window(s): ${created.join(", ")}`)
   }
-  if (existing.length > 0) {
+  if (!quiet && existing.length > 0) {
     console.log(`Already running (${existing.length}): ${existing.join(", ")}`)
   }
   if (failed.length > 0) {
@@ -254,6 +255,7 @@ NOTES:
   const config = loadSpawnConfig() || DEFAULT_CONFIG
   const runtimes = Object.keys(config)
   const spawnAll = flags.has("all")
+  const quiet = flags.has("quiet")
   const inline = flags.has("inline")
   const specificAgent = (opts.agent || "").trim()
   const hasBatchTarget = spawnAll || specificAgent.length > 0
@@ -286,7 +288,7 @@ NOTES:
 
     const selectedCommand = await selectMenu(menuItems, "Select a spawn preset:", {
       header: renderBanner([]),
-      footer: "Tip: use `termlings` and press 's' to launch the team.",
+      footer: "Tip: use `termlings` for control + peek, or run `termlings spawn --all`.",
     })
 
     await routePresetCommand(selectedCommand)
@@ -361,5 +363,5 @@ NOTES:
     return
   }
 
-  await spawnAgentWindows(runtimeName, presetName, agentSlugs, extraArgs)
+  await spawnAgentWindows(runtimeName, presetName, agentSlugs, extraArgs, quiet)
 }

@@ -185,6 +185,8 @@ class WorkspaceTui {
   private avatarSizeMode: "large" | "small" | "tiny" = "small"
   private renderScheduled = false
   private lastRenderTime = 0
+  private lastTmuxStatusLeft = ""
+  private lastTmuxStatusRight = ""
 
   private calendarSchedulerRunning = false
   private calendarSchedulerCheckedAt = 0
@@ -324,6 +326,96 @@ class WorkspaceTui {
     } catch {}
   }
 
+  private isControlPanelSession(): boolean {
+    const raw = (process.env.TERMLINGS_CONTROL_PANEL || "").trim().toLowerCase()
+    return raw === "1" || raw === "true" || raw === "yes" || raw === "on"
+  }
+
+  private isInsideTmuxSession(): boolean {
+    return Boolean((process.env.TMUX || "").trim())
+  }
+
+  private tmuxSessionName(): string {
+    return (process.env.TERMLINGS_TMUX_SESSION || "").trim()
+  }
+
+  private currentViewLabel(): string {
+    if (this.view === "messages") return "Chat"
+    if (this.view === "requests") return "Requests"
+    if (this.view === "tasks") return "Tasks"
+    if (this.view === "calendar") return "Calendar"
+    if (this.view === "settings") return "Settings"
+    return "Workspace"
+  }
+
+  private renderTmuxStatusLeft(): string {
+    return `termlings · ${this.currentViewLabel()}`
+  }
+
+  private renderTmuxStatusRight(): string {
+    if (this.view === "messages") {
+      if (this.selectedThreadId.startsWith("agent:")) {
+        return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓ | Ctrl-p peek`
+      }
+      return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓`
+    }
+
+    if (this.view === "requests") {
+      return "↑/↓ select | Enter respond"
+    }
+
+    if (this.view === "settings") {
+      return "↑/↓ select | Enter toggle"
+    }
+
+    if (this.view === "tasks") {
+      return `${this.taskScrollOffset}/${this.taskScrollMax} ↑/↓`
+    }
+
+    if (this.view === "calendar") {
+      return `${this.calendarScrollOffset}/${this.calendarScrollMax} ↑/↓`
+    }
+
+    return ""
+  }
+
+  private syncTmuxStatusBar(): void {
+    if (!this.isInsideTmuxSession()) return
+    const sessionName = this.tmuxSessionName()
+    if (!sessionName) return
+
+    const left = this.renderTmuxStatusLeft()
+    const right = this.renderTmuxStatusRight()
+
+    if (left !== this.lastTmuxStatusLeft) {
+      this.lastTmuxStatusLeft = left
+      try {
+        spawnSync("tmux", ["set-option", "-t", sessionName, "@termlings_control_left", ` #[fg=colour141,bold]${left}#[default] `], {
+          stdio: "ignore",
+        })
+      } catch {}
+    }
+
+    if (right !== this.lastTmuxStatusRight) {
+      this.lastTmuxStatusRight = right
+      try {
+        spawnSync("tmux", ["set-option", "-t", sessionName, "@termlings_control_right", `#[fg=colour245]${right}#[default] `], {
+          stdio: "ignore",
+        })
+      } catch {}
+    }
+  }
+
+  private teardownControlTmuxSession(): void {
+    if (!this.isControlPanelSession()) return
+    const sessionName = (process.env.TERMLINGS_TMUX_SESSION || "").trim()
+    if (!sessionName) return
+
+    try {
+      spawnSync("tmux", ["kill-session", "-t", sessionName], { stdio: "ignore" })
+    } catch {}
+  }
+
   private stop(code: number): never {
     if (!this.running) {
       process.exit(code)
@@ -356,6 +448,7 @@ class WorkspaceTui {
     }
 
     this.leaveScreen()
+    this.teardownControlTmuxSession()
     process.exit(code)
   }
 
@@ -672,6 +765,13 @@ class WorkspaceTui {
         continue
       }
 
+      if (ch === "\u0010") {
+        if (this.view === "messages" && this.selectedThreadId.startsWith("agent:")) {
+          this.peekAgentWindow()
+        }
+        continue
+      }
+
       const hasActiveInputText =
         (this.view === "messages" && this.draft.length > 0)
         || (this.view === "requests" && this.requestInputMode)
@@ -681,16 +781,6 @@ class WorkspaceTui {
         if (lower === "q") {
           this.stop(0)
           return
-        }
-
-        if (lower === "s" && this.view === "messages") {
-          this.launchTeamWindows()
-          continue
-        }
-
-        if (lower === "p" && this.view === "messages") {
-          this.peekAgentWindow()
-          continue
         }
 
         if (lower === "b" && this.view === "messages" && this.messageScrollOffset > 0) {
@@ -741,22 +831,6 @@ class WorkspaceTui {
 
     this.syncMentionSelection()
     this.render()
-  }
-
-  private launchTeamWindows(): void {
-    const proc = spawnSync("termlings", ["spawn", "--all"], {
-      cwd: this.root,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    })
-    if ((proc.status ?? 1) !== 0) {
-      const err = (proc.stderr || proc.stdout || "").trim()
-      this.statusMessage = err ? `Launch failed: ${err}` : "Launch failed."
-      return
-    }
-
-    const output = (proc.stdout || "").trim()
-    this.statusMessage = output ? output.split("\n").slice(-1)[0] || "Launched team windows." : "Launched team windows."
   }
 
   private peekTargetSlug(): string | null {
@@ -1329,7 +1403,7 @@ class WorkspaceTui {
 
     const selectedDmThread = this.selectedDmThread()
     if (selectedDmThread && !selectedDmThread.online) {
-      this.statusMessage = `${selectedDmThread.label} is offline. Press s to launch them or p to peek another terminal.`
+      this.statusMessage = `${selectedDmThread.label} is offline. Team terminals launch automatically; press Ctrl-p to peek active terminals.`
       return
     }
 
@@ -2782,7 +2856,7 @@ class WorkspaceTui {
       if (noAgentsOnline) {
         const bannerLines = [
           "Looks like no agent terminal is online yet.",
-          "Press s to launch team terminals, or p to peek.",
+          "Team terminals launch automatically. Press Ctrl-p to peek.",
         ]
         const topPadding = Math.max(0, Math.floor((height - bannerLines.length) / 2))
         const bannerWidth = Math.max(1, width)
@@ -3982,7 +4056,10 @@ class WorkspaceTui {
 
   private renderFooterRightMeta(): string {
     if (this.view === "messages") {
-      return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓ | s launch | p peek | Ctrl-g control`
+      if (this.selectedThreadId.startsWith("agent:")) {
+        return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓ | Ctrl-p peek`
+      }
+      return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓`
     }
 
     if (this.view === "requests") {
@@ -4042,11 +4119,12 @@ class WorkspaceTui {
   private renderImmediate(): void {
     if (!this.running) return
     this.lastRenderTime = Date.now()
+    this.syncTmuxStatusBar()
 
     const width = Math.max(this.stdout.columns || 120, 40)
     const height = Math.max(this.stdout.rows || 30, 18)
 
-    const topPadRows = 0
+    const topPadRows = 1
     const headerLines: string[] = []
     for (let index = 0; index < topPadRows; index++) {
       headerLines.push(" ".repeat(Math.max(0, width)))
@@ -4067,7 +4145,7 @@ class WorkspaceTui {
     const showPromptArea = showOfflineJoinHint || showComposer
     const inputPadTopRows = showPromptArea ? (showRequestsNavigator ? 0 : 1) : 0
     const inputPadBottomRows = showPromptArea ? 1 : 0
-    const inputMarginBottomRows = 1
+    const inputMarginBottomRows = 0
     const promptContentRows = showPromptArea
       ? (showComposer ? composerLines.length + mentionSuggestionLines.length + (showTypingHint ? 1 : 0) : 1)
       : 0
@@ -4163,7 +4241,7 @@ class WorkspaceTui {
         lines.push(grayBar("", width, promptBg))
       }
       if (showOfflineJoinHint && selectedDmThread) {
-        lines.push(offlineBar(` ${selectedDmThread.label} is offline. Press s to launch or p to peek active terminals.`, width))
+        lines.push(offlineBar(` ${selectedDmThread.label} is offline. Team terminals auto-launch; press Ctrl-p to peek active terminals.`, width))
       } else if (showComposer) {
         if (showTypingHint && selectedDmThread) {
           lines.push(`${BG_INPUT_PANEL}${FG_META}${fitPlain(` ${selectedDmThread.label} is typing...`, width)}${ANSI_RESET}`)
@@ -4186,7 +4264,9 @@ class WorkspaceTui {
       lines.push("")
     }
     if (height > 0) {
-      lines[height - 1] = this.renderFooterMetaBar(width)
+      lines[height - 1] = this.isInsideTmuxSession()
+        ? " ".repeat(Math.max(0, width))
+        : this.renderFooterMetaBar(width)
     }
 
     // Overwrite in-place: move to home, write each line with clear-to-EOL.
