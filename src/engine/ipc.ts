@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync, existsSync } from "fs"
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync, existsSync, appendFileSync } from "fs"
 import { join } from "path"
 
 /**
@@ -19,7 +19,7 @@ export function getIpcDir(): string {
 
 /**
  * Get the data directory for the current project.
- * This is `.termlings/` where sim state, placements, emails, crons, and tasks are stored.
+ * This is `.termlings/` where sim state, placements, calendar events, and tasks are stored.
  */
 export function getDataDir(): string {
   return getTermlingsDir()
@@ -138,6 +138,64 @@ export function readMessages(sessionId: string): AgentMessage[] {
   } catch {
     return []
   }
+}
+
+// --- Message Queue (for offline agents/humans) ---
+
+export interface QueuedMessage extends AgentMessage {
+  fromDna?: string
+}
+
+/**
+ * Queue a message for an offline agent or human
+ * Messages persist until agent/human comes online and reads them
+ */
+export function queueMessage(targetId: string, message: QueuedMessage): void {
+  const queueDir = join(IPC_DIR, "message-queue")
+  mkdirSync(queueDir, { recursive: true })
+
+  const file = join(queueDir, `${targetId}.queue.jsonl`)
+  try {
+    const line = JSON.stringify(message) + "\n"
+    appendFileSync(file, line)
+  } catch (e) {
+    // Fallback: write to file
+    appendFileSync(file, JSON.stringify(message) + "\n")
+  }
+}
+
+/**
+ * Read all queued messages for an agent/human and clear the queue
+ */
+export function readQueuedMessages(targetId: string): QueuedMessage[] {
+  const queueDir = join(IPC_DIR, "message-queue")
+  const file = join(queueDir, `${targetId}.queue.jsonl`)
+
+  if (!existsSync(file)) return []
+
+  try {
+    const data = readFileSync(file, "utf8")
+    const messages = data
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as QueuedMessage)
+
+    // Clear the queue after reading
+    unlinkSync(file)
+    return messages
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Check if there are queued messages for an agent/human
+ */
+export function hasQueuedMessages(targetId: string): boolean {
+  const queueDir = join(IPC_DIR, "message-queue")
+  const file = join(queueDir, `${targetId}.queue.jsonl`)
+  return existsSync(file)
 }
 
 const PERSIST_FILES = new Set(["agents.json", "chat.jsonl"])

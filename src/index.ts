@@ -608,9 +608,9 @@ export function renderSVG(dna: string, pixelSize = 10, frame = 0, background: st
  * Render a DNA string as ANSI colored pixel art for the terminal.
  * Uses `██` per pixel (2 chars wide for square proportions).
  */
-export function renderTerminal(dna: string, frame = 0, bw = false): string {
+export function renderTerminal(dna: string, frame = 0, bw = false, talkFrame = 0, waveFrame = 0): string {
   const traits = decodeDNA(dna);
-  const grid = generateGrid(traits, frame);
+  const grid = generateGrid(traits, frame, talkFrame, waveFrame);
 
   const { faceRgb, darkRgb, hatRgb } = getTraitColors(traits, bw);
 
@@ -838,9 +838,16 @@ export function getAvatarCSS(): string {
 `;
 }
 
-export function renderTerminalSmall(dna: string, frame = 0, bw = false): string {
+export function renderTerminalSmall(
+  dna: string,
+  frame = 0,
+  bw = false,
+  talkFrame = 0,
+  waveFrame = 0,
+  backside = false,
+): string {
   const traits = decodeDNA(dna);
-  const grid = generateGridSmall(traits, frame);
+  const grid = generateGridSmall(traits, frame, talkFrame, waveFrame, backside);
 
   const { faceRgb, darkRgb, hatRgb } = getTraitColors(traits, bw);
 
@@ -887,4 +894,3 @@ export function renderTerminalSmall(dna: string, frame = 0, bw = false): string 
 function hueToGray(hueIndex: number): number {
   return Math.round(89 + (hueIndex / 11) * 77);
 }
-

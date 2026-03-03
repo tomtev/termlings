@@ -6,6 +6,21 @@
 import { createInterface, Interface } from "readline";
 import type { Readable, Writable } from "stream";
 
+const ANSI_RESET = "\x1b[0m";
+const ANSI_BOLD = "\x1b[1m";
+const ANSI_TITLE = "\x1b[38;5;117m";
+const ANSI_TITLE_RULE = "\x1b[38;5;67m";
+const ANSI_ITEM = "\x1b[38;5;252m";
+const ANSI_ITEM_SELECTED = "\x1b[48;5;24m\x1b[38;5;231m";
+const ANSI_ITEM_DESC = "\x1b[38;5;245m";
+const ANSI_FOOTER = "\x1b[38;5;244m";
+const ANSI_HINT = "\x1b[38;5;242m";
+const ANSI_ESCAPE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+
+function visibleLength(input: string): number {
+  return input.replace(ANSI_ESCAPE, "").length;
+}
+
 export interface MenuItem {
   label: string;
   value: string;
@@ -18,7 +33,7 @@ export interface MenuItem {
 export async function selectMenu(
   items: MenuItem[],
   title?: string,
-  options?: { input?: Readable; output?: Writable }
+  options?: { input?: Readable; output?: Writable; footer?: string }
 ): Promise<string> {
   const input = options?.input || process.stdin;
   const output = options?.output || process.stdout;
@@ -30,29 +45,50 @@ export async function selectMenu(
 
   return new Promise<string>((resolve) => {
     let selectedIndex = 0;
-    const titleStr = title ? `\n${title}\n` : "";
 
     const render = () => {
       // Clear previous output
       output.write("\x1b[2J\x1b[H"); // Clear screen and move cursor to top
-      output.write(titleStr);
+      if (title) {
+        const width = (output as NodeJS.WriteStream).columns || process.stdout.columns || 80;
+        const safeTitle = ` ${title} `;
+        const ruleWidth = Math.max(0, width - visibleLength(safeTitle) - 2);
+        output.write(`\n${ANSI_TITLE}${ANSI_BOLD}${safeTitle}${ANSI_RESET}${ANSI_TITLE_RULE}${"-".repeat(ruleWidth)}${ANSI_RESET}\n`);
+      } else {
+        output.write("\n");
+      }
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i]!;
         const isSelected = i === selectedIndex;
-        const prefix = isSelected ? "▶ " : "  ";
-        const labelColor = isSelected ? "\x1b[1;36m" : "\x1b[0m"; // Cyan if selected, normal otherwise
-        const reset = "\x1b[0m";
-        const dimGray = "\x1b[90m"; // Dim gray for descriptions
+        const prefix = isSelected ? "> " : "  ";
+        const labelColor = isSelected ? ANSI_ITEM_SELECTED : ANSI_ITEM;
 
-        output.write(`${labelColor}${prefix}${item.label}${reset}\n`);
+        output.write(`${labelColor}${prefix}${item.label}${ANSI_RESET}\n`);
 
         if (item.description) {
-          output.write(`${dimGray}   ${item.description}${reset}\n`);
+          const desc = item.description.split("\n");
+          for (const line of desc) {
+            output.write(`${ANSI_ITEM_DESC}   ${line}${ANSI_RESET}\n`);
+          }
         }
       }
 
-      output.write("\n\x1b[90m(↑/↓ to select, Enter to confirm)\x1b[0m");
+      if (options?.footer) {
+        const lines = options.footer.split("\n");
+        for (const line of lines) {
+          if (line.length === 0) {
+            output.write("\n");
+            continue;
+          }
+          if (line.includes("\x1b[")) {
+            output.write(`\n${line}`);
+          } else {
+            output.write(`\n${ANSI_FOOTER}${line}${ANSI_RESET}`);
+          }
+        }
+      }
+      output.write(`\n${ANSI_HINT}(up/down to select, Enter to confirm)${ANSI_RESET}`);
     };
 
     render();
@@ -121,5 +157,197 @@ export async function confirm(
         resolve(answer.toLowerCase() === "y");
       }
     });
+  });
+}
+
+export interface GridItem {
+  label: string;
+  title?: string;
+  value: string;
+  avatar: string; // Terminal-rendered avatar
+  disabled?: boolean; // Grayed out if true
+}
+
+/**
+ * Display agents in a grid with their small avatars
+ * Navigate with arrow keys, select with Enter
+ * Grid is responsive to terminal width
+ */
+export async function selectAgentGrid(
+  items: GridItem[],
+  title?: string,
+  options?: { input?: Readable; output?: Writable }
+): Promise<string> {
+  const input = options?.input || process.stdin;
+  const output = options?.output || process.stdout;
+
+  output.write("\x1b[?25l"); // Hide cursor
+
+  const rl = createInterface({ input, output, terminal: true });
+
+  return new Promise<string>((resolve) => {
+    let selectedIndex = items.findIndex((item) => !item.disabled);
+    if (selectedIndex === -1) selectedIndex = 0;
+
+    // Get avatar lines for all items
+    const avatarLines: string[][] = items.map((item) => item.avatar.split("\n"));
+    const maxLines = Math.max(...avatarLines.map((lines) => lines.length));
+
+    // Calculate responsive columns based on terminal width
+    const termWidth = process.stdout.columns || 80;
+    const itemWidth = 12; // Avatar width + spacing
+    const cols = Math.max(1, Math.floor((termWidth - 4) / itemWidth));
+    const rows = Math.ceil(items.length / cols);
+
+    const render = () => {
+      output.write("\x1b[2J\x1b[H"); // Clear screen
+      if (title) output.write(`${title}\n\n`);
+
+      // Render grid row by row
+      for (let row = 0; row < rows; row++) {
+        for (let line = 0; line < maxLines; line++) {
+          for (let col = 0; col < cols; col++) {
+            const index = row * cols + col;
+            if (index >= items.length) break;
+
+            const item = items[index]!;
+            const avatarLines_ = avatarLines[index]!;
+            const avatarLine = avatarLines_[line] || "";
+
+            output.write(avatarLine.padEnd(10));
+            output.write("  "); // Spacing between columns
+          }
+          output.write("\n");
+        }
+
+        // Add name row
+        for (let col = 0; col < cols; col++) {
+          const index = row * cols + col;
+          if (index >= items.length) break;
+
+          const item = items[index]!;
+          const isSelected = index === selectedIndex;
+          const isDisabled = item.disabled;
+          const dimGray = "\x1b[90m";
+          const cyan = "\x1b[1;36m";
+          const reset = "\x1b[0m";
+
+          let nameColor = reset;
+          if (isDisabled) {
+            nameColor = dimGray;
+          } else if (isSelected) {
+            nameColor = cyan;
+          }
+
+          const name = item.label.substring(0, 10).padEnd(10);
+          output.write(`${nameColor}${name}${reset}`);
+          output.write("  ");
+        }
+        output.write("\n");
+
+        // Add title row (muted)
+        for (let col = 0; col < cols; col++) {
+          const index = row * cols + col;
+          if (index >= items.length) break;
+
+          const item = items[index]!;
+          const isDisabled = item.disabled;
+          const dimGray = isDisabled ? "\x1b[90m" : "\x1b[90m";
+          const reset = "\x1b[0m";
+
+          const titleText = item.title ? item.title.substring(0, 10).padEnd(10) : "".padEnd(10);
+          output.write(`${dimGray}${titleText}${reset}`);
+          output.write("  ");
+        }
+        output.write("\n\n");
+      }
+
+      output.write("\x1b[90m(← → ↑ ↓ to navigate, Enter to select)\x1b[0m");
+    };
+
+    render();
+
+    if (input.isTTY) {
+      input.setRawMode(true);
+      input.setEncoding("utf8");
+    }
+
+    const onData = (key: string) => {
+      if (key === "\x03" || key === "q") {
+        cleanup();
+        process.exit(0);
+      }
+
+      const currentRow = Math.floor(selectedIndex / cols);
+      const currentCol = selectedIndex % cols;
+      let newIndex = selectedIndex;
+
+      if (key === "\u001b[A" || key === "k") {
+        // Up arrow
+        if (currentRow > 0) {
+          newIndex = (currentRow - 1) * cols + currentCol;
+          if (newIndex >= items.length) newIndex = selectedIndex;
+          // Skip disabled items
+          while (newIndex !== selectedIndex && items[newIndex]?.disabled) {
+            newIndex -= cols;
+            if (newIndex < 0) newIndex = selectedIndex;
+          }
+        }
+      } else if (key === "\u001b[B" || key === "j") {
+        // Down arrow
+        if (currentRow < rows - 1) {
+          newIndex = (currentRow + 1) * cols + currentCol;
+          if (newIndex >= items.length) newIndex = selectedIndex;
+          // Skip disabled items
+          while (newIndex !== selectedIndex && items[newIndex]?.disabled) {
+            newIndex += cols;
+            if (newIndex >= items.length) newIndex = selectedIndex;
+          }
+        }
+      } else if (key === "\u001b[C" || key === "l") {
+        // Right arrow
+        if (currentCol < cols - 1 && selectedIndex + 1 < items.length) {
+          newIndex = selectedIndex + 1;
+          // Skip disabled items
+          while (newIndex < items.length && items[newIndex]?.disabled) {
+            newIndex++;
+          }
+          if (newIndex >= items.length) newIndex = selectedIndex;
+        }
+      } else if (key === "\u001b[D" || key === "h") {
+        // Left arrow
+        if (currentCol > 0) {
+          newIndex = selectedIndex - 1;
+          // Skip disabled items
+          while (newIndex >= 0 && items[newIndex]?.disabled) {
+            newIndex--;
+          }
+          if (newIndex < 0) newIndex = selectedIndex;
+        }
+      } else if (key === "\r" || key === "\n") {
+        // Enter - only if not disabled
+        if (!items[selectedIndex]?.disabled) {
+          cleanup();
+          resolve(items[selectedIndex]!.value);
+        }
+        return;
+      }
+
+      if (newIndex !== selectedIndex) {
+        selectedIndex = newIndex;
+        render();
+      }
+    };
+
+    const cleanup = () => {
+      if (input.isTTY) {
+        input.setRawMode(false);
+      }
+      output.write("\x1b[?25h"); // Show cursor
+      rl.close();
+      input.removeListener("data", onData);
+    };
+
+    input.on("data", onData);
   });
 }

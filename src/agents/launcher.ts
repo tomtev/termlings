@@ -1,10 +1,15 @@
 import type { AgentAdapter } from "./types.js"
 import { randomBytes } from "crypto"
-import { readFileSync, existsSync, unlinkSync } from "fs"
+import { readFileSync, existsSync, unlinkSync, writeFileSync } from "fs"
 import { resolve as resolvePath, dirname as dirName, join as joinPath } from "path"
 import { fileURLToPath } from "url"
-import { homedir } from "os"
-import { writeCommand, readMessages, getIpcDir } from "../engine/ipc.js"
+import { readMessages, getIpcDir } from "../engine/ipc.js"
+import {
+  appendWorkspaceMessage,
+  ensureWorkspaceDirs,
+  removeSession,
+  upsertSession,
+} from "../workspace/state.js"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirName(__filename)
@@ -18,17 +23,22 @@ const RANDOM_NAMES = [
   "Pip", "Storm", "Ivy", "Blaze", "Mochi",
 ]
 
+const TERMINAL_TYPING_IDLE_MS = 3500
+const TERMINAL_TYPING_WRITE_THROTTLE_MS = 1500
+const INJECT_WHEN_IDLE_MS = 1200
+const RESIZE_ACTIVITY_SUPPRESS_MS = 1500
+
 function pickRandomName(): string {
   const idx = Math.floor(Math.random() * RANDOM_NAMES.length)
   return RANDOM_NAMES[idx]!
 }
 
 function loadContext(): string {
-  // Load framework context (termling-context.md)
+  // Load framework context (termlings-system-message.md)
   let context = ""
 
   // Try sibling file first (installed / built layout)
-  const siblingPath = joinPath(__dirname, "..", "termling-context.md")
+  const siblingPath = joinPath(__dirname, "..", "termlings-system-message.md")
   try {
     context = readFileSync(siblingPath, "utf8")
   } catch {}
@@ -36,16 +46,18 @@ function loadContext(): string {
   // Fallback: dev mode with ts runner
   if (!context) {
     try {
-      context = readFileSync(resolvePath("src/termling-context.md"), "utf8")
+      context = readFileSync(resolvePath("src/termlings-system-message.md"), "utf8")
     } catch {}
   }
 
-  // Append project OBJECTIVES.md if it exists
+  // Append project vision addendum if present.
   try {
-    const objectivesPath = resolvePath("OBJECTIVES.md")
-    if (existsSync(objectivesPath)) {
-      const objectives = readFileSync(objectivesPath, "utf8")
-      context += "\n\n" + objectives + "\n"
+    const visionPath = resolvePath(".termlings", "VISION.md")
+    if (existsSync(visionPath)) {
+      const vision = readFileSync(visionPath, "utf8").trim()
+      if (vision) {
+        context += `\n\n<TERMLINGS-VISION>\n${vision}\n</TERMLINGS-VISION>\n`
+      }
     }
   } catch {}
 
@@ -71,11 +83,6 @@ function parseSoul(): { name: string; dna: string } {
   }
 }
 
-function encodeBracketedPaste(text: string): Buffer {
-  const sanitized = text.replace(/\x1b\[[0-9;]*[a-zA-Z~]/g, "")
-  return Buffer.from(`\x1b[200~${sanitized}\x1b[201~`)
-}
-
 /**
  * Launch a local agent soul with specified command (default: claude)
  */
@@ -83,14 +90,10 @@ export async function launchLocalAgent(
   localAgent: any,
   passthroughArgs: string[],
   termlingOpts: Record<string, string>,
-  commandName?: string,
+  runtimeAdapter?: AgentAdapter,
 ): Promise<never> {
-  const { agents } = await import("./index.js")
-
-  // Use soul's command if specified, otherwise use provided command or default to claude
-  const finalCommandName = localAgent.soul?.command || commandName || "claude"
-  const adapter = agents[finalCommandName]
-  if (!adapter) throw new Error(`Agent command not found: ${finalCommandName}`)
+  const adapter = runtimeAdapter || (await import("./index.js")).agents.claude
+  if (!adapter) throw new Error("No agent adapter available")
 
   // Override name and dna from local soul
   termlingOpts = { ...termlingOpts }
@@ -104,7 +107,18 @@ export async function launchLocalAgent(
     termlingOpts.description = localAgent.soul.description
   }
 
-  return launchAgent(adapter, passthroughArgs, termlingOpts, localAgent.soul)
+  // Set slug (folder name) - source of truth for agent identity
+  termlingOpts.slug = localAgent.name || ""
+
+  // Pass full soul data with title, title_short, and role
+  return launchAgent(adapter, passthroughArgs, termlingOpts, {
+    name: localAgent.soul?.name || "",
+    description: localAgent.soul?.description || "",
+    dna: localAgent.soul?.dna || "",
+    title: localAgent.soul?.title,
+    title_short: localAgent.soul?.title_short,
+    role: localAgent.soul?.role,
+  })
 }
 
 /**
@@ -115,7 +129,7 @@ export async function launchAgent(
   adapter: AgentAdapter,
   passthroughArgs: string[],
   termlingOpts: Record<string, string>,
-  soulData?: { name: string; description: string; dna: string; command?: string },
+  soulData?: { name: string; description: string; dna: string; title?: string; title_short?: string; role?: string },
 ): Promise<never> {
   const sessionId = `tl-${randomBytes(4).toString("hex")}`
   const context = loadContext()
@@ -129,6 +143,11 @@ export async function launchAgent(
     agentDna = generateRandomDNA()
   }
 
+  // Extract title and role from soul
+  const agentTitle = soulData?.title
+  const agentTitleShort = soulData?.title_short
+  const agentRole = soulData?.role
+
   // Apply context substitutions BEFORE passing to adapter
   let finalContext = context
   if (context) {
@@ -137,6 +156,9 @@ export async function launchAgent(
       SESSION_ID: sessionId,
       DNA: agentDna,
       ROOM: "default",
+      AGENT_TITLE: agentTitle || "",
+      AGENT_TITLE_SHORT: agentTitleShort || "",
+      AGENT_ROLE: agentRole || "",
       DESCRIPTION: termlingOpts.description || soul.description || process.env.TERMLINGS_DESCRIPTION || "You are an autonomous agent exploring and interacting with the world.",
     }
     for (const [field, value] of Object.entries(dynamicFields)) {
@@ -147,13 +169,13 @@ export async function launchAgent(
   const contextArgs = adapter.contextArgs(finalContext)
   const finalArgs = [...contextArgs, ...passthroughArgs]
 
-  // Install Claude Code hooks for typing animations and tool requests
+  // Remove legacy Claude hook registration so terminal activity remains authoritative.
   if (adapter.bin === "claude") {
     try {
-      const { installTermlingsHooks } = await import("../hooks/installer.js")
-      await installTermlingsHooks()
+      const { uninstallTermlingsHooks } = await import("../hooks/installer.js")
+      await uninstallTermlingsHooks()
     } catch {
-      // Hook installation failed — not fatal, agent will still work
+      // Hook cleanup failed — not fatal, agent will still work
     }
   }
 
@@ -195,12 +217,84 @@ export async function launchAgent(
     console.log()
   }
 
+  const ipcDir = getIpcDir()
+
+  const agentSlug = termlingOpts.slug || ""
+
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
     TERMLINGS_SESSION_ID: sessionId,
     TERMLINGS_AGENT_NAME: agentName,
     TERMLINGS_AGENT_DNA: agentDna,
-    TERMLINGS_IPC_DIR: getIpcDir(),
+    TERMLINGS_AGENT_SLUG: agentSlug,
+    TERMLINGS_AGENT_TITLE: agentTitle || "",
+    TERMLINGS_AGENT_TITLE_SHORT: agentTitleShort || "",
+    TERMLINGS_AGENT_ROLE: agentRole || "",
+    TERMLINGS_IPC_DIR: ipcDir,
+  }
+  const typingPath = joinPath(ipcDir, `${sessionId}.typing.json`)
+  let typingIdleTimer: ReturnType<typeof setTimeout> | null = null
+  let typingActive = false
+  let lastTypingWriteAt = 0
+  let lastTerminalOutputAt = 0
+  let lastTerminalInputAt = 0
+  let lastInjectedWriteAt = 0
+  let outputActivityArmed = false
+  let suppressOutputUntil = 0
+  let processingInput = false
+
+  const writeTypingState = (typing: boolean, source: "terminal" = "terminal", force = false) => {
+    const now = Date.now()
+    if (!force && typingActive === typing && now - lastTypingWriteAt < TERMINAL_TYPING_WRITE_THROTTLE_MS) {
+      return
+    }
+    typingActive = typing
+    lastTypingWriteAt = now
+    try {
+      writeFileSync(
+        typingPath,
+        JSON.stringify({ typing, source, updatedAt: now }) + "\n",
+      )
+    } catch {}
+  }
+
+  const noteTerminalActivity = () => {
+    writeTypingState(true, "terminal")
+    if (typingIdleTimer) {
+      clearTimeout(typingIdleTimer)
+    }
+    typingIdleTimer = setTimeout(() => {
+      typingIdleTimer = null
+      writeTypingState(false, "terminal")
+      outputActivityArmed = false
+    }, TERMINAL_TYPING_IDLE_MS)
+  }
+
+  const clearTerminalTyping = () => {
+    if (typingIdleTimer) {
+      clearTimeout(typingIdleTimer)
+      typingIdleTimer = null
+    }
+    outputActivityArmed = false
+    writeTypingState(false, "terminal", true)
+  }
+
+  const isSubmitInput = (data: Buffer): boolean => {
+    const text = data.toString("utf8")
+    return text.includes("\r") || text.includes("\n")
+  }
+
+  const noteTerminalInput = (data: Buffer) => {
+    lastTerminalInputAt = Date.now()
+    if (isSubmitInput(data)) {
+      outputActivityArmed = true
+      noteTerminalActivity()
+    }
+  }
+
+  const noteInjectedWrite = () => {
+    lastInjectedWriteAt = Date.now()
+    outputActivityArmed = true
   }
 
   // Add context to environment (already substituted above)
@@ -208,30 +302,91 @@ export async function launchAgent(
     let envContext = finalContext
 
     if (process.env.TERMLINGS_SIMPLE === "1") {
-      envContext += `\n\n## Simple Mode
+      envContext += `\n\n## Workspace Mode
 
-This room is running in SIMPLE MODE:
-- There is NO map. Walking is disabled.
-- \`termlings action walk\` will fail.
-- \`termlings action place\` and \`termlings action destroy\` will fail.
-- Use \`termlings action map\` to see connected agents and their session IDs.
-- Use \`termlings action send <session-id> <message>\` to communicate.
-- Gestures (talk, wave) and stop still work.`
+- Map/pathfinding actions are removed.
+- Use \`termlings list-agents\` to discover teammates.
+- Use \`termlings message <target> <message>\` to communicate.
+- Use \`termlings message human:<id> <message>\` to DM human operators.
+- Use \`termlings task\` and \`termlings calendar\` for task/calendar management.`
     }
     env.TERMLINGS_CONTEXT = envContext
   }
 
-  // Announce to the sim so the agent entity spawns immediately
-  writeCommand(sessionId, { action: "join", name: agentName, dna: agentDna, ts: Date.now() })
+  // Register as an online workspace session.
+  ensureWorkspaceDirs()
+  upsertSession(sessionId, {
+    name: agentName,
+    dna: agentDna,
+  })
+  appendWorkspaceMessage({
+    kind: "system",
+    from: "system",
+    fromName: "Workspace",
+    text: `${agentName} joined`,
+    target: sessionId,
+  })
+  const heartbeatTimer = setInterval(() => {
+    try {
+      upsertSession(sessionId, {
+        name: agentName,
+        dna: agentDna,
+        lastSeenAt: Date.now(),
+      })
+    } catch {}
+  }, 5000)
 
   const cols = process.stdout.columns || 80
   const rows = process.stdout.rows || 24
+
+  const sanitizeInjectedText = (text: string): string =>
+    text
+      .replace(/\x1b\[[0-9;]*[a-zA-Z~]/g, "")
+      .replace(/[\r\n\t]+/g, " ")
+      .replace(/[^\x20-\x7E]/g, "")
+      .trim()
+
+  const hasSubstantiveTerminalOutput = (chunk: string | Uint8Array): boolean => {
+    const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8")
+    const visible = text
+      .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, "")
+      .replace(/\x1b\][^\u0007]*(?:\u0007|\x1b\\)/g, "")
+      .replace(/[\u0000-\u001F\u007F]/g, "")
+      .trim()
+    return visible.length > 0
+  }
+
+  const isTerminalBusy = () => {
+    if (processingInput) return true
+    const lastActivityAt = Math.max(lastTerminalOutputAt, lastTerminalInputAt, lastInjectedWriteAt)
+    return Date.now() - lastActivityAt < INJECT_WHEN_IDLE_MS
+  }
+
+  const injectMessageLine = async (line: string) => {
+    const payload = sanitizeInjectedText(line)
+    if (!payload) return
+
+    // Plain write is more reliable than bracketed paste in some Claude UI states.
+    noteInjectedWrite()
+    terminal.write(Buffer.from(payload))
+    await delay(200)
+    noteInjectedWrite()
+    terminal.write(Buffer.from("\r"))
+    await delay(220)
+  }
 
   const proc = Bun.spawn([adapter.bin, ...finalArgs], {
     terminal: {
       cols,
       rows,
       data(_terminal, data) {
+        lastTerminalOutputAt = Date.now()
+        const outputSuppressed = Date.now() < suppressOutputUntil
+        const canTreatOutputAsActivity = typingActive || outputActivityArmed
+        if (!outputSuppressed && canTreatOutputAsActivity && hasSubstantiveTerminalOutput(data)) {
+          noteTerminalActivity()
+          outputActivityArmed = false
+        }
         process.stdout.write(data)
       },
     },
@@ -244,36 +399,74 @@ This room is running in SIMPLE MODE:
   process.stdin.resume()
   process.stdin.setRawMode?.(true)
   const onStdinData = (data: Buffer) => {
+    noteTerminalInput(data)
     terminal.write(data)
   }
   process.stdin.on("data", onStdinData)
 
   // Handle terminal resize
   const onResize = () => {
+    outputActivityArmed = false
+    suppressOutputUntil = Date.now() + RESIZE_ACTIVITY_SUPPRESS_MS
     terminal.resize(process.stdout.columns, process.stdout.rows)
   }
   process.stdout.on("resize", onResize)
 
   // Poll for incoming messages and inject them into the PTY
-  let processingInput = false
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  // Format message header with sender name, title, and ID
+  const formatMessageHeader = async (msg: any): Promise<string> => {
+    let title = ""
+    let messageId = msg.from
+
+    // Try to get title from sender's metadata
+    try {
+      if (msg.from === "human:default") {
+        // Human operator
+        const { getDefaultHuman } = await import("../humans/index.js")
+        const human = getDefaultHuman()
+        if (human?.soul?.title) {
+          title = ` - ${human.soul.title}`
+        }
+        messageId = "human:default"
+      } else if (msg.fromDna) {
+        // Agent - look up by DNA to get slug (folder name)
+        const { discoverLocalAgents } = await import("../agents/discover.js")
+        const agents = discoverLocalAgents()
+        const agent = agents.find((a) => a.soul?.dna === msg.fromDna)
+        if (agent?.soul?.title) {
+          title = ` - ${agent.soul.title}`
+        }
+        // Use slug (folder name) if available, fallback to DNA
+        messageId = agent ? `agent:${agent.name}` : `agent:${msg.fromDna}`
+      }
+    } catch {}
+
+    return `[Message from ${msg.fromName}${title}. id: ${messageId}]: ${msg.text}`
+  }
+
+  // Wait for initial output to settle before attempting message injection.
+  lastTerminalOutputAt = Date.now()
 
   const pollTimer = setInterval(async () => {
     if (processingInput) return
+    if (isTerminalBusy()) return
     try {
+      const { readQueuedMessages } = await import("../engine/ipc.js")
       const messages = readMessages(sessionId)
-      if (messages.length === 0) return
+      const slugQueued = agentSlug ? readQueuedMessages(agentSlug) : []
+      const dnaQueued = readQueuedMessages(agentDna)
+      const queuedMessages = [...slugQueued, ...dnaQueued]
+      const allMessages = [...messages, ...queuedMessages]
 
+      if (allMessages.length === 0) return
+
+      clearTerminalTyping()
       processingInput = true
-      for (const msg of messages) {
-        const line = `[Message from ${msg.fromName}]: ${msg.text}`
-        terminal.write(encodeBracketedPaste(line))
-        await delay(150)
-        // Press enter twice to submit
-        terminal.write(Buffer.from("\r"))
-        await delay(80)
-        terminal.write(Buffer.from("\r"))
-        await delay(100)
+      for (const msg of allMessages) {
+        const line = await formatMessageHeader(msg)
+        await injectMessageLine(line)
       }
       processingInput = false
     } catch {
@@ -282,15 +475,26 @@ This room is running in SIMPLE MODE:
   }, 2000)
 
   // Handle cleanup on exit
+  let cleanedUp = false
   const cleanup = () => {
+    if (cleanedUp) return
+    cleanedUp = true
+
+    clearInterval(heartbeatTimer)
     clearInterval(pollTimer)
+    clearTerminalTyping()
     process.stdin.off("data", onStdinData)
     process.stdout.off("resize", onResize)
     process.stdin.setRawMode?.(false)
-
-    // Send leave command to announce departure
-    // The sim will process this command and pollCommands() will delete the queue file
-    writeCommand(sessionId, { action: "leave" as any, name: agentName, ts: Date.now() })
+    removeSession(sessionId)
+    try { unlinkSync(typingPath) } catch {}
+    appendWorkspaceMessage({
+      kind: "system",
+      from: "system",
+      fromName: "Workspace",
+      text: `${agentName} left`,
+      target: sessionId,
+    })
   }
 
   // Forward signals to child and cleanup

@@ -1,179 +1,166 @@
 import { join, resolve } from "path";
-import { writeFile } from "fs/promises";
-import { generateRandomDNA, renderSVG, decodeDNA, hslToRgb, renderTerminal } from "./index.js";
+import { mkdir, writeFile } from "fs/promises";
 import { createInterface } from "readline";
+import { generateRandomDNA, renderSVG, renderTerminal } from "./index.js";
+
+export interface CreateOptions {
+  slug?: string
+  name?: string
+  dna?: string
+  purpose?: string
+  title?: string
+  titleShort?: string
+  role?: string
+  team?: string
+  reportsTo?: string
+  nonInteractive?: boolean
+  yes?: boolean
+}
 
 function prompt(question: string): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
+  return new Promise((resolvePrompt) => {
     rl.question(question, (answer) => {
       rl.close();
-      resolve(answer.trim());
+      resolvePrompt(answer.trim());
     });
   });
 }
 
-export async function runCreate(): Promise<void> {
-  const args = process.argv.slice(3);
-  let slug: string | null = null;
-  const vars: Record<string, string> = {};
-
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--name" && i + 1 < args.length) {
-      vars["AGENT_NAME"] = args[++i];
-    } else if (args[i] === "--owner" && i + 1 < args.length) {
-      vars["OWNER_NAME"] = args[++i];
-    } else if (args[i] === "--purpose" && i + 1 < args.length) {
-      vars["AGENT_PURPOSE"] = args[++i];
-    } else if (!args[i].startsWith("--") && !slug) {
-      // First non-flag arg is the agent slug
-      slug = args[i].toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    }
-  }
-
-  // Default agent name from slug (capitalize first letter)
-  slug = slug || "agent";
-  const defaultName = slug.charAt(0).toUpperCase() + slug.slice(1);
-  if (!vars["AGENT_NAME"]) {
-    const answer = await prompt(`Agent name (default: ${defaultName}): `);
-    vars["AGENT_NAME"] = answer || defaultName;
-  }
-
-  if (!vars["AGENT_PURPOSE"]) {
-    vars["AGENT_PURPOSE"] = await prompt("Purpose: ") || "A helpful agent";
-  }
-
-  // Select command
-  let command = "claude";
-  if (!rawArgs.includes("--dangerous-skip-confirmation")) {
-    console.log("\nSelect command:");
-    console.log("  (1) claude  - Claude Code");
-    console.log("  (2) codex   - Codex CLI");
-    const commandChoice = await prompt("Choose (default: 1): ");
-    if (commandChoice === "2") {
-      command = "codex";
-    }
-  }
-
-  const dest = resolve(".termlings", slug);
-  await Bun.spawn(["mkdir", "-p", dest]).exited;
-
-  await createAgent(dest, vars, command);
+function normalizeSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
-async function detectOwnerName(): Promise<string> {
-  try {
-    const proc = Bun.spawn(["git", "config", "user.name"], { stdout: "pipe", stderr: "pipe" });
-    await proc.exited;
-    const name = (await new Response(proc.stdout).text()).trim();
-    if (name) return name;
-  } catch {}
-  return require("os").userInfo().username || "Owner";
+function defaultNameFromSlug(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ") || "Agent";
 }
 
-async function createAgent(dest: string, vars: Record<string, string>, command: string = "claude"): Promise<void> {
-  const agentName = vars["AGENT_NAME"] || "My Agent";
-  const ownerName = vars["OWNER_NAME"] || await detectOwnerName();
+function validateDna(raw: string): string {
+  const dna = raw.trim().toLowerCase();
+  if (!/^[0-9a-f]{7}$/.test(dna)) {
+    throw new Error("Invalid DNA. Expected 7 hex characters, e.g. 0a3f201.");
+  }
+  return dna;
+}
 
-  // --- Avatar approval loop ---
-  let dna = generateRandomDNA();
-
+async function selectAvatarDna(initialDna: string, agentName: string): Promise<string> {
+  let dna = initialDna;
   while (true) {
-    const traits = decodeDNA(dna);
-    const fRgb = hslToRgb(traits.faceHue * 30, 0.5, 0.5);
-    const dRgb = hslToRgb(traits.faceHue * 30, 0.5, 0.28);
-    const hRgb = hslToRgb(traits.hatHue * 30, 0.5, 0.5);
-
-    const BOLD = "\x1b[1m";
-    const DIM = "\x1b[2m";
-    const RESET = "\x1b[0m";
-
     console.log("");
-    const info = [
-      `${BOLD}${agentName}${RESET}`,
-      `dna: ${dna}`,
-    ];
-
-    // Start waving animation
-    process.stdout.write("\x1b[?25l"); // hide cursor
-    let waveFrame = 1;
-    let tick = 0;
-
-    const avatarWidth = 18;
-    const visLen = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").length;
-
-    function renderMergedFrame(wFrame: number): { output: string; lineCount: number } {
-      const rendered = renderTerminal(dna, wFrame - 1);
-      const avatarLines = rendered.split("\n");
-      const infoStart = Math.max(0, Math.floor((avatarLines.length - info.length) / 2));
-      const merged: string[] = [];
-      for (let i = 0; i < avatarLines.length; i++) {
-        const left = avatarLines[i];
-        const pad = " ".repeat(Math.max(0, avatarWidth - visLen(left)));
-        const right = info[i - infoStart] ?? "";
-        merged.push(`${left}${pad}  ${right}\x1b[K`);
-      }
-      return { output: merged.join("\n"), lineCount: avatarLines.length };
-    }
-
-    // Draw first frame
-    const first = renderMergedFrame(1);
-    process.stdout.write(first.output + "\n");
-    const frameLineCount = first.lineCount;
-
-    const drawFrame = () => {
-      tick++;
-      waveFrame = (tick % 2) + 1;
-      const frame = renderMergedFrame(waveFrame);
-      process.stdout.write(`\x1b[${frameLineCount}A`);
-      process.stdout.write(frame.output + "\n");
-    };
-
-    const interval = setInterval(drawFrame, 400);
-
-    // Clear interval and show cursor before prompting
-    clearInterval(interval);
-    process.stdout.write("\x1b[?25h"); // show cursor
-    console.log("");
-
-    // Ask for approval
-    const answer = await prompt(`Keep this avatar? (Y)es / (r)eroll / (q)uit: `);
-    const a = answer.toLowerCase().trim() || "y";
-
-    if (a === "q") {
+    console.log(`${agentName}`);
+    console.log(`dna: ${dna}`);
+    console.log(renderTerminal(dna, 0));
+    const answer = (await prompt("Keep this avatar? (Y)es / (r)eroll / (q)uit: ")).toLowerCase() || "y";
+    if (answer === "q") {
       console.log("Cancelled.");
       process.exit(0);
     }
-    if (a === "r") {
+    if (answer === "r") {
       dna = generateRandomDNA();
       continue;
     }
-    // Accept (y or enter)
-    break;
+    return dna;
+  }
+}
+
+export async function runCreate(options: CreateOptions = {}): Promise<void> {
+  const interactiveShell = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+  const hasExplicitProps = Boolean(
+    options.slug
+    || options.name
+    || options.dna
+    || options.purpose
+    || options.title
+    || options.titleShort
+    || options.role
+    || options.team
+    || options.reportsTo,
+  );
+  const nonInteractive = options.nonInteractive === true || hasExplicitProps;
+
+  let slug = normalizeSlug(options.slug || "");
+  if (!slug && options.name) {
+    slug = normalizeSlug(options.name);
+  }
+  if (!slug) {
+    slug = "agent";
   }
 
-  // Create SOUL.md with agent identity
-  const soulContent = `---
-name: ${agentName}
-command: ${command}
-dna: ${dna}
----
-
-## Purpose
-
-${vars["AGENT_PURPOSE"] || "A helpful agent"}
-`;
-
-  try {
-    await writeFile(join(dest, "SOUL.md"), soulContent);
-    await writeFile(join(dest, "avatar.svg"), renderSVG(dna, 10, 0, null));
-
-    console.log(`\nCreated in ${dest}`);
-    console.log(`  SOUL.md (name: ${agentName})`);
-    console.log(`  avatar.svg (dna: ${dna})`);
-    console.log(`\nLaunch with: termlings ${slug}`);
-    console.log(`Or auto-confirm (dangerous): termlings ${slug} --dangerous-skip-confirmation`);
-  } catch (err) {
-    throw new Error(`Failed to create agent files: ${err instanceof Error ? err.message : String(err)}`);
+  let agentName = (options.name || "").trim();
+  if (!agentName) {
+    const fallbackName = defaultNameFromSlug(slug);
+    if (nonInteractive) {
+      agentName = fallbackName;
+    } else {
+      if (!interactiveShell) {
+        throw new Error("Interactive create requires a TTY. Use --non-interactive with explicit props.");
+      }
+      agentName = (await prompt(`Agent name (default: ${fallbackName}): `)) || fallbackName;
+    }
   }
+
+  let purpose = (options.purpose || "").trim();
+  if (!purpose) {
+    if (nonInteractive) {
+      purpose = "A helpful agent";
+    } else {
+      if (!interactiveShell) {
+        throw new Error("Interactive create requires a TTY. Use --non-interactive with --purpose.");
+      }
+      purpose = (await prompt("Purpose: ")) || "A helpful agent";
+    }
+  }
+
+  const title = (options.title || "Agent").trim() || "Agent";
+  const titleShort = (options.titleShort || "").trim();
+  const role = (options.role || purpose).trim() || purpose;
+  const team = (options.team || "Core").trim() || "Core";
+  const reportsTo = (options.reportsTo || "agent:pm").trim() || "agent:pm";
+
+  let dna = options.dna ? validateDna(options.dna) : generateRandomDNA();
+  const shouldReviewAvatar = interactiveShell && !nonInteractive && !options.yes && !options.dna;
+  if (shouldReviewAvatar) {
+    dna = await selectAvatarDna(dna, agentName);
+  }
+
+  const dest = resolve(".termlings", "agents", slug);
+  await mkdir(dest, { recursive: true });
+
+  const frontmatter: string[] = [
+    "---",
+    `name: ${agentName}`,
+    `title: ${title}`,
+  ];
+  if (titleShort) {
+    frontmatter.push(`title_short: ${titleShort}`);
+  }
+  frontmatter.push(
+    `role: ${role}`,
+    `team: ${team}`,
+    `reports_to: ${reportsTo}`,
+    `dna: ${dna}`,
+    "---",
+    "",
+    "## Purpose",
+    "",
+    purpose,
+    "",
+  );
+  const soulContent = frontmatter.join("\n");
+
+  await writeFile(join(dest, "SOUL.md"), soulContent);
+  await writeFile(join(dest, "avatar.svg"), renderSVG(dna, 10, 0, null));
+
+  console.log(`\nCreated in ${dest}`);
+  console.log(`  SOUL.md (name: ${agentName})`);
+  console.log(`  avatar.svg (dna: ${dna})`);
+  console.log(`\nLaunch with: termlings ${slug}`);
+  console.log(`Or auto-confirm (dangerous): termlings ${slug} --dangerous-skip-confirmation`);
 }

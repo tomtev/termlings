@@ -1,5 +1,11 @@
 import type { LocalAgent } from "../agents/discover.js";
-import type { AgentStateEntity } from "./ipc.js";
+
+export interface AgentStateEntity {
+  sessionId: string
+  name?: string
+  dna: string
+  idle?: boolean
+}
 
 export interface MergedAgent {
   dna: string;
@@ -78,9 +84,8 @@ export function formatAgentListCompact(
     const dnaStr = `[${agent.dna.slice(0, 7)}]`;
 
     if (agent.online) {
-      const pos = `(${agent.online.x}, ${agent.online.y})`;
       const idle = agent.online.idle ? "idle" : "active";
-      const line = `${icon} ${name.padEnd(14)} ${dnaStr.padEnd(10)} ${agent.status.padEnd(6)} ${agent.online.sessionId} at ${pos.padEnd(12)} ${idle}`;
+      const line = `${icon} ${name.padEnd(14)} ${dnaStr.padEnd(10)} ${agent.status.padEnd(6)} ${agent.online.sessionId} ${idle}`;
       lines.push(line);
     } else if (agent.saved) {
       const purpose = agent.saved.soul?.purpose
@@ -152,7 +157,6 @@ export function formatAgentListFull(
 
     if (agent.online) {
       lines.push(`   Session: ${agent.online.sessionId}`);
-      lines.push(`   Position: (${agent.online.x}, ${agent.online.y})`);
       lines.push(`   State: ${agent.online.idle ? "idle" : "active"}`);
     }
 

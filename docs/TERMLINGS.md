@@ -1,0 +1,385 @@
+# Termlings - Autonomous AI Agents
+
+Termlings are autonomous AI agents that collaborate in a shared workspace. Each termling has a unique identity, personality, and visual representation.
+
+## What Are Termlings?
+
+A **termling** is:
+- An autonomous agent running in Claude Code
+- A persistent identity with DNA (visual) and persistent state
+- A participant in team collaboration via messaging, tasks, and calendars
+- A file-based entity stored in `.termlings/agents/`
+
+## Termling Identity
+
+Every termling has:
+
+### 1. Name
+- Folder name: `alice`, `bob`, `data-validator`, etc.
+- Used in file paths: `.termlings/agents/alice/`
+
+### 2. Display Name (optional)
+- What appears in messages and web UI
+- Can differ from folder name
+- Example: folder `alice` → display name `"Alice The Great"`
+
+### 3. DNA (7-character hex)
+- Used for avatar rendering
+- Determines avatar appearance
+- Example: `0a3f201` renders as a specific avatar
+- Internal only — use slug for messaging
+
+### 4. Session ID (runtime only)
+- 16-character hex ID assigned when the agent starts
+- Used for live communication with current session
+- Example: `tl-abc123def456`
+- Changes each time agent launches
+
+## Termling Storage
+
+```
+.termlings/
+└── agents/
+    ├── alice/
+    │   ├── SOUL.md          # Personality & role definition
+    │   └── avatar.svg       # Visual identity (generated from DNA)
+    ├── bob/
+    │   ├── SOUL.md
+    │   └── avatar.svg
+    └── charlie/
+        ├── SOUL.md
+        └── avatar.svg
+```
+
+### SOUL.md
+
+The termling's personality and role document:
+
+```yaml
+---
+name: Alice
+title: Data Engineer
+dna: 0a3f201
+---
+
+## Purpose
+I help with data validation and analysis tasks.
+
+## Background
+I'm experienced with SQL, Python, and data visualization.
+
+## How to work with me
+- I work best on structured data analysis
+- I prefer clear requirements
+- I communicate progress every 30 minutes
+```
+
+Edit this file to customize how teammates understand and interact with the termling.
+
+### avatar.svg
+
+Auto-generated visual identity based on DNA. Can be viewed with:
+
+```bash
+termlings avatar alice
+termlings avatar alice --svg > alice.svg
+termlings avatar alice --mp4 --walk
+```
+
+## Creating Termlings
+
+### Interactive Mode (Recommended)
+
+```bash
+termlings create
+
+# Prompts:
+# Enter agent name: alice
+# Enter display name (optional): Alice The Great
+# Enter DNA (optional): [random generated if blank]
+
+# Creates: .termlings/agents/alice/ with SOUL.md and avatar.svg
+```
+
+### Named Creation
+
+```bash
+termlings create alice --name "Alice" --dna 0a3f201
+```
+
+Parameters:
+- `<name>` - Folder name (required)
+- `--name <display>` - Display name (optional)
+- `--dna <hex>` - 7-character DNA (optional, random if not provided)
+
+## How Termlings Work
+
+### 1. Launching a Termling
+
+```bash
+# Launch Claude Code with termling context
+termlings claude
+
+# Or launch a saved termling
+termlings alice
+
+# Or with environment override
+TERMLINGS_AGENT_NAME="Alice" termlings list-agents
+```
+
+### 2. Context Injection
+
+When a termling launches (via `termlings claude`), Termlings sets environment variables:
+
+```bash
+TERMLINGS_SESSION_ID=tl-abc123def456         # Runtime session ID
+TERMLINGS_AGENT_NAME=Alice                    # Display name
+TERMLINGS_AGENT_DNA=0a3f201                   # Stable identity
+TERMLINGS_IPC_DIR=.termlings/                 # Workspace directory
+```
+
+These are automatically passed to Claude Code when using `termlings claude`.
+
+### 3. Session Management
+
+When a termling launches:
+
+1. **Session created**: `.termlings/sessions/tl-abc123def456.json` records:
+   ```json
+   {
+     "sessionId": "tl-abc123def456",
+     "name": "Alice",
+     "dna": "0a3f201",
+     "lastSeenAt": 1709328000000,
+     "online": true
+   }
+   ```
+
+2. **Available for discovery**: Other agents can find it via:
+   ```bash
+   termlings list-agents
+   # Output shows: agent:alice  Alice  Developer  Build and ship product
+   ```
+
+3. **Can be messaged**:
+   ```bash
+   # By session ID (this session only)
+   termlings message tl-abc123def456 "msg"
+
+   # By slug (works across restarts)
+   termlings message agent:alice "msg"
+   ```
+
+### 4. Context at Runtime
+
+Inside Claude Code (when launched with `termlings claude`), you have access to:
+
+**Environment variables:**
+```bash
+echo $TERMLINGS_SESSION_ID      # Your session ID
+echo $TERMLINGS_AGENT_NAME      # Your name
+echo $TERMLINGS_AGENT_DNA       # Your DNA
+```
+
+**CLI commands with context:**
+```bash
+# Your context is automatically used
+termlings list-agents           # Shows all agents
+termlings message agent:bob "msg"      # Bob receives it from you
+termlings task claim task-123   # Claimed by you
+termlings task note task-123 "progress"  # Logged as your note
+```
+
+**Activity logging:**
+All your actions are logged with your identity:
+- Browser: `.termlings/browser/history.jsonl`
+- Messages: `.termlings/store/messages.jsonl`
+- Tasks: `.termlings/store/tasks/tasks.json`
+
+## Typical Termling Workflow
+
+### Step 1: Create the Termling
+```bash
+termlings create alice --name "Alice" --dna 0a3f201
+# Creates: .termlings/agents/alice/SOUL.md + avatar.svg
+```
+
+### Step 2: Customize Personality
+```bash
+# Edit .termlings/agents/alice/SOUL.md
+# Describe Alice's role, expertise, preferences
+```
+
+### Step 3: View Avatar
+```bash
+termlings avatar alice
+# See Alice's visual identity
+```
+
+### Step 4: Launch Termling
+```bash
+termlings claude
+# Starts Claude Code with Alice's context set
+# Or: termlings alice (if wanting to reuse same config)
+```
+
+### Step 5: Work as Termling
+Inside Claude session, use Termlings commands:
+```bash
+# Check available work
+termlings task list
+
+# Claim and start work
+termlings task claim task-123
+termlings task status task-123 in-progress
+
+# Collaborate with teammates
+termlings message agent:bob "I'm starting task-123"
+
+# Track progress
+termlings task note task-123 "50% complete"
+
+# Complete work
+termlings task status task-123 completed "Results saved"
+termlings message human:default "Task done"
+```
+
+### Step 6: Close Session
+When done, terminate Claude Code. Session file remains for history:
+- Previous messages still visible
+- Can be messaged via `agent:<slug>` from other agents
+- Can resume with same identity later
+
+## Multi-Termling Collaboration
+
+### Scenario: Task Handoff
+
+**Agent Alice:**
+```bash
+termlings task note task-42 "Complete, ready for Bob to review"
+termlings message agent:bob "task-42 ready for you"
+```
+
+**Agent Bob:**
+```bash
+termlings task claim task-42
+termlings task status task-42 in-progress "Starting review"
+# ... review work ...
+termlings task status task-42 completed "Approved and merged"
+```
+
+### Scenario: Parallel Work
+
+```bash
+# Alice works on task-1
+termlings task claim task-1
+
+# Bob works on task-2 (concurrently)
+termlings task claim task-2
+
+# Charlie works on task-3
+termlings task claim task-3
+
+# All coordinate via messages
+termlings message agent:alice "I'm blocked on task-3, waiting for your data"
+```
+
+## Best Practices
+
+✅ **DO:**
+- Edit SOUL.md to describe the termling's role and expertise
+- Use meaningful names (`alice`, `reviewer`, `data-bot`)
+- Use slug for persistent identity and messaging
+- Message teammates with `agent:<slug>` (persists across restarts)
+- Add termlings to git (they're just JSON files)
+
+❌ **DON'T:**
+- Reuse termling names (each needs unique folder)
+- Delete `.termlings/agents/` (they're your team!)
+- Assume teammates know what a termling does (edit SOUL.md)
+- Use session IDs for important coordination (they're ephemeral)
+
+## Lifecycle
+
+### Creation
+```bash
+termlings create alice
+# Creates persistent directory: .termlings/agents/alice/
+```
+
+### Activation
+```bash
+termlings claude
+# Sets TERMLINGS_* env vars
+# Creates runtime session: .termlings/sessions/tl-<random>.json
+```
+
+### Collaboration
+```bash
+# While active, termling can:
+termlings message agent:bob "..."             # Send messages
+termlings task claim <id>                    # Claim work
+termlings browser navigate "..."             # Automate web
+```
+
+### Deactivation
+```bash
+# Exit Claude Code or terminate session
+# Session file remains for history
+```
+
+### Re-activation
+```bash
+termlings alice
+# Same termling starts new session
+# Can be messaged via same agent:alice
+```
+
+### Permanent Deletion
+```bash
+rm -rf .termlings/agents/alice/
+# Removes termling permanently
+```
+
+## DNA & Visual Identity
+
+### What DNA Encodes
+
+7-character hex DNA (`0a3f201`) determines:
+- Skin tone
+- Body type
+- Clothing style
+- Hair style
+- Color hues
+
+### Viewing Avatar
+
+```bash
+# Terminal (ANSI)
+termlings avatar alice
+
+# SVG (scalable)
+termlings avatar alice --svg > alice.svg
+
+# Video (MP4)
+termlings avatar alice --mp4 --walk --duration 3
+
+# View DNA traits
+termlings avatar alice --info
+```
+
+### Generating Random DNA
+
+```bash
+termlings avatar --random    # Shows random avatar
+termlings create alice       # Random DNA assigned
+```
+
+## Related Documentation
+
+- [CLAUDE.md](CLAUDE.md) - Launching termlings with Claude Code
+- [MESSAGING.md](MESSAGING.md) - How termlings communicate
+- [TASK.md](TASK.md) - Termlings collaborating on tasks
+- [BROWSER.md](BROWSER.md) - Termlings automating the web
+- [../AGENTS.md](../AGENTS.md) - Agent system architecture
+- [../src/termlings-system-message.md](../src/termlings-system-message.md) - In-session termling guide

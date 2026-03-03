@@ -5,7 +5,16 @@ import { createInterface } from "readline";
 export interface LocalAgent {
   name: string;
   path: string;
-  soul?: { name: string; title?: string; dna: string; command?: string; description: string };
+  soul?: {
+    name: string;
+    title?: string;
+    title_short?: string;
+    role?: string;
+    team?: string;
+    reports_to?: string;
+    dna: string;
+    description: string;
+  };
 }
 
 /**
@@ -35,44 +44,27 @@ export function discoverLocalAgents(): LocalAgent[] {
       try {
         const content = readFileSync(soulPath, "utf-8");
 
-        // Try parsing YAML front-matter first
         const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)/);
-        let name: string | undefined;
-        let title: string | undefined;
-        let dna: string | undefined;
-        let description: string = "";
-        let command: string | undefined;
-
-        if (frontmatterMatch) {
-          // Parse YAML front-matter
-          const yaml = frontmatterMatch[1];
-          name = yaml.match(/^name:\s*(.+)$/m)?.[1];
-          title = yaml.match(/^title:\s*(.+)$/m)?.[1];
-          dna = yaml.match(/^dna:\s*(.+)$/m)?.[1];
-          command = yaml.match(/^command:\s*(.+)$/m)?.[1];
-
-          // Get markdown content (everything after front-matter)
-          description = (frontmatterMatch[2] || "").trim();
-        } else {
-          // Fallback to legacy markdown format
-          const nameMatch = content.match(/^# (.+)$/m);
-          const titleMatch = content.match(/\*\*Title\*\*:\s*(.+)$/m);
-          const dnaMatch = content.match(/\*\*DNA\*\*:\s*(.+)$/m);
-          const commandMatch = content.match(/\*\*Command\*\*:\s*(.+)$/m);
-
-          name = nameMatch ? nameMatch[1] : undefined;
-          title = titleMatch ? titleMatch[1] : undefined;
-          dna = dnaMatch ? dnaMatch[1] : undefined;
-          command = commandMatch ? commandMatch[1] : undefined;
-          description = content;
-        }
+        if (!frontmatterMatch) continue;
+        const yaml = frontmatterMatch[1];
+        const name = yaml.match(/^name:\s*(.+)$/m)?.[1];
+        const title = yaml.match(/^title:\s*(.+)$/m)?.[1];
+        const title_short = yaml.match(/^title_short:\s*(.+)$/m)?.[1];
+        const role = yaml.match(/^role:\s*(.+)$/m)?.[1];
+        const team = yaml.match(/^team:\s*(.+)$/m)?.[1];
+        const reports_to = yaml.match(/^reports_to:\s*(.+)$/m)?.[1];
+        const dna = yaml.match(/^dna:\s*(.+)$/m)?.[1];
+        const description = (frontmatterMatch[2] || "").trim();
 
         if (name && dna) {
           soul = {
             name,
             title,
+            title_short,
+            role,
+            team,
+            reports_to,
             dna,
-            command,
             description,
           };
 
@@ -95,65 +87,47 @@ export function discoverLocalAgents(): LocalAgent[] {
  * Includes option to create random agent
  */
 export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promise<LocalAgent | null | "create-random"> {
-  // Get active agents in this room
-  // Note: With chunks, active agents are stored in sessions, not centralized state
+  const { selectAgentGrid } = await import("../interactive-menu.js");
+  const { renderTerminalSmall } = await import("../index.js");
+  const { readdirSync, readFileSync, existsSync } = await import("fs");
+
+  // Get active agents from sessions directory
   const activeAgentDnas = new Set<string>();
-  // TODO: Query sessions directory to get active DNAs
-  // For now, all agents are available for selection
-
-  const { selectMenu } = await import("../interactive-menu.js");
-  const { decodeDNA, getTraitColors } = await import("../index.js");
-
-  // Build menu items for existing agents
-  const menuItems = [
-    ...localAgents.map((a) => {
-      const name = a.soul?.name || a.name;
-      const title = a.soul?.title ? ` — ${a.soul.title}` : "";
-      const purpose = a.soul?.purpose || "Autonomous agent";
-      const status = a.soul?.dna && activeAgentDnas.has(a.soul.dna) ? " (in room)" : "";
-
-      // Get face and hat colors from DNA (same as avatar rendering)
-      let hatColor = "";
-      let faceColor = "";
-      if (a.soul?.dna) {
-        try {
-          const traits = decodeDNA(a.soul.dna);
-          const colors = getTraitColors(traits, false);
-          hatColor = `\x1b[38;2;${colors.hatRgb[0]};${colors.hatRgb[1]};${colors.hatRgb[2]}m▪\x1b[0m`;
-          faceColor = `\x1b[38;2;${colors.faceRgb[0]};${colors.faceRgb[1]};${colors.faceRgb[2]}m█\x1b[0m`;
-        } catch {
-          hatColor = "▪";
-          faceColor = "●";
+  const sessionsDir = join(process.cwd(), ".termlings", "sessions");
+  if (existsSync(sessionsDir)) {
+    try {
+      const sessionFiles = readdirSync(sessionsDir);
+      for (const file of sessionFiles) {
+        if (file.endsWith(".json")) {
+          try {
+            const sessionData = JSON.parse(readFileSync(join(sessionsDir, file), "utf-8"));
+            if (sessionData.dna) {
+              activeAgentDnas.add(sessionData.dna);
+            }
+          } catch {}
         }
-      } else {
-        hatColor = " ";
-        faceColor = " ";
       }
-
-      // Fade out description text (but keep color square bright)
-      const dimGray = "\x1b[90m";
-      const reset = "\x1b[0m";
-      const fadedText = `${dimGray}${purpose}${status}${reset}`;
-
-      return {
-        value: JSON.stringify({ type: "existing", agent: a }),
-        label: `${hatColor} ${name}${title}`,
-        description: `${faceColor} ${fadedText}`,
-      };
-    }),
-    {
-      value: JSON.stringify({ type: "create", agent: null }),
-      label: "Spawn random agent",
-      description: "Create a new agent with random DNA",
-    },
-  ];
-
-  const selected = await selectMenu(menuItems, "Select agent to launch:");
-  const { type, agent } = JSON.parse(selected);
-
-  if (type === "create") {
-    return "create-random";
+    } catch {}
   }
+
+  // Build grid items for existing agents
+  const gridItems = localAgents.map((a) => {
+    const name = a.soul?.name || a.name;
+    const role = a.soul?.role || "";
+    const isActive = a.soul?.dna ? activeAgentDnas.has(a.soul.dna) : false;
+    const avatar = a.soul?.dna ? renderTerminalSmall(a.soul.dna, 0, isActive) : "?";
+
+    return {
+      value: JSON.stringify({ type: "existing", agent: a }),
+      label: name,
+      title: a.soul?.title_short || a.soul?.title,
+      avatar,
+      disabled: isActive,
+    };
+  });
+
+  const selected = await selectAgentGrid(gridItems, "Select agent to launch:");
+  const { type, agent } = JSON.parse(selected);
 
   if (agent && agent.soul?.dna && activeAgentDnas.has(agent.soul.dna)) {
     console.log("\n⚠️  Warning: This agent is already active in this room.");
@@ -167,7 +141,7 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
  * Marks agents already active in the room as taken
  */
 export async function selectAgent(): Promise<{ type: "builtin" | "local"; name: string; agent?: LocalAgent }> {
-  const builtins = ["claude", "codex"];
+  const builtins = ["claude"];
   const localAgents = discoverLocalAgents();
 
   // Get active agents in this room
@@ -193,7 +167,7 @@ export async function selectAgent(): Promise<{ type: "builtin" | "local"; name: 
   const { selectMenu } = await import("../interactive-menu.js");
   const menuItems = allOptions.map((opt) => {
     if (opt.type === "builtin") {
-      const label = opt.name === "claude" ? "Claude Code" : "Codex CLI";
+      const label = "Claude Code";
       const status = opt.taken ? " (in room)" : "";
       return {
         value: JSON.stringify(opt),

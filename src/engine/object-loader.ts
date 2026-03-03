@@ -9,7 +9,8 @@ function projectObjectsDir(): string {
 }
 
 /**
- * Load starter objects from templates/office/objects/
+ * Load optional starter objects from templates/office/objects/
+ * (may be empty/absent in lightweight workspace templates).
  */
 export function loadStarterObjects(): Record<string, ObjectDef> {
   try {

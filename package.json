@@ -7,7 +7,9 @@
   },
   "scripts": {
     "test": "bun test",
-    "test:watch": "bun test --watch"
+    "test:watch": "bun test --watch",
+    "workspace:dev": "bun run --cwd web dev",
+    "workspace:build": "bun run --cwd web build"
   },
   "devDependencies": {
     "@opentui/core": "^0.1.82",
@@ -30,7 +32,8 @@
   "files": [
     "src",
     "bin",
-    "templates"
+    "templates",
+    "web"
   ],
   "homepage": "https://termlings.com",
   "keywords": [

@@ -1,0 +1,112 @@
+# Messaging & Agent Discovery
+
+Send direct messages and discover active teammates.
+
+## Discover Agents
+
+```bash
+termlings list-agents
+```
+
+Output:
+```
+Slug            Name         Title              Role
+agent:developer Alice        Developer          Build and ship product (you)
+agent:designer  Bob          Designer           Design and user experience
+```
+
+Tells you:
+- Who's currently online
+- Their slug (use for messaging)
+- Their display name and title
+- Their role
+
+## Send Messages
+
+```bash
+termlings message <target> <text>
+```
+
+### Message Targets
+
+**1. Session ID** (current session only)
+```bash
+termlings message tl-abc123def456 "Hi Alice! Can you review the PR?"
+```
+Use for immediate, live communication.
+
+**2. Agent Slug** (stable, recommended ⭐)
+```bash
+termlings message agent:developer "Starting task-42, will finish in 30min"
+```
+Use for persistent threads - works across agent restarts.
+
+**3. Human Operator** (highest priority)
+```bash
+termlings message human:default "I'm blocked waiting for AWS credentials"
+```
+
+Aliases:
+- `human:default` - Project owner (recommended)
+- `human:operator` - Same as default
+- `human:owner` - Same as default
+
+## Workflow Examples
+
+### Coordination
+```bash
+# Agent A
+termlings message agent:bob "task-42 is ready for your review"
+
+# Agent B
+termlings message agent:alice "Got it, reviewing now"
+```
+
+### Status Updates
+```bash
+termlings message human:default "Completed 3 of 5 tasks. Blocker: API rate limits"
+```
+
+### Help Requests
+```bash
+termlings message human:default "Stuck on CORS issue - need to pair with someone"
+```
+
+## Best Practices
+
+✅ **DO:**
+- Use `agent:<slug>` for team coordination (persistent)
+- Message `human:default` when blocked or needing help
+- Include concrete next steps in messages
+- Send updates every 30 minutes on long tasks
+
+❌ **DON'T:**
+- Use session IDs for important messages (they expire)
+- Send silent failures - communicate blockers immediately
+- Assume teammates know what you're doing
+
+## Message History
+
+All messages are logged to `.termlings/store/messages.jsonl` (JSONL format).
+
+Each entry includes:
+- Timestamp
+- From/to (session IDs or human targets)
+- Message text
+- Metadata (agent slug, etc.)
+
+Access history programmatically or view in web UI.
+
+## Integration with Tasks
+
+Often you'll message teammates after task updates:
+
+```bash
+# Complete a task
+termlings task status task-42 completed "Analysis saved to /tmp/output.json"
+
+# Notify teammate
+termlings message agent:bob "task-42 done, ready for review"
+```
+
+See [TASK.md](TASK.md) for task management.
