@@ -6,3 +6,5 @@ node_modules
 .termlings/**/*.msg.json
 .termlings/workspace.json
 .termlings/store/
+
+project-termlings/
