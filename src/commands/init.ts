@@ -19,7 +19,7 @@ CREATES:
   ├── sessions/              Active agent sessions
   ├── store/                 Persistent data
   ├── browser/               Browser automation profile
-  └── map.json               World metadata (if using map)
+  └── VISION.md              Project vision injected into agent context (template-provided)
 
 TEMPLATES:
   Currently available:

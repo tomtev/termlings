@@ -146,7 +146,6 @@ export function ensureWorkspaceDirs(root = process.cwd()): void {
   mkdirSync(base, { recursive: true })
   mkdirSync(join(base, "agents"), { recursive: true })
   mkdirSync(join(base, "humans"), { recursive: true })
-  mkdirSync(join(base, "objects"), { recursive: true })
   mkdirSync(sessionsDir(root), { recursive: true })
   mkdirSync(storeDir(root), { recursive: true })
   mkdirSync(join(storeDir(root), "browser"), { recursive: true })

@@ -6,7 +6,7 @@ import { ensureWorkspaceDirs } from "./state.js"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
-const TEMPLATE_COPY_ALLOWLIST = ["agents", "humans", "store", "objects", "OBJECTIVES.md", "README.md", "spawn.json"] as const
+const TEMPLATE_COPY_ALLOWLIST = ["agents", "humans", "store", "VISION.md", "README.md", "spawn.json"] as const
 
 function templatesRoot(): string {
   return join(__dirname, "..", "..", "templates")

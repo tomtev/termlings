@@ -10,6 +10,12 @@ Termlings agents are autonomous Claude Code sessions that collaborate through a 
 - Claude-only agent runtime.
 - File-backed JSON state in `.termlings/`.
 
+## Implementation policy (current phase)
+
+- Do not add backward-compatibility layers unless explicitly requested.
+- Do not add fallback paths/aliases for old file names, commands, or data formats.
+- Prefer one canonical path/format and update templates/docs/code together.
+
 ## Architecture
 
 ```text

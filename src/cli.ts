@@ -6,6 +6,7 @@
 
 import { launchWorkspaceWeb } from "./workspace/web-launch.js";
 import { launchWorkspaceTui } from "./tui/tui.js";
+import { getUpdateNotice, printUpdateNotice } from "./update-check.js";
 
 const args = process.argv.slice(2);
 const flags = new Set<string>();
@@ -17,6 +18,7 @@ let agentPassthrough: string[] = [];
 // Known flags that take a space-separated value
 const VALUE_FLAGS = new Set([
   "name", "dna", "owner", "purpose", "dangerous-skip-confirmation",
+  "slug", "title", "title-short", "title_short", "role", "team", "reports-to", "reports_to",
   "port", "host", "color", "size", "padding", "bg", "fps", "duration", "out",
   "headed", "headless", "depth", "max-tokens", "maxTokens", "tab", "tab-id", "tabId"
 ]);
@@ -75,6 +77,15 @@ if (args[0] && _agentRegistry[args[0]]) {
 import { routeCommand } from "./commands/index.js";
 
 try {
+  const command = positional[0];
+  const isDefaultTuiLaunch = !command && !flags.has("clear");
+  const isSpawnPicker = command === "spawn" && positional.length <= 1 && !flags.has("help");
+  const updateNotice = await getUpdateNotice({ command, flags });
+
+  if (updateNotice && !isDefaultTuiLaunch && !isSpawnPicker) {
+    printUpdateNotice(updateNotice);
+  }
+
   const handled = await routeCommand(positional, flags, opts);
 
   if (!handled) {
@@ -121,6 +132,10 @@ Avatar & Creation:
 Spawn:
   termlings spawn              Pick agent + preset, then launch
   termlings spawn <preset>     Pick agent, launch with preset
+
+Upgrade:
+  npm install -g termlings@latest
+  bun add -g termlings@latest
 `);
       process.exit(0);
     }
@@ -131,7 +146,9 @@ Spawn:
     }
 
     if (!positional[0] && !flags.has("clear")) {
-      await launchWorkspaceTui(process.cwd());
+      await launchWorkspaceTui(process.cwd(), {
+        startupBanner: updateNotice ? updateNotice.bannerText : undefined,
+      });
       process.exit(0);
     }
 

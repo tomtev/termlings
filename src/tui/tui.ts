@@ -97,6 +97,10 @@ interface SessionTypingState {
   source?: "terminal"
 }
 
+interface WorkspaceTuiOptions {
+  startupBanner?: string
+}
+
 class WorkspaceTui {
   private readonly root: string
 
@@ -114,6 +118,8 @@ class WorkspaceTui {
   private draftCursorIndex = 0
 
   private statusMessage = "Ready"
+  private startupBanner = ""
+  private startupBannerUntil = 0
 
   private snapshot: Snapshot = {
     sessions: [],
@@ -186,8 +192,12 @@ class WorkspaceTui {
 
   private readonly onSigTermBound: () => void
 
-  constructor(root = process.cwd()) {
+  constructor(root = process.cwd(), options: WorkspaceTuiOptions = {}) {
     this.root = root
+    if (options.startupBanner) {
+      this.startupBanner = options.startupBanner
+      this.startupBannerUntil = Date.now() + 30_000
+    }
 
     const envSessionId = process.env.TERMLINGS_SESSION_ID
 
@@ -224,6 +234,11 @@ class WorkspaceTui {
     this.onSigTermBound = () => {
       this.stop(0)
     }
+  }
+
+  private showStartupBanner(): boolean {
+    if (!this.startupBanner) return false
+    return Date.now() < this.startupBannerUntil
   }
 
   async run(): Promise<never> {
@@ -3509,6 +3524,8 @@ class WorkspaceTui {
     for (let index = 0; index < inputMarginBottomRows; index++) {
       if (showScrollToBottomHint && index === 0) {
         lines.push(padAnsi(`${FG_SUBTLE_HINT}  (b) Scroll to bottom${ANSI_RESET}`, width))
+      } else if (index === 0 && this.showStartupBanner()) {
+        lines.push(`${BG_INPUT_PANEL}\x1b[38;5;223m${fitPlain(` ${this.startupBanner}`, width)}${ANSI_RESET}`)
       } else {
         lines.push("")
       }
@@ -3533,7 +3550,7 @@ class WorkspaceTui {
   }
 }
 
-export async function launchWorkspaceTui(root = process.cwd()): Promise<never> {
-  const app = new WorkspaceTui(root)
+export async function launchWorkspaceTui(root = process.cwd(), options: WorkspaceTuiOptions = {}): Promise<never> {
+  const app = new WorkspaceTui(root, options)
   return app.run()
 }

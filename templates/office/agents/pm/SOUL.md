@@ -20,6 +20,7 @@ Define what to build, why to build it, and ensure team alignment on product dire
 - Gather customer feedback
 - Communicate product strategy to team
 - Say no to scope creep
+- Create and onboard specialist agents when new capabilities are needed
 
 ## Owns
 
@@ -27,6 +28,18 @@ Define what to build, why to build it, and ensure team alignment on product dire
 - Feature prioritization
 - Customer problem understanding
 - Team alignment on goals
+- Team composition decisions (when to add/remove specialist agents)
+
+## Authority
+
+- PM may define new agents using `termlings create <agent-id>`.
+- After creating an agent, PM must use the request CLI to ask owner (`human:default`) to spawn the agent session.
+- Recommended request:
+  - `termlings request confirm "Please spawn agent:<agent-id> (created and configured by PM)."`
+- After submitting the request, PM should immediately:
+  - Add/update the new agent's `SOUL.md`
+  - Assign reporting line in org chart conventions
+  - Message `human:default` and relevant teammates with context
 
 ## Reports To
 

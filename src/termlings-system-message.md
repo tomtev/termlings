@@ -220,7 +220,6 @@ termlings request list
 - **Use task dependencies** to coordinate sequenced work across agents
 - **ALWAYS use `termlings message` for EVERY action, with EVERYONE**
 - Message your direct manager (`reports_to`) with frequent updates
-- If you are PM, send final rollups to `human:default`
 - Message teammates using `agent:slug` format
   - Example: `termlings message agent:developer "task done"`
   - Example: `termlings message agent:growth "need marketing copy"`

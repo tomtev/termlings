@@ -6,6 +6,21 @@
 import { createInterface, Interface } from "readline";
 import type { Readable, Writable } from "stream";
 
+const ANSI_RESET = "\x1b[0m";
+const ANSI_BOLD = "\x1b[1m";
+const ANSI_TITLE = "\x1b[38;5;117m";
+const ANSI_TITLE_RULE = "\x1b[38;5;67m";
+const ANSI_ITEM = "\x1b[38;5;252m";
+const ANSI_ITEM_SELECTED = "\x1b[48;5;24m\x1b[38;5;231m";
+const ANSI_ITEM_DESC = "\x1b[38;5;245m";
+const ANSI_FOOTER = "\x1b[38;5;244m";
+const ANSI_HINT = "\x1b[38;5;242m";
+const ANSI_ESCAPE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+
+function visibleLength(input: string): number {
+  return input.replace(ANSI_ESCAPE, "").length;
+}
+
 export interface MenuItem {
   label: string;
   value: string;
@@ -30,32 +45,50 @@ export async function selectMenu(
 
   return new Promise<string>((resolve) => {
     let selectedIndex = 0;
-    const titleStr = title ? `\n${title}\n` : "";
 
     const render = () => {
       // Clear previous output
       output.write("\x1b[2J\x1b[H"); // Clear screen and move cursor to top
-      output.write(titleStr);
+      if (title) {
+        const width = (output as NodeJS.WriteStream).columns || process.stdout.columns || 80;
+        const safeTitle = ` ${title} `;
+        const ruleWidth = Math.max(0, width - visibleLength(safeTitle) - 2);
+        output.write(`\n${ANSI_TITLE}${ANSI_BOLD}${safeTitle}${ANSI_RESET}${ANSI_TITLE_RULE}${"-".repeat(ruleWidth)}${ANSI_RESET}\n`);
+      } else {
+        output.write("\n");
+      }
 
       for (let i = 0; i < items.length; i++) {
         const item = items[i]!;
         const isSelected = i === selectedIndex;
-        const prefix = isSelected ? "▶ " : "  ";
-        const labelColor = isSelected ? "\x1b[1;36m" : "\x1b[0m"; // Cyan if selected, normal otherwise
-        const reset = "\x1b[0m";
-        const dimGray = "\x1b[90m"; // Dim gray for descriptions
+        const prefix = isSelected ? "> " : "  ";
+        const labelColor = isSelected ? ANSI_ITEM_SELECTED : ANSI_ITEM;
 
-        output.write(`${labelColor}${prefix}${item.label}${reset}\n`);
+        output.write(`${labelColor}${prefix}${item.label}${ANSI_RESET}\n`);
 
         if (item.description) {
-          output.write(`${dimGray}   ${item.description}${reset}\n`);
+          const desc = item.description.split("\n");
+          for (const line of desc) {
+            output.write(`${ANSI_ITEM_DESC}   ${line}${ANSI_RESET}\n`);
+          }
         }
       }
 
       if (options?.footer) {
-        output.write(`\n\x1b[90m${options.footer}\x1b[0m`);
+        const lines = options.footer.split("\n");
+        for (const line of lines) {
+          if (line.length === 0) {
+            output.write("\n");
+            continue;
+          }
+          if (line.includes("\x1b[")) {
+            output.write(`\n${line}`);
+          } else {
+            output.write(`\n${ANSI_FOOTER}${line}${ANSI_RESET}`);
+          }
+        }
       }
-      output.write("\n\x1b[90m(↑/↓ to select, Enter to confirm)\x1b[0m");
+      output.write(`\n${ANSI_HINT}(up/down to select, Enter to confirm)${ANSI_RESET}`);
     };
 
     render();

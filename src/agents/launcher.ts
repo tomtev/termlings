@@ -50,12 +50,14 @@ function loadContext(): string {
     } catch {}
   }
 
-  // Append project OBJECTIVES.md if it exists
+  // Append project vision addendum if present.
   try {
-    const objectivesPath = resolvePath("OBJECTIVES.md")
-    if (existsSync(objectivesPath)) {
-      const objectives = readFileSync(objectivesPath, "utf8")
-      context += "\n\n" + objectives + "\n"
+    const visionPath = resolvePath(".termlings", "VISION.md")
+    if (existsSync(visionPath)) {
+      const vision = readFileSync(visionPath, "utf8").trim()
+      if (vision) {
+        context += `\n\n<TERMLINGS-VISION>\n${vision}\n</TERMLINGS-VISION>\n`
+      }
     }
   } catch {}
 

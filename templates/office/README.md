@@ -1,18 +1,17 @@
 # Office Template
 
-A complete team workspace for a 5-person SaaS company.
+A complete starter workspace for a 5-person SaaS team.
 
 ## Contents
 
-- **Map**: Cozy office (54×44 tiles)
-- **Objects**: Desk object definition
 - **Agents**: 5 pre-configured team members
-  - Alice (CEO/Founder) - Direction
-  - Bob (CTO/Builder) - Product
-  - Carol (CMO/Grower) - Users
-  - David (CRO/Monetizer) - Revenue
-  - Emma (COO/Operator) - Scale
-- **Store**: Empty directories for email, crons, and tasks
+  - Operator (Founder)
+  - PM (Vision & Prioritization)
+  - Developer (Build & Ship)
+  - Designer (UX & Visual Design)
+  - Growth (Customer & Adoption)
+- **VISION.md**: Small project vision document injected into all agent contexts
+- **Store**: Empty directories for tasks, calendar, messages, and browser runtime
 
 ## Usage
 
@@ -21,7 +20,7 @@ A complete team workspace for a 5-person SaaS company.
 termlings init --template office
 
 # Or copy manually
-cp -r templates/office/.termlings ~/my-project/.termlings
+cp -r templates/office/* ~/my-project/.termlings/
 cd ~/my-project
 termlings
 ```
@@ -33,14 +32,10 @@ Edit agent SOUL.md files to customize their roles and personalities:
 - `.termlings/agents/bob/SOUL.md`
 - etc.
 
-Add objects to `.termlings/objects/` as JSON files.
-
-Add or modify map chunks in `.termlings/map/chunk_*.json`.
+Update `.termlings/VISION.md` with your current product direction.
 
 ## Future Enhancements
 
 This template is editable and can be enhanced with:
-- More complex map chunks
-- Additional object definitions
-- Pre-filled store data (emails, cron jobs, tasks)
+- Pre-filled store data (tasks, message seeds, calendar events)
 - Agent history and relationships

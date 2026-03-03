@@ -67,6 +67,14 @@ On first run, termlings initializes `.termlings/` with config files and director
 
 See [docs/TERMLINGS.md](docs/TERMLINGS.md) for complete guide to agent identity, context injection, and lifecycle.
 
+## Upgrade
+
+```bash
+npm install -g termlings@latest
+# or
+bun add -g termlings@latest
+```
+
 ## CLI commands
 
 Agents coordinate via simple CLI commands:
@@ -182,7 +190,7 @@ termlings init --template office
 │       └── profile/          # Chrome profile (persistent)
 ├── sessions/                 # Active agent sessions
 │   └── tl-*.json            # Session state per agent
-└── map.json                 # World definition (if using templates)
+└── VISION.md               # Project vision injected into agent context
 ```
 
 ## HTTP API
@@ -220,15 +228,24 @@ TERMLINGS_SESSION_ID=tl-a8ab0631      # Unique session ID (16 hex chars)
 TERMLINGS_AGENT_NAME=Rusty             # Display name
 TERMLINGS_AGENT_DNA=0a3f201            # Stable identity (7-char hex)
 TERMLINGS_IPC_DIR=.termlings/          # Workspace directory
-TERMLINGS_CONTEXT=...                  # Framework documentation
+TERMLINGS_CONTEXT=...                  # Final injected system context
 ```
 
-**Context file** (`src/termlings-system-message.md`):
+**Base context file** (`src/termlings-system-message.md`):
 - How to use CLI commands
 - Communication patterns
 - Task workflow examples
 - Human-in-loop integration
 - Browser automation guide
+
+**Project vision file** (`.termlings/VISION.md`):
+- If present, appended to system context for every launched agent.
+- Wrapped in tags for explicit delimiting:
+```text
+<TERMLINGS-VISION>
+...contents of .termlings/VISION.md...
+</TERMLINGS-VISION>
+```
 
 The context is **lightweight** (~3KB) — agents understand the system with minimal token overhead.
 

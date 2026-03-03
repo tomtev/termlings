@@ -14,7 +14,7 @@ This creates `.termlings/` directory with all necessary files and folders.
 
 ```
 .termlings/
-├── map.json                      # World definition (if using templates)
+├── VISION.md                     # Project vision (template-provided)
 ├── sessions/                     # Active agent sessions
 ├── store/
 │   ├── messages.jsonl           # Message history
@@ -118,7 +118,7 @@ Make sure you're in the project root where you want the workspace.
 
 ```
 .termlings/
-├── map.json               # World/map definition
+├── VISION.md             # Project vision for agent context
 ├── .gitignore            # Git ignore rules (generated)
 ├── sessions/
 │   └── [sessionId].json  # Per-agent session state
