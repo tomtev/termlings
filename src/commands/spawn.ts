@@ -6,7 +6,6 @@
 
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
-import { getUpdateNotice } from "../update-check.js";
 
 interface Preset {
   description: string;
@@ -146,6 +145,9 @@ PRESET FILE (.termlings/spawn.json):
     return;
   }
 
+  // Render logo banner for the menu header
+  const { renderBanner } = await import("../banner.js");
+
   const config = loadSpawnConfig() || DEFAULT_CONFIG;
   const runtimes = Object.keys(config);
 
@@ -156,7 +158,6 @@ PRESET FILE (.termlings/spawn.json):
   if (!runtimeName) {
     const { selectMenu } = await import("../interactive-menu.js");
     const menuItems: { value: string; label: string; description: string }[] = [];
-    const updateNotice = await getUpdateNotice({ command: "spawn", flags });
 
     for (const [runtime, presets] of Object.entries(config)) {
       for (const [name, preset] of Object.entries(presets)) {
@@ -171,13 +172,9 @@ PRESET FILE (.termlings/spawn.json):
       }
     }
 
-    const footerLines = ["Edit presets in .termlings/spawn.json"];
-    if (updateNotice) {
-      footerLines.push(`\x1b[38;5;180m${updateNotice.bannerText}\x1b[0m`);
-    }
-
     const selectedCommand = await selectMenu(menuItems, "Select a spawn preset:", {
-      footer: footerLines.join("\n"),
+      header: renderBanner([]),
+      footer: "Edit presets in .termlings/spawn.json",
     });
 
     await routePresetCommand(selectedCommand);

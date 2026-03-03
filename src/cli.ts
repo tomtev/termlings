@@ -6,7 +6,7 @@
 
 import { launchWorkspaceWeb } from "./workspace/web-launch.js";
 import { launchWorkspaceTui } from "./tui/tui.js";
-import { getUpdateNotice, printUpdateNotice } from "./update-check.js";
+import { getUpdateNotice } from "./update-check.js";
 import { runSimCommand } from "./sim/index.js";
 
 const args = process.argv.slice(2);
@@ -21,7 +21,8 @@ const VALUE_FLAGS = new Set([
   "name", "dna", "owner", "purpose", "dangerous-skip-confirmation",
   "slug", "title", "title-short", "title_short", "role", "team", "reports-to", "reports_to",
   "port", "host", "color", "size", "padding", "bg", "fps", "duration", "out",
-  "headed", "headless", "depth", "max-tokens", "maxTokens", "tab", "tab-id", "tabId"
+  "headed", "headless", "depth", "max-tokens", "maxTokens", "tab", "tab-id", "tabId",
+  "from", "primary", "logo", "domain", "email", "website", "profile",
 ]);
 
 // Check if first arg is an agent name
@@ -83,8 +84,14 @@ try {
   const isSpawnPicker = command === "spawn" && positional.length <= 1 && !flags.has("help");
   const updateNotice = await getUpdateNotice({ command, flags });
 
-  if (updateNotice && !isDefaultTuiLaunch && !isSpawnPicker) {
-    printUpdateNotice(updateNotice);
+  if (updateNotice) {
+    if (process.stdout.isTTY) {
+      const { showUpdateMenu } = await import("./banner.js");
+      await showUpdateMenu(updateNotice);
+    } else {
+      const { printUpdateNotice } = await import("./update-check.js");
+      printUpdateNotice(updateNotice);
+    }
   }
 
   if (flags.has("sim") || command === "sim") {
@@ -122,6 +129,7 @@ Agent System:
   termlings request <type> Request decision/env var from operator
   termlings task <cmd>     Task management
   termlings calendar <cmd> Calendar management
+  termlings brand <cmd>    Brand profiles (colors/logo/voice/domain/email)
 
 Browser Automation:
   termlings browser --help Show browser commands
@@ -160,9 +168,15 @@ Sim (optional):
     }
 
     if (!positional[0] && !flags.has("clear")) {
-      await launchWorkspaceTui(process.cwd(), {
-        startupBanner: updateNotice ? updateNotice.bannerText : undefined,
-      });
+      // Show init banner if no workspace exists yet
+      const { existsSync } = await import("fs");
+      const { join } = await import("path");
+      if (!existsSync(join(process.cwd(), ".termlings"))) {
+        const { printInitBanner } = await import("./banner.js");
+        printInitBanner();
+      }
+
+      await launchWorkspaceTui(process.cwd(), {});
       process.exit(0);
     }
 
@@ -220,6 +234,10 @@ Sim (optional):
     process.exit(1);
   }
 } catch (e) {
-  console.error(`Error: ${e}`);
+  if (e instanceof Error && e.stack) {
+    console.error(e.stack);
+  } else {
+    console.error(`Error: ${e}`);
+  }
   process.exit(1);
 }

@@ -5,7 +5,7 @@ import { writeMessages } from "../engine/ipc.js"
 import { getAllTasks, type Task, type TaskPriority, type TaskStatus } from "../engine/tasks.js"
 import { listRequests, resolveRequest, dismissRequest, type AgentRequest } from "../engine/requests.js"
 import { decodeDNA, getTraitColors, renderTerminal, renderTerminalSmall, renderTermlingsLogo } from "../index.js"
-import { join } from "path"
+import { basename, join } from "path"
 import { execSync } from "child_process"
 import {
   appendWorkspaceMessage,
@@ -2431,7 +2431,13 @@ class WorkspaceTui {
         ]
       : this.renderMarkdownBody(this.decodeMentionsForDisplay(message.text || ""), contentWidth)
     const prependLines = options.prependLines ?? []
-    const content = [header, ...details.map((d) => truncatePlain(d, contentWidth)), ...prependLines, ...bodyLines]
+    const detailLines = details.map((d) => truncatePlain(d, contentWidth))
+    const shouldAddBodyGap = !presenceEvent
+      && (message.kind === "dm" || message.kind === "chat")
+      && (prependLines.length > 0 || bodyLines.length > 0)
+    const content = shouldAddBodyGap
+      ? [header, ...detailLines, "", ...prependLines, ...bodyLines]
+      : [header, ...detailLines, ...prependLines, ...bodyLines]
     const rows = content.length
 
     const borderColor = options.borderColor ?? FG_FRAME
@@ -2439,8 +2445,9 @@ class WorkspaceTui {
     if (borderless) {
       const plainLines: string[] = []
       const sidePad = " "
+      const leadPad = `${sidePad}${contentInsetPad}`
       for (let row = 0; row < rows; row++) {
-        plainLines.push(`${frameInsetPad}${sidePad}${padAnsi(content[row] || "", innerWidth)}${sidePad}`)
+        plainLines.push(`${frameInsetPad}${leadPad}${padAnsi(content[row] || "", contentWidth)}${sidePad}`)
       }
       return plainLines
     }
@@ -2525,7 +2532,13 @@ class WorkspaceTui {
 
   private renderRequestsView(height: number, width: number): string[] {
     const out: string[] = []
-    const cardWidth = Math.max(30, Math.min(width - 2, 80))
+    const cardWidth = Math.max(34, Math.min(width - 2, 96))
+    const cardHorizontalPadding = 1
+    const asText = (value: unknown): string => {
+      if (typeof value === "string") return value
+      if (value === null || value === undefined) return ""
+      return String(value)
+    }
 
     const pending = this.snapshot.requests.filter(r => r.status === "pending")
     const resolved = this.snapshot.requests.filter(r => r.status !== "pending").slice(0, 5)
@@ -2534,6 +2547,15 @@ class WorkspaceTui {
       out.push("  No requests from agents.")
       return out
     }
+
+    const resolvedCount = this.snapshot.requests.filter(r => r.status !== "pending").length
+    out.push(
+      ...this.renderHeaderFrame(
+        [`${FG_META}Pending ${pending.length} · Resolved ${resolvedCount}${ANSI_RESET}`],
+        width,
+      ),
+    )
+    out.push("")
 
     const selectedIndex = Math.max(0, Math.min(this.requestSelectionIndex, pending.length - 1))
 
@@ -2547,63 +2569,101 @@ class WorkspaceTui {
       const borderColor = selected ? FG_SELECTED : FG_FRAME
 
       // Card label
-      let icon = "📋"
+      let icon = "req"
       let label = ""
       if (req.type === "env") {
-        icon = "🔑"
-        label = `${req.varName}`
+        icon = "key"
+        label = asText(req.varName)
       } else if (req.type === "confirm") {
-        icon = "❓"
+        icon = "?"
         label = "Confirm"
       } else if (req.type === "choice") {
-        icon = "🔘"
+        icon = ">"
         label = "Choice"
       }
 
       // Build card content lines
+      const innerWidth = Math.max(8, cardWidth - 2)
+      const contentWidth = Math.max(1, innerWidth - (cardHorizontalPadding * 2))
       const content: string[] = []
-      content.push(`${senderChip} ${from}${" ".repeat(Math.max(1, cardWidth - visibleLength(`${senderChip} ${from}`) - agoStr.length - 5))}${FG_META}${agoStr} ago${ANSI_RESET}`)
+      const pushWrapped = (text: unknown, options: { color?: string; prefix?: string } = {}): void => {
+        const normalizedText = asText(text)
+        const prefix = options.prefix ?? ""
+        const color = options.color ?? ""
+        const bodyWidth = Math.max(1, contentWidth - prefix.length)
+        const wrapped = wrapPlain(normalizedText, bodyWidth)
+        const continuationPrefix = " ".repeat(prefix.length)
+        for (let index = 0; index < wrapped.length; index++) {
+          const linePrefix = index === 0 ? prefix : continuationPrefix
+          const plainLine = truncatePlain(`${linePrefix}${wrapped[index] ?? ""}`, contentWidth)
+          if (color.length > 0) {
+            content.push(`${color}${plainLine}${ANSI_RESET}`)
+          } else {
+            content.push(plainLine)
+          }
+        }
+      }
+
+      const agoLabel = contentWidth >= 12 ? `${agoStr} ago` : agoStr
+      const chipPrefix = `${senderChip} `
+      const chipPrefixWidth = visibleLength(chipPrefix)
+      const leftBudget = Math.max(0, contentWidth - agoLabel.length - 1)
+      let headerLeft = ""
+      if (leftBudget > 0) {
+        if (chipPrefixWidth >= leftBudget) {
+          headerLeft = visibleLength(senderChip) <= leftBudget ? senderChip : ""
+        } else {
+          const maxNameWidth = Math.max(0, leftBudget - chipPrefixWidth)
+          headerLeft = maxNameWidth > 0
+            ? `${chipPrefix}${truncatePlain(from, maxNameWidth)}`
+            : senderChip
+        }
+      }
+      const headerGap = Math.max(0, contentWidth - visibleLength(headerLeft) - agoLabel.length)
+      content.push(`${headerLeft}${" ".repeat(headerGap)}${FG_META}${agoLabel}${ANSI_RESET}`)
+      content.push("")
 
       if (req.type === "env") {
-        if (req.reason) content.push(`${FG_META}Reason: ${req.reason}${ANSI_RESET}`)
-        if (req.url) content.push(`${FG_META}${req.url}${ANSI_RESET}`)
+        if (req.reason) pushWrapped(asText(req.reason), { color: FG_META, prefix: "Reason: " })
+        if (req.url) pushWrapped(asText(req.url), { color: FG_META })
         if (selected && this.requestInputMode) {
-          content.push(`${FG_SELECTED}Value (saved to .env): ${this.requestInputDraft}█${ANSI_RESET}`)
+          pushWrapped(`Value (saved to .env): ${this.requestInputDraft}█`, { color: FG_SELECTED })
         } else if (selected) {
-          content.push(`${FG_META}Press Enter to set value${ANSI_RESET}`)
+          pushWrapped("Press Enter to set value", { color: FG_META })
         }
       } else if (req.type === "confirm") {
-        content.push(req.question || "")
+        pushWrapped(asText(req.question))
         if (selected && this.requestInputMode) {
-          content.push(`${FG_SELECTED}Type y/n: ${this.requestInputDraft}█${ANSI_RESET}`)
+          pushWrapped(`Type y/n: ${this.requestInputDraft}█`, { color: FG_SELECTED })
         } else if (selected) {
-          content.push(`${FG_META}Press Enter to respond${ANSI_RESET}`)
+          pushWrapped("Press Enter to respond", { color: FG_META })
         }
       } else if (req.type === "choice") {
-        content.push(req.question || "")
+        pushWrapped(asText(req.question))
         if (req.options) {
           for (let j = 0; j < req.options.length; j++) {
-            content.push(`${FG_META}  ${j + 1}. ${req.options[j]}${ANSI_RESET}`)
+            pushWrapped(asText(req.options[j]), { color: FG_META, prefix: `  ${j + 1}. ` })
           }
         }
         if (selected && this.requestInputMode) {
-          content.push(`${FG_SELECTED}Pick #: ${this.requestInputDraft}█${ANSI_RESET}`)
+          pushWrapped(`Pick #: ${this.requestInputDraft}█`, { color: FG_SELECTED })
         } else if (selected) {
-          content.push(`${FG_META}Press Enter to choose${ANSI_RESET}`)
+          pushWrapped("Press Enter to choose", { color: FG_META })
         }
       }
 
       // Render card with border
-      const innerWidth = Math.max(8, cardWidth - 2)
-      const cardLabel = `${icon} ${label}`
+      const cardLabel = icon.length > 0 ? `${icon} ${label}` : label
       const labelTrimmed = truncatePlain(cardLabel, Math.max(0, innerWidth - 2))
       const labelUsed = visibleLength(labelTrimmed) + 2
       const dashCount = Math.max(0, innerWidth - labelUsed)
       out.push(` ${borderColor}${FRAME_TL} ${ANSI_RESET}${labelTrimmed}${borderColor} ${FRAME_H.repeat(dashCount)}${FRAME_TR}${ANSI_RESET}`)
 
       for (const line of content) {
-        const textPart = padAnsi(line, innerWidth)
-        out.push(` ${borderColor}${FRAME_V}${ANSI_RESET}${textPart}${borderColor}${FRAME_V}${ANSI_RESET}`)
+        const textPart = padAnsi(line, contentWidth)
+        out.push(
+          ` ${borderColor}${FRAME_V}${ANSI_RESET}${" ".repeat(cardHorizontalPadding)}${textPart}${" ".repeat(cardHorizontalPadding)}${borderColor}${FRAME_V}${ANSI_RESET}`,
+        )
       }
 
       out.push(` ${borderColor}${FRAME_BL}${FRAME_H.repeat(innerWidth)}${FRAME_BR}${ANSI_RESET}`)
@@ -2612,17 +2672,30 @@ class WorkspaceTui {
 
     if (resolved.length > 0) {
       out.push(`${FG_META}  Resolved:${ANSI_RESET}`)
+      const resolvedBodyWidth = Math.max(12, width - 8)
       for (const req of resolved) {
         const from = this.requestSenderName(req)
         const senderChip = this.colorChipForDna(this.requestSenderDna(req))
         const status = req.status === "resolved" ? "✓" : "✗"
+        const response = asText(req.response) || "dismissed"
+        let summary = ""
         if (req.type === "env") {
-          const reasonSuffix = req.reason ? ` — ${req.reason}` : ""
-          out.push(`  ${FG_META}${status} ${senderChip} ${from}: ${req.varName} → set${reasonSuffix}${ANSI_RESET}`)
+          const reasonSuffix = req.reason ? ` — ${asText(req.reason)}` : ""
+          summary = `${from}: ${asText(req.varName)} -> set${reasonSuffix}`
         } else if (req.type === "confirm") {
-          out.push(`  ${FG_META}${status} ${senderChip} ${from}: ${req.question} → ${req.response}${ANSI_RESET}`)
+          summary = `${from}: ${asText(req.question)} -> ${response}`
         } else if (req.type === "choice") {
-          out.push(`  ${FG_META}${status} ${senderChip} ${from}: ${req.question} → ${req.response}${ANSI_RESET}`)
+          summary = `${from}: ${asText(req.question)} -> ${response}`
+        }
+
+        const wrapped = wrapPlain(summary, resolvedBodyWidth)
+        const lead = `${status} ${senderChip} `
+        const leadIndent = " ".repeat(visibleLength(`${status} ■ `))
+        if (wrapped.length > 0) {
+          out.push(`  ${FG_META}${lead}${wrapped[0] ?? ""}${ANSI_RESET}`)
+          for (let index = 1; index < wrapped.length; index++) {
+            out.push(`  ${FG_META}${leadIndent}${wrapped[index] ?? ""}${ANSI_RESET}`)
+          }
         }
       }
     }
@@ -2695,9 +2768,23 @@ class WorkspaceTui {
     return unresolved
   }
 
+  private renderHeaderFrame(lines: string[], width: number, label = ""): string[] {
+    // Non-message views render through panelBodyLine(), which adds one leading cell.
+    // Body render width is already reduced upstream, so expand header frames here to match
+    // the visual full-width span of the agent container frame.
+    const frameWidth = Math.max(12, width + 3)
+    const innerWidth = Math.max(1, frameWidth - 4)
+    const out: string[] = [boxTop(frameWidth, label)]
+    for (const line of lines) {
+      out.push(boxAnsiLine(truncatePlain(line, innerWidth), frameWidth))
+    }
+    out.push(boxBottom(frameWidth))
+    return out
+  }
+
   private renderTaskCard(task: Task, cardWidth: number, taskById: Map<string, Task>): string[] {
     const out: string[] = []
-    const borderColor = this.taskStatusColor(task.status)
+    const borderColor = FG_FRAME
     const innerWidth = Math.max(12, cardWidth - 2)
     const statusTag = `${this.taskStatusColor(task.status)}${statusIcon(task.status)} ${task.status.toUpperCase()}${ANSI_RESET}`
     const priorityTag = `${this.taskPriorityColor(task.priority)}${task.priority.toUpperCase()}${ANSI_RESET}`
@@ -2771,8 +2858,8 @@ class WorkspaceTui {
       blocked: tasks.filter(task => task.status === "blocked").length,
       completed: tasks.filter(task => task.status === "completed").length,
     }
-    const summary = `Open ${counts.open} | Claimed ${counts.claimed} | In-progress ${counts.inProgress} | Blocked ${counts.blocked} | Completed ${counts.completed}`
-    out.push(`${FG_META}${truncatePlain(summary, width)}${ANSI_RESET}`)
+    const summary = `Open ${counts.open} · Claimed ${counts.claimed} · In-progress ${counts.inProgress} · Blocked ${counts.blocked} · Completed ${counts.completed}`
+    out.push(...this.renderHeaderFrame([`${FG_META}${summary}${ANSI_RESET}`], width))
     out.push("")
 
     const cardWidth = Math.max(28, Math.min(width - 2, 96))
@@ -2834,7 +2921,7 @@ class WorkspaceTui {
 
   private renderCalendarCard(event: CalendarEvent, cardWidth: number): string[] {
     const out: string[] = []
-    const borderColor = this.calendarStatusColor(event.enabled)
+    const borderColor = FG_FRAME
     const innerWidth = Math.max(12, cardWidth - 2)
     const statusText = event.enabled ? "✓ ENABLED" : "✕ DISABLED"
     const statusTag = `${this.calendarStatusColor(event.enabled)}${statusText}${ANSI_RESET}`
@@ -2928,14 +3015,16 @@ class WorkspaceTui {
     }
 
     const now = Date.now()
-    const schedulerPlain = this.calendarSchedulerRunning ? "scheduler running" : "scheduler stopped"
-    const schedulerColor = this.calendarSchedulerRunning ? "\x1b[38;5;71m" : "\x1b[38;5;203m"
-    out.push(`${schedulerColor}${truncatePlain(`● ${schedulerPlain}`, width)}${ANSI_RESET}`)
+    const schedulerPlain = this.calendarSchedulerRunning
+      ? "scheduler active"
+      : "scheduler not active · run: termlings scheduler --daemon"
+    const schedulerColor = this.calendarSchedulerRunning ? "\x1b[38;5;71m" : FG_META
+    const schedulerLine = `${schedulerColor}● ${schedulerPlain}${ANSI_RESET}`
 
     const enabled = events.filter(event => event.enabled).length
     const upcoming = events.filter(event => event.endTime >= now).length
-    const summary = `Enabled ${enabled}/${events.length} | Upcoming ${upcoming} | Past ${Math.max(0, events.length - upcoming)}`
-    out.push(`${FG_META}${truncatePlain(summary, width)}${ANSI_RESET}`)
+    const summary = `Enabled ${enabled}/${events.length} · Upcoming ${upcoming} · Past ${Math.max(0, events.length - upcoming)}`
+    out.push(...this.renderHeaderFrame([schedulerLine, `${FG_META}${summary}${ANSI_RESET}`], width))
     out.push("")
 
     const cardWidth = Math.max(28, Math.min(width - 2, 96))
@@ -2962,32 +3051,39 @@ class WorkspaceTui {
   }
 
   private renderSettingsView(height: number, width: number): string[] {
-    const out: string[] = []
     const items = this.settingsItems()
+    const rows: string[] = []
 
     if (items.length === 0) {
-      out.push("No settings available.")
-      return out
+      rows.push(`${FG_META}No settings available.${ANSI_RESET}`)
+      return this.renderHeaderFrame(rows, width)
     }
 
     const selected = Math.max(0, Math.min(this.settingsSelectionIndex, items.length - 1))
-    const maxRows = Math.max(1, height - out.length)
+    const maxRows = Math.max(1, height - 2) // reserve top+bottom frame rows
+    let renderedItems = 0
 
-    for (let index = 0; index < items.length && out.length < 1 + maxRows; index++) {
+    for (let index = 0; index < items.length && rows.length < maxRows; index++) {
       const item = items[index]!
       const prefix = index === selected ? "›" : " "
       const row = `${prefix} ${item.label}: ${item.value}`
       if (index === selected) {
-        out.push(`${FG_SELECTED}\x1b[1m${truncatePlain(row, width)}\x1b[22m${ANSI_RESET}`)
+        rows.push(`${FG_SELECTED}\x1b[1m${row}\x1b[22m${ANSI_RESET}`)
       } else {
-        out.push(truncatePlain(row, width))
+        rows.push(row)
       }
-      if (out.length < 1 + maxRows) {
-        out.push(`${FG_META}${truncatePlain(`  ${item.hint}`, width)}${ANSI_RESET}`)
+      if (rows.length < maxRows) {
+        rows.push(`${FG_META}  ${item.hint}${ANSI_RESET}`)
       }
+      renderedItems = index + 1
     }
 
-    return out
+    const remainingItems = Math.max(0, items.length - renderedItems)
+    if (remainingItems > 0 && rows.length < maxRows) {
+      rows.push(`${FG_META}+${remainingItems} more setting${remainingItems === 1 ? "" : "s"}${ANSI_RESET}`)
+    }
+
+    return this.renderHeaderFrame(rows, width)
   }
 
   private renderAvatarStrip(width: number): string[] {
@@ -3017,7 +3113,8 @@ class WorkspaceTui {
     const anyTalking = Array.from(this.talkUntilByDna.values()).some((until) => until > now)
     const logoAnimating = anyTyping || anyTalking
     const logoAnimFrame = logoAnimating ? Math.floor(Date.now() / AVATAR_ANIM_MS) % 2 : 0
-    const logoTalkFrame = logoAnimating ? logoAnimFrame + 1 : 0
+    // Keep "All Activity" logo static in mouth/talk state to reduce visual noise.
+    const logoTalkFrame = 0
     const logoWalkFrame = logoAnimating ? logoAnimFrame : 0
     const logoBw = !this.selectedThreadId || this.selectedThreadId !== "activity"
     const logoLines = renderTermlingsLogo(logoBw, logoTalkFrame, logoWalkFrame).split("\n")
@@ -3055,7 +3152,7 @@ class WorkspaceTui {
       const displayLabel = label
       const baseSubtitle = (agent.title_short || agent.title) || (!agent.online ? "offline" : "")
       const typing = agent.online && agent.typing
-      const subtitle = typing ? this.typingDots() : baseSubtitle
+      const subtitle = baseSubtitle
       const selected = this.isAgentThreadSelected(agent)
       const blockWidth = Math.max(
         ...lines.map((line) => visibleLength(line)),
@@ -3362,27 +3459,39 @@ class WorkspaceTui {
       })
       .join(separator)
     const left = `${leftPad}${rendered}`
-    const status = this.renderBottomStatusMeta()
-    if (status.length === 0) {
-      return padAnsi(left, width)
-    }
-
-    const minGap = 2
-    const leftLen = visibleLength(left)
-    const available = width - leftLen - minGap
-    if (available <= 8) {
-      return padAnsi(left, width)
-    }
-
-    const statusTrimmed = truncatePlain(status, available)
-    const gap = Math.max(0, width - leftLen - statusTrimmed.length)
-    return `${left}${" ".repeat(gap)}${FG_SUBTLE_HINT}${statusTrimmed}${ANSI_RESET}`
+    return padAnsi(left, width)
   }
 
-  private renderBottomStatusMeta(): string {
+  private renderFooterLeftMeta(): string {
+    const project = basename(this.root || process.cwd())
+    const projectPrefix = project.length > 0 ? `${project} / ` : ""
+
     if (this.view === "messages") {
-      const thread = truncatePlain(this.threadLabel(this.selectedThreadId), 24)
-      return `${thread} | ${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓`
+      return `${projectPrefix}${this.threadLabel(this.selectedThreadId)}`
+    }
+
+    if (this.view === "requests") {
+      return `${projectPrefix}requests`
+    }
+
+    if (this.view === "settings") {
+      return `${projectPrefix}settings`
+    }
+
+    if (this.view === "tasks") {
+      return `${projectPrefix}tasks`
+    }
+
+    if (this.view === "calendar") {
+      return `${projectPrefix}calendar`
+    }
+
+    return project
+  }
+
+  private renderFooterRightMeta(): string {
+    if (this.view === "messages") {
+      return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓`
     }
 
     if (this.view === "requests") {
@@ -3402,6 +3511,23 @@ class WorkspaceTui {
     }
 
     return ""
+  }
+
+  private renderFooterMetaBar(width: number): string {
+    const leftRaw = this.renderFooterLeftMeta()
+    const rightRaw = this.renderFooterRightMeta()
+    if (!leftRaw && !rightRaw) return " ".repeat(Math.max(0, width))
+
+    const leftPrefix = leftRaw ? ` ${leftRaw}` : ""
+    const rightText = rightRaw ? ` ${rightRaw}` : ""
+    const minGap = 2
+    const leftLen = leftPrefix.length
+    const rightLen = rightText.length
+    const availableForLeft = Math.max(0, width - rightLen - minGap)
+    const shownLeft = truncatePlain(leftPrefix, availableForLeft)
+    const gap = Math.max(0, width - shownLeft.length - rightLen)
+    const line = `${FG_SUBTLE_HINT}${shownLeft}${" ".repeat(gap)}${rightText}${ANSI_RESET}`
+    return padAnsi(line, width)
   }
 
   private render(): void {
@@ -3429,7 +3555,12 @@ class WorkspaceTui {
     const width = Math.max(this.stdout.columns || 120, 40)
     const height = Math.max(this.stdout.rows || 30, 18)
 
+    const topPadRows = 1
     const headerLines: string[] = []
+    for (let index = 0; index < topPadRows; index++) {
+      headerLines.push(" ".repeat(Math.max(0, width)))
+    }
+    headerLines.push(this.renderBottomTabs(width))
 
     const showAgents = this.view === "messages"
     let avatarContentLines = showAgents ? this.renderAvatarStrip(Math.max(0, width - 4)) : []
@@ -3442,13 +3573,12 @@ class WorkspaceTui {
     const mentionSuggestionLines = showComposer ? this.renderMentionSuggestions(width) : []
     const showPromptArea = showOfflineJoinHint || showComposer
     const inputPadTopRows = showPromptArea ? (showRequestsNavigator ? 0 : 1) : 0
-    const inputPadBottomRows = showPromptArea ? (showRequestsNavigator ? 0 : 1) : 0
+    const inputPadBottomRows = showPromptArea ? 1 : 0
     const inputMarginBottomRows = 1
     const promptContentRows = showPromptArea
       ? 1 + (showComposer ? mentionSuggestionLines.length + (showTypingHint ? 1 : 0) : 0)
       : 0
-    const tabsRowHeight = 1
-    const promptBoxHeight = inputPadTopRows + promptContentRows + inputPadBottomRows + inputMarginBottomRows + tabsRowHeight
+    const promptBoxHeight = inputPadTopRows + promptContentRows + inputPadBottomRows + inputMarginBottomRows
     const minBodyBoxHeight = 8
     if (showAgents) {
       while (
@@ -3458,6 +3588,23 @@ class WorkspaceTui {
         avatarContentLines = avatarContentLines.slice(0, -1)
       }
     }
+    const inlineArrowHint = `${FG_SUBTLE_HINT}←/→${ANSI_RESET}`
+    const inlineArrowHintLen = 3
+    let avatarHintPlacedInline = false
+    if (showAgents && avatarContentLines.length > 0) {
+      const avatarInnerWidth = Math.max(0, width - 4)
+      const candidateRows = Math.min(avatarContentLines.length, 3)
+      for (let row = 0; row < candidateRows; row++) {
+        const line = avatarContentLines[row] ?? ""
+        if (visibleLength(line) <= 0) continue
+        const needed = visibleLength(line) + 2 + inlineArrowHintLen
+        if (needed > avatarInnerWidth) continue
+        avatarContentLines[row] = `${line}  ${inlineArrowHint}`
+        avatarHintPlacedInline = true
+        break
+      }
+    }
+
     const agentsSectionHeight = showAgents ? avatarContentLines.length + 2 : 0
 
     const bodyBoxHeight = Math.max(
@@ -3472,11 +3619,15 @@ class WorkspaceTui {
     lines.push(...headerLines)
 
     if (showAgents) {
-      const arrowHint = `${FG_SUBTLE_HINT}←/→${ANSI_RESET}`
-      const arrowHintLen = 3 // visible length of "←/→"
-      const innerWidth = Math.max(0, width - 2)
-      const dashLeft = Math.max(0, innerWidth - arrowHintLen - 2)
-      lines.push(`${FG_FRAME}${FRAME_TL}${FRAME_H.repeat(dashLeft)} ${ANSI_RESET}${arrowHint}${FG_FRAME} ${FRAME_TR}${ANSI_RESET}`)
+      if (avatarHintPlacedInline) {
+        lines.push(boxTop(width, ""))
+      } else {
+        const arrowHint = `${FG_SUBTLE_HINT}←/→${ANSI_RESET}`
+        const arrowHintLen = 3 // visible length of "←/→"
+        const innerWidth = Math.max(0, width - 2)
+        const dashLeft = Math.max(0, innerWidth - arrowHintLen - 2)
+        lines.push(`${FG_FRAME}${FRAME_TL}${FRAME_H.repeat(dashLeft)} ${ANSI_RESET}${arrowHint}${FG_FRAME} ${FRAME_TR}${ANSI_RESET}`)
+      }
       for (const avatarLine of avatarContentLines) {
         lines.push(boxAnsiLine(avatarLine, width))
       }
@@ -3500,7 +3651,19 @@ class WorkspaceTui {
         lines.push(panelBodyLine("", width))
       }
     }
-    lines.push(`${FG_FRAME}${FRAME_H.repeat(Math.max(0, width))}${ANSI_RESET}`)
+    const dividerWidth = Math.max(0, width)
+    if (showScrollToBottomHint && dividerWidth > 0) {
+      const hintPlain = "(b) Scroll to bottom"
+      if (hintPlain.length <= dividerWidth) {
+        const padLeft = Math.max(0, Math.floor((dividerWidth - hintPlain.length) / 2))
+        const padRight = Math.max(0, dividerWidth - padLeft - hintPlain.length)
+        lines.push(`${" ".repeat(padLeft)}${FG_SUBTLE_HINT}${hintPlain}${ANSI_RESET}${" ".repeat(padRight)}`)
+      } else {
+        lines.push(" ".repeat(dividerWidth))
+      }
+    } else {
+      lines.push(" ".repeat(dividerWidth))
+    }
 
     if (showPromptArea) {
       const promptBg = showOfflineJoinHint ? BG_OFFLINE_PANEL : BG_INPUT_PANEL
@@ -3527,17 +3690,17 @@ class WorkspaceTui {
       }
     }
     for (let index = 0; index < inputMarginBottomRows; index++) {
-      if (showScrollToBottomHint && index === 0) {
-        lines.push(padAnsi(`${FG_SUBTLE_HINT}  (b) Scroll to bottom${ANSI_RESET}`, width))
-      } else if (index === 0 && this.showStartupBanner()) {
+      if (index === 0 && this.showStartupBanner()) {
         lines.push(`${BG_INPUT_PANEL}\x1b[38;5;223m${fitPlain(` ${this.startupBanner}`, width)}${ANSI_RESET}`)
       } else {
         lines.push("")
       }
     }
-    lines.push(this.renderBottomTabs(width))
     while (lines.length < height) {
       lines.push("")
+    }
+    if (height > 0) {
+      lines[height - 1] = this.renderFooterMetaBar(width)
     }
 
     // Overwrite in-place: move to home, write each line with clear-to-EOL.

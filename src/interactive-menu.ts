@@ -33,7 +33,7 @@ export interface MenuItem {
 export async function selectMenu(
   items: MenuItem[],
   title?: string,
-  options?: { input?: Readable; output?: Writable; footer?: string }
+  options?: { input?: Readable; output?: Writable; footer?: string; header?: string }
 ): Promise<string> {
   const input = options?.input || process.stdin;
   const output = options?.output || process.stdout;
@@ -49,6 +49,9 @@ export async function selectMenu(
     const render = () => {
       // Clear previous output
       output.write("\x1b[2J\x1b[H"); // Clear screen and move cursor to top
+      if (options?.header) {
+        output.write(options.header + "\n");
+      }
       if (title) {
         const width = (output as NodeJS.WriteStream).columns || process.stdout.columns || 80;
         const safeTitle = ` ${title} `;

@@ -7,8 +7,8 @@ export const JOIN_WAVE_MS = 4_000
 export const TALK_ANIM_MS = 2_000
 
 export const ANSI_RESET = "\x1b[0m"
-export const FG_FRAME = "\x1b[38;5;67m"
-export const FG_FRAME_LABEL = "\x1b[38;5;153m"
+export const FG_FRAME = "\x1b[38;5;244m"
+export const FG_FRAME_LABEL = "\x1b[38;5;250m"
 export const FG_META = "\x1b[38;5;250m"
 export const FG_SUBTLE_HINT = "\x1b[38;5;245m"
 export const FG_MD_HEADING = "\x1b[38;5;151m"

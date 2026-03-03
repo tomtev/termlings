@@ -56,10 +56,17 @@ NEXT STEPS:
     }
   }
 
-  const { ensureWorkspaceInitializedForLaunch } = await import("../workspace/index.js");
+  // Show logo banner before init prompts
+  const { printInitBanner, printPostInitBanner } = await import("../banner.js");
+  printInitBanner();
+
+  const { ensureWorkspaceInitializedForLaunch } = await import("../workspace/web-launch.js");
   const ready = await ensureWorkspaceInitializedForLaunch(forceSetup);
   if (ready) {
-    console.log("Workspace is initialized.");
+    // Count agents for post-init banner
+    const { discoverLocalAgents } = await import("../agents/discover.js");
+    const agents = discoverLocalAgents();
+    printPostInitBanner(agents.length);
   }
   process.exit(0);
 }

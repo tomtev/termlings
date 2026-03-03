@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "name": "Termlings",
+  "voice": "Clear, pragmatic, direct. Friendly but not fluffy. Avoid hype and jargon.",
+  "colors": {
+    "primary": "#574747",
+    "secondary": "#F4F4F5",
+    "accent": "#F4F4F5",
+    "background": "#FFFFFF",
+    "foreground": "#09090B",
+    "palette": [
+      "#574747",
+      "#F4F4F5",
+      "#FFFFFF",
+      "#09090B",
+      "#D32F2F",
+      "#008032",
+      "#A65B00"
+    ]
+  },
+  "logos": {
+    "main": "",
+    "mark": "",
+    "favicon": ""
+  },
+  "identity": {
+    "domain": {
+      "primary": "termlings.com",
+      "website": "https://termlings.com",
+      "app": "",
+      "docs": "",
+      "api": ""
+    },
+    "email": {
+      "fromName": "Termlings",
+      "fromAddress": "",
+      "replyTo": "",
+      "support": "",
+      "sales": "",
+      "security": "",
+      "noreply": ""
+    }
+  },
+  "sources": [
+    "manual",
+    "package.json"
+  ],
+  "updatedAt": "2026-03-03T00:00:00.000Z"
+}

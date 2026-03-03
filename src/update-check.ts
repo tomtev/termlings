@@ -12,6 +12,7 @@ const ANSI_PATTERN = /\x1b\[[0-9;]*m/g
 interface UpdateCache {
   checkedAt: number
   latestVersion: string
+  skippedVersion?: string
 }
 
 export interface UpdateNotice {
@@ -82,7 +83,11 @@ function readDiskCache(): UpdateCache | null {
   try {
     const parsed = JSON.parse(readFileSync(CACHE_PATH, "utf8")) as Partial<UpdateCache>
     if (typeof parsed.checkedAt !== "number" || typeof parsed.latestVersion !== "string") return null
-    return { checkedAt: parsed.checkedAt, latestVersion: parsed.latestVersion }
+    return {
+      checkedAt: parsed.checkedAt,
+      latestVersion: parsed.latestVersion,
+      skippedVersion: typeof parsed.skippedVersion === "string" ? parsed.skippedVersion : undefined,
+    }
   } catch {
     return null
   }
@@ -95,6 +100,18 @@ function writeDiskCache(cache: UpdateCache): void {
   } catch {
     // Ignore cache write failures to avoid breaking commands.
   }
+}
+
+export function writeSkippedVersion(version: string): void {
+  const existing = readDiskCache()
+  const cache: UpdateCache = existing
+    ? { ...existing, skippedVersion: version }
+    : { checkedAt: Date.now(), latestVersion: version, skippedVersion: version }
+  writeDiskCache(cache)
+}
+
+export function readSkippedVersion(): string | undefined {
+  return readDiskCache()?.skippedVersion
 }
 
 async function fetchLatestVersion(timeoutMs: number): Promise<string | null> {
@@ -190,6 +207,9 @@ export async function getUpdateNotice(options: UpdateCheckOptions = {}): Promise
     const latestVersion = await resolveLatestVersion(now, options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     if (!latestVersion) return null
     if (!isNewerVersion(latestVersion, currentVersion)) return null
+
+    const skipped = readSkippedVersion()
+    if (skipped && latestVersion === skipped) return null
 
     const upgrade = getUpgradeCommands()
     return {

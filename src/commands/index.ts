@@ -14,6 +14,7 @@ import { handleSpawn } from "./spawn.js";
 import { handleRequest } from "./request.js";
 import { handleOrgChart } from "./org-chart.js";
 import { handleBrief } from "./brief.js";
+import { handleBrand } from "./brand.js";
 
 export async function routeCommand(
   positional: string[],
@@ -45,6 +46,10 @@ export async function routeCommand(
 
     case "calendar":
       await handleCalendar(flags, positional);
+      return true;
+
+    case "brand":
+      await handleBrand(flags, positional, opts);
       return true;
 
     case "browser":

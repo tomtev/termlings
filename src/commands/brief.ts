@@ -59,6 +59,7 @@ INCLUDES:
   - Org structure + online status
   - Task status summary
   - Calendar event summary
+  - Brand profile summary
   - Pending operator requests
   - Message/channel activity
 `);
@@ -74,6 +75,7 @@ INCLUDES:
     { listSessions },
     { getAllTasks },
     { getAllCalendarEvents, getAgentCalendarEvents },
+    { readBrand },
     { listRequests },
     { getMessageIndex },
   ] = await Promise.all([
@@ -82,6 +84,7 @@ INCLUDES:
     import("../workspace/state.js"),
     import("../engine/tasks.js"),
     import("../engine/calendar.js"),
+    import("../engine/brand.js"),
     import("../engine/requests.js"),
     import("../workspace/message-storage.js"),
   ]);
@@ -91,6 +94,7 @@ INCLUDES:
   const humans = discoverLocalHumans();
   const tasks = getAllTasks();
   const events = getAllCalendarEvents();
+  const brand = readBrand(cwd);
   const pendingRequests = listRequests("pending");
   const messageIndex = getMessageIndex(cwd);
 
@@ -282,6 +286,17 @@ INCLUDES:
         nextAt: getEventNextTs(event),
       })),
     },
+    brand: {
+      available: Boolean(brand),
+      name: brand?.name || null,
+      voice: brand?.voice || null,
+      primaryColor: brand?.colors.primary || null,
+      secondaryColor: brand?.colors.secondary || null,
+      logo: brand?.logos.main || null,
+      domain: brand?.identity.domain.primary || null,
+      website: brand?.identity.domain.website || null,
+      updatedAt: brand?.updatedAt || null,
+    },
     requests: {
       pending: pendingRequests.length,
       latestPending: pendingRequests.slice(0, 5).map((req) => ({
@@ -408,6 +423,32 @@ INCLUDES:
   }
   if (events.length === 0) {
     console.log("- No calendar events found");
+  }
+  console.log("");
+
+  console.log("Brand");
+  if (!brief.brand.available) {
+    console.log("- No brand profile found (run: termlings brand init)");
+  } else {
+    const domainLabel = brief.brand.domain || "-";
+    const websiteLabel = brief.brand.website || "-";
+    const primaryLabel = brief.brand.primaryColor || "-";
+    const secondaryLabel = brief.brand.secondaryColor || "-";
+    const logoLabel = brief.brand.logo || "-";
+    console.log(
+      `- ${brief.brand.name || "-"} · domain:${domainLabel} · website:${websiteLabel} · primary:${primaryLabel} · secondary:${secondaryLabel} · logo:${logoLabel}`
+    );
+    if (brief.brand.voice) {
+      console.log(`- Voice: ${truncate(brief.brand.voice, 120)}`);
+    }
+    if (brief.brand.updatedAt) {
+      const updatedTs = Date.parse(brief.brand.updatedAt);
+      if (Number.isFinite(updatedTs)) {
+        console.log(`- Updated: ${formatRelativeAge(updatedTs, now)}`);
+      } else {
+        console.log(`- Updated: ${brief.brand.updatedAt}`);
+      }
+    }
   }
   console.log("");
 
