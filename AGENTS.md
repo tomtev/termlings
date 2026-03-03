@@ -61,6 +61,7 @@ Each agent has:
 - DNA (stable identity)
 - Title (full job title, e.g., Product Manager, Developer)
 - Title Short (optional abbreviation for TUI display, e.g., PM, Dev)
+- Sort Order (optional integer for TUI ordering; lower appears first, default `0`)
 - Role (brief description of responsibilities)
 - Session ID (per running process)
 

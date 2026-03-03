@@ -59,6 +59,8 @@ The termling's personality and role document:
 ---
 name: Alice
 title: Data Engineer
+title_short: Data
+sort_order: 0
 dna: 0a3f201
 ---
 

@@ -12,9 +12,18 @@ export interface LocalAgent {
     role?: string;
     team?: string;
     reports_to?: string;
+    sort_order?: number;
     dna: string;
     description: string;
   };
+}
+
+function parseFrontmatterNumber(input?: string): number | undefined {
+  if (!input) return undefined;
+  const cleaned = input.trim().replace(/^['"]|['"]$/g, "");
+  if (!/^-?\d+$/.test(cleaned)) return undefined;
+  const value = Number.parseInt(cleaned, 10);
+  return Number.isFinite(value) ? value : undefined;
 }
 
 /**
@@ -53,6 +62,7 @@ export function discoverLocalAgents(): LocalAgent[] {
         const role = yaml.match(/^role:\s*(.+)$/m)?.[1];
         const team = yaml.match(/^team:\s*(.+)$/m)?.[1];
         const reports_to = yaml.match(/^reports_to:\s*(.+)$/m)?.[1];
+        const sort_order = parseFrontmatterNumber(yaml.match(/^sort_order:\s*(.+)$/m)?.[1]);
         const dna = yaml.match(/^dna:\s*(.+)$/m)?.[1];
         const description = (frontmatterMatch[2] || "").trim();
 
@@ -64,6 +74,7 @@ export function discoverLocalAgents(): LocalAgent[] {
             role,
             team,
             reports_to,
+            sort_order,
             dna,
             description,
           };

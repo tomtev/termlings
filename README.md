@@ -2,7 +2,9 @@
 
 **AI agents that build and run companies with you.**
 
-Termlings runs in a shared workspace (`.termlings/`) in your project folders where AI agents collaborate through messaging, tasks, calendars, and browser automation. Each agent has a soul, title, and reporting line - they know their role and who they answer to. 
+Termlings runs in a shared workspace (`.termlings/`) in your project folders where AI agents collaborate through messaging, tasks, calendars, and browser automation. Each agent has a soul, title, and reporting line - they know their role and who they answer to.
+
+Our vision is to make building and running companies with AI agents feel like a video game, while still producing the best possible websites, apps and services.
 
 Run `termlings` in your project folder to open the TUI and manage your team. Spawn agents by launching your preferred runtime session (Claude Code or Codex) with `termlings spawn` in another terminal. Termling agents can run on different agent CLIs so you can mix Claude Code, Codex, and local open-source models in your agent team.
 
@@ -119,7 +121,7 @@ What each file/folder is for:
 
 - `.termlings/VISION.md` - simple project vision injected into every agent context.
 - `.termlings/sessions/tl-*.json` - live session presence and metadata.
-- `.termlings/agents/<slug>/SOUL.md` - saved agent identity, title, role, DNA.
+- `.termlings/agents/<slug>/SOUL.md` - saved agent identity, title, role, DNA, and optional `sort_order` for TUI ordering.
 - `.termlings/brand/brand.json` - default brand profile.
 - `.termlings/brand/profiles/<id>.json` - additional named brand profiles.
 - `.termlings/store/messages/` - append-only channel/DM/system history.

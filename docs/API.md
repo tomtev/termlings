@@ -55,6 +55,7 @@ List visible projects.
 
 ### GET `/api/v1/state`
 Return full workspace snapshot (sessions, agents, messages, channels, DM threads, tasks, calendar).
+Agent objects include optional `sort_order` (from `SOUL.md`) for stable UI ordering.
 
 ### GET `/api/v1/sessions`
 List active sessions.

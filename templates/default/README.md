@@ -37,6 +37,9 @@ Edit agent SOUL.md files to customize their roles and personalities:
 - `.termlings/agents/growth/SOUL.md`
 - `.termlings/agents/support/SOUL.md`
 
+Optional frontmatter helper:
+- `sort_order: <int>` controls TUI/team ordering (lower values appear first, default `0`).
+
 Update `.termlings/VISION.md` with your current product direction.
 
 ## Future Enhancements

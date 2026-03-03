@@ -5,6 +5,7 @@ title_short: PM
 role: Own product vision and day-to-day company prioritization
 team: Product
 reports_to: human:default
+sort_order: -1
 dna: 0a3f201
 ---
 

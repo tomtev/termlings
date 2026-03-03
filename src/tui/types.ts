@@ -20,6 +20,7 @@ export interface AgentPresence {
   typing: boolean
   title?: string
   title_short?: string
+  sort_order?: number
 }
 
 export interface DmThread {
@@ -29,6 +30,7 @@ export interface DmThread {
   label: string
   online: boolean
   typing: boolean
+  sort_order?: number
 }
 
 export interface Snapshot {

@@ -329,9 +329,12 @@ export async function launchAgent(
 
   const noteTerminalInput = (data: Buffer) => {
     lastTerminalInputAt = Date.now()
+    // Any key activity means the operator/agent is currently typing.
+    if (data.length > 0) {
+      noteTerminalActivity()
+    }
     if (isSubmitInput(data)) {
       outputActivityArmed = true
-      noteTerminalActivity()
     }
   }
 

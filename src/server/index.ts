@@ -28,6 +28,7 @@ interface SavedAgent {
   dna: string
   title?: string
   title_short?: string
+  sort_order?: number
   role?: string
 }
 
@@ -38,6 +39,7 @@ interface WorkspaceAgent {
   dna: string
   title?: string
   title_short?: string
+  sort_order?: number
   role?: string
   online: boolean
   sessionIds: string[]
@@ -144,7 +146,17 @@ function buildConfig(opts: Record<string, string>, projectRoot = process.cwd()):
   }
 }
 
-function parseSoul(content: string): { name: string; dna: string; title?: string; title_short?: string; role?: string } | null {
+function parseFrontmatterNumber(value: string | undefined): number | undefined {
+  if (!value) return undefined
+  const cleaned = value.trim().replace(/^['"]|['"]$/g, "")
+  if (!/^-?\d+$/.test(cleaned)) return undefined
+  const parsed = Number.parseInt(cleaned, 10)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function parseSoul(
+  content: string,
+): { name: string; dna: string; title?: string; title_short?: string; sort_order?: number; role?: string } | null {
   const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)/)
   if (!frontmatterMatch) return null
   const yaml = frontmatterMatch[1] || ""
@@ -152,9 +164,10 @@ function parseSoul(content: string): { name: string; dna: string; title?: string
   const dna = yaml.match(/^dna:\s*(.+)$/m)?.[1]?.trim()
   const title = yaml.match(/^title:\s*(.+)$/m)?.[1]?.trim()
   const titleShort = yaml.match(/^title_short:\s*(.+)$/m)?.[1]?.trim()
+  const sortOrder = parseFrontmatterNumber(yaml.match(/^sort_order:\s*(.+)$/m)?.[1])
   const role = yaml.match(/^role:\s*(.+)$/m)?.[1]?.trim()
   if (!name || !dna) return null
-  return { name, dna, title, title_short: titleShort, role }
+  return { name, dna, title, title_short: titleShort, sort_order: sortOrder, role }
 }
 
 function listSavedAgents(root: string): SavedAgent[] {
@@ -177,12 +190,18 @@ function listSavedAgents(root: string): SavedAgent[] {
         dna: parsed.dna,
         title: parsed.title,
         title_short: parsed.title_short,
+        sort_order: parsed.sort_order,
         role: parsed.role,
       })
     } catch {}
   }
 
-  saved.sort((a, b) => a.name.localeCompare(b.name))
+  saved.sort((a, b) => {
+    const aOrder = a.sort_order ?? 0
+    const bOrder = b.sort_order ?? 0
+    if (aOrder !== bOrder) return aOrder - bOrder
+    return a.name.localeCompare(b.name)
+  })
   return saved
 }
 
@@ -197,6 +216,7 @@ function mergeAgentPresence(savedAgents: SavedAgent[], sessions: WorkspaceSessio
       dna: agent.dna,
       title: agent.title,
       title_short: agent.title_short,
+      sort_order: agent.sort_order,
       role: agent.role,
       online: false,
       sessionIds: [],
@@ -225,6 +245,9 @@ function mergeAgentPresence(savedAgents: SavedAgent[], sessions: WorkspaceSessio
   }
 
   return Array.from(byDna.values()).sort((a, b) => {
+    const aOrder = a.sort_order ?? 0
+    const bOrder = b.sort_order ?? 0
+    if (aOrder !== bOrder) return aOrder - bOrder
     if (a.online !== b.online) return a.online ? -1 : 1
     return a.name.localeCompare(b.name)
   })

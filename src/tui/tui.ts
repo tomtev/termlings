@@ -1737,6 +1737,7 @@ class WorkspaceTui {
       const name = local.soul?.name || local.name
       const title = local.soul?.title || local.soul?.role || undefined
       const title_short = local.soul?.title_short
+      const sort_order = typeof local.soul?.sort_order === "number" ? local.soul.sort_order : undefined
 
       slugByDna.set(dna, slug)
       byDna.set(dna, {
@@ -1747,6 +1748,7 @@ class WorkspaceTui {
         typing: false,
         title,
         title_short,
+        sort_order,
       })
     }
 
@@ -1779,6 +1781,9 @@ class WorkspaceTui {
     )
 
     return filtered.sort((a, b) => {
+      const aOrder = a.sort_order ?? 0
+      const bOrder = b.sort_order ?? 0
+      if (aOrder !== bOrder) return aOrder - bOrder
       if (a.online !== b.online) return a.online ? -1 : 1
       return a.name.localeCompare(b.name)
     })
@@ -1803,6 +1808,7 @@ class WorkspaceTui {
         label: agent.name,
         online: agent.online,
         typing: agent.typing,
+        sort_order: agent.sort_order,
       })
     }
 
@@ -1822,6 +1828,7 @@ class WorkspaceTui {
           label: message.fromName || known?.name || fromDna,
           online: known?.online ?? false,
           typing: known?.typing ?? false,
+          sort_order: known?.sort_order,
         })
       }
 
@@ -1835,11 +1842,18 @@ class WorkspaceTui {
           label: message.targetName || known?.name || targetDna,
           online: known?.online ?? false,
           typing: known?.typing ?? false,
+          sort_order: known?.sort_order,
         })
       }
     }
 
-    return Array.from(byDna.values()).sort((a, b) => a.label.localeCompare(b.label))
+    return Array.from(byDna.values()).sort((a, b) => {
+      const aOrder = a.sort_order ?? 0
+      const bOrder = b.sort_order ?? 0
+      if (aOrder !== bOrder) return aOrder - bOrder
+      if (a.online !== b.online) return a.online ? -1 : 1
+      return a.label.localeCompare(b.label)
+    })
   }
 
   private threadLabel(threadId: string): string {
