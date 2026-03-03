@@ -4,3 +4,5 @@ node_modules
 .DS_Store
 .termlings/**/*.queue.jsonl
 .termlings/**/*.msg.json
+.termlings/workspace.json
+.termlings/store/
