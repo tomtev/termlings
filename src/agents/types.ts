@@ -6,7 +6,7 @@
  * agent binary — the adapter only handles context injection.
  */
 export interface AgentAdapter {
-  /** Binary / command name to spawn (currently "claude") */
+  /** Binary / command name to spawn (for example "claude", "codex") */
   bin: string
 
   /** Fallback display name when no --name or AGENTS.md name is found */

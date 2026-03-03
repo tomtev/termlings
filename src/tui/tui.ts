@@ -305,8 +305,7 @@ class WorkspaceTui {
     this.stdout.write("\x1b[?1049h") // alternate screen
     this.stdout.write("\x1b[2J\x1b[H")
     this.stdout.write("\x1b[?2004h") // enable bracketed paste mode
-    this.stdout.write("\x1b[?1000h") // enable mouse button + wheel tracking
-    this.stdout.write("\x1b[?1006h") // enable SGR mouse mode
+    // Keep native terminal selection/copy behavior by not enabling mouse tracking.
     this.stdout.write("\x1b[?25l") // hide cursor
     this.stdin.setRawMode(true)
     this.stdin.resume()
@@ -430,6 +429,42 @@ class WorkspaceTui {
       : input
 
     if (!normalizedInput) return
+
+    if (isPasteInput) {
+      const pasteText = normalizedInput
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .replace(/\n+/g, " ")
+
+      if (this.view === "requests" && this.requestInputMode) {
+        this.requestInputDraft += pasteText
+        this.render()
+        return
+      }
+
+      if (!this.isComposerAvailable()) {
+        return
+      }
+
+      if (
+        this.view === "messages"
+        && this.selectedThreadId === "activity"
+        && this.draft.length === 0
+        && !pasteText.trimStart().startsWith("@")
+      ) {
+        this.statusMessage = 'Start with @everyone or @agent.'
+        this.render()
+        return
+      }
+
+      if (!this.inputFocused) {
+        this.inputFocused = true
+      }
+      this.insertDraftText(pasteText)
+      this.syncMentionSelection()
+      this.render()
+      return
+    }
 
     const isArrowUp = normalizedInput === "\u001b[A" || normalizedInput === "\u001bOA"
     const isArrowDown = normalizedInput === "\u001b[B" || normalizedInput === "\u001bOB"
@@ -2588,6 +2623,7 @@ class WorkspaceTui {
     const renderWidth = Math.max(20, Math.min(maxVisibleWidth, width + 3))
     const out: string[] = []
     const selectedDmThread = this.selectedDmThread()
+    const noAgentsOnline = this.snapshot.agents.length > 0 && !this.snapshot.agents.some((agent) => agent.online)
     const showTypingFooter = this.selectedThreadId.startsWith("agent:") && Boolean(selectedDmThread?.typing)
     const typingFooter = showTypingFooter && selectedDmThread
       ? `${FG_META}  ${this.typingDots()}${ANSI_RESET}`
@@ -2598,7 +2634,26 @@ class WorkspaceTui {
       .filter((message) => this.isMessageInThread(message, this.selectedThreadId))
 
     if (visible.length === 0) {
-      out.push("No messages yet.")
+      if (noAgentsOnline) {
+        const bannerLines = [
+          "Looks like no agent is online yet!",
+          "Run `termlings spawn` in another terminal.",
+        ]
+        const topPadding = Math.max(0, Math.floor((height - bannerLines.length) / 2))
+        const bannerWidth = Math.max(1, width)
+        for (let row = 0; row < topPadding && out.length < height; row++) {
+          out.push("")
+        }
+        for (let index = 0; index < bannerLines.length && out.length < height; index++) {
+          const text = truncatePlain(bannerLines[index]!, bannerWidth)
+          const leftPad = Math.max(0, Math.floor((bannerWidth - text.length) / 2))
+          const rightPad = Math.max(0, bannerWidth - leftPad - text.length)
+          const color = index === 0 ? FG_META : FG_SUBTLE_HINT
+          out.push(`${" ".repeat(leftPad)}${color}${text}${ANSI_RESET}${" ".repeat(rightPad)}`)
+        }
+      } else {
+        out.push("No messages yet.")
+      }
       if (typingFooter && out.length < height) {
         out.push(typingFooter)
         for (let row = 0; row < typingFooterPadRows && out.length < height; row++) {
@@ -2662,8 +2717,7 @@ class WorkspaceTui {
     const resolved = this.snapshot.requests.filter(r => r.status !== "pending").slice(0, 5)
 
     if (pending.length === 0 && resolved.length === 0) {
-      out.push("  No requests from agents.")
-      return out
+      return this.renderHeaderFrame([`${FG_META}No requests from agents.${ANSI_RESET}`], width)
     }
 
     const resolvedCount = this.snapshot.requests.filter(r => r.status !== "pending").length
@@ -3020,8 +3074,7 @@ class WorkspaceTui {
     const tasks = activeFilter ? allTasks.filter(activeFilter.predicate) : allTasks
 
     if (allTasks.length === 0) {
-      out.push("No tasks created.")
-      return out
+      return this.renderHeaderFrame([`${FG_META}No tasks created.${ANSI_RESET}`], width)
     }
 
     const counts = {
@@ -3204,8 +3257,7 @@ class WorkspaceTui {
     const events = activeFilter ? allEvents.filter(activeFilter.predicate) : allEvents
 
     if (allEvents.length === 0) {
-      out.push("No calendar events scheduled.")
-      return out
+      return this.renderHeaderFrame([`${FG_META}No calendar events scheduled.${ANSI_RESET}`], width)
     }
 
     const now = Date.now()
@@ -3627,6 +3679,68 @@ class WorkspaceTui {
     return [body, this.draft.length === 0]
   }
 
+  private renderComposerLines(width: number, body: string, isPlaceholder: boolean): string[] {
+    const cursor = this.shouldShowComposerCursor()
+      ? this.cursorBlinkVisible
+        ? `${FG_CURSOR_BLOCK}█${FG_INPUT}`
+        : " "
+      : ""
+    const cursorIndex = !isPlaceholder ? this.draftCursorIndex : undefined
+
+    if (isPlaceholder) {
+      return [composerInputBar(" ❯ ", body, width, true, cursor, cursorIndex)]
+    }
+
+    const firstPrefix = " ❯ "
+    const continuationPrefix = "   "
+    const firstCapacity = Math.max(1, width - visibleLength(firstPrefix))
+    const continuationCapacity = Math.max(1, width - visibleLength(continuationPrefix))
+
+    const segments: Array<{ text: string; start: number; end: number; prefix: string }> = []
+    if (body.length === 0) {
+      segments.push({ text: "", start: 0, end: 0, prefix: firstPrefix })
+    } else {
+      let start = 0
+      let line = 0
+      while (start < body.length) {
+        const capacity = line === 0 ? firstCapacity : continuationCapacity
+        const end = Math.min(body.length, start + capacity)
+        segments.push({
+          text: body.slice(start, end),
+          start,
+          end,
+          prefix: line === 0 ? firstPrefix : continuationPrefix,
+        })
+        start = end
+        line += 1
+      }
+    }
+
+    let cursorLineIndex = Math.max(0, segments.length - 1)
+    for (let index = 0; index < segments.length; index++) {
+      const segment = segments[index]!
+      if ((cursorIndex ?? 0) <= segment.end) {
+        cursorLineIndex = index
+        break
+      }
+    }
+
+    return segments.map((segment, index) => {
+      if (index !== cursorLineIndex) {
+        return composerInputBar(segment.prefix, segment.text, width, false)
+      }
+      const segmentCursorIndex = Math.max(0, (cursorIndex ?? 0) - segment.start)
+      return composerInputBar(
+        segment.prefix,
+        segment.text,
+        width,
+        false,
+        cursor,
+        segmentCursorIndex,
+      )
+    })
+  }
+
   private shouldShowComposerCursor(): boolean {
     if (!this.inputFocused) return false
     if (this.view !== "messages") return false
@@ -3823,12 +3937,14 @@ class WorkspaceTui {
     const showComposer = !showOfflineJoinHint && !showRequestsNavigator && this.view !== "settings"
     const showTypingHint = showComposer && this.selectedThreadId.startsWith("agent:") && Boolean(selectedDmThread?.typing)
     const mentionSuggestionLines = showComposer ? this.renderMentionSuggestions(width) : []
+    const [promptLine, isPlaceholder] = this.renderPrompt(width)
+    const composerLines = showComposer ? this.renderComposerLines(width, promptLine, isPlaceholder) : []
     const showPromptArea = showOfflineJoinHint || showComposer
     const inputPadTopRows = showPromptArea ? (showRequestsNavigator ? 0 : 1) : 0
     const inputPadBottomRows = showPromptArea ? 1 : 0
     const inputMarginBottomRows = 1
     const promptContentRows = showPromptArea
-      ? 1 + (showComposer ? mentionSuggestionLines.length + (showTypingHint ? 1 : 0) : 0)
+      ? (showComposer ? composerLines.length + mentionSuggestionLines.length + (showTypingHint ? 1 : 0) : 1)
       : 0
     const promptBoxHeight = inputPadTopRows + promptContentRows + inputPadBottomRows + inputMarginBottomRows
     const minBodyBoxHeight = 8
@@ -3865,7 +3981,6 @@ class WorkspaceTui {
     )
     const bodyContentHeight = Math.max(1, bodyBoxHeight - 2)
     const bodyLines = this.renderBody(bodyContentHeight, Math.max(0, width - 4))
-    const [promptLine, isPlaceholder] = this.renderPrompt(width)
 
     const lines: string[] = []
     lines.push(...headerLines)
@@ -3928,13 +4043,7 @@ class WorkspaceTui {
         if (showTypingHint && selectedDmThread) {
           lines.push(`${BG_INPUT_PANEL}${FG_META}${fitPlain(` ${selectedDmThread.label} is typing...`, width)}${ANSI_RESET}`)
         }
-        const cursor = this.shouldShowComposerCursor()
-          ? this.cursorBlinkVisible
-            ? `${FG_CURSOR_BLOCK}█${FG_INPUT}`
-            : " "
-          : ""
-        const cursorIndex = !isPlaceholder ? this.draftCursorIndex : undefined
-        lines.push(composerInputBar(" ❯ ", promptLine, width, isPlaceholder, cursor, cursorIndex))
+        lines.push(...composerLines)
         lines.push(...mentionSuggestionLines)
       }
       for (let index = 0; index < inputPadBottomRows; index++) {

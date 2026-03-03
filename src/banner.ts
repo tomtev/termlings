@@ -156,7 +156,8 @@ export function printPostInitBanner(agentCount: number): void {
 
 export interface TeamWaveAgent {
   dna: string;
-  label: string;
+  name: string;
+  role: string;
 }
 
 function centerLabel(label: string, width: number): string {
@@ -170,7 +171,12 @@ function centerLabel(label: string, width: number): string {
 function renderTeamWaveFrame(agents: TeamWaveAgent[], waveFrame: number): { frame: string; lines: number } {
   const avatarBlocks = agents.map((agent) => renderTerminalSmall(agent.dna, 0, false, 0, waveFrame).split("\n"));
   const rows = Math.max(...avatarBlocks.map((block) => block.length));
-  const slotWidths = avatarBlocks.map((block) => Math.max(...block.map((line) => stripAnsi(line).length), 8));
+  const slotWidths = avatarBlocks.map((block, index) => {
+    const avatarWidth = Math.max(...block.map((line) => stripAnsi(line).length), 8);
+    const nameWidth = agents[index]?.name.length || 0;
+    const roleWidth = agents[index]?.role.length || 0;
+    return Math.min(24, Math.max(avatarWidth, nameWidth, roleWidth, 8));
+  });
   const gap = "  ";
 
   const lines: string[] = [];
@@ -184,8 +190,10 @@ function renderTeamWaveFrame(agents: TeamWaveAgent[], waveFrame: number): { fram
 
   const muted = "\x1b[38;5;245m";
   const reset = "\x1b[0m";
-  const labelParts = agents.map((agent, index) => centerLabel(agent.label, slotWidths[index]!));
-  lines.push(`${muted}${labelParts.join(gap)}${reset}`);
+  const nameParts = agents.map((agent, index) => centerLabel(agent.name, slotWidths[index]!));
+  const roleParts = agents.map((agent, index) => centerLabel(agent.role, slotWidths[index]!));
+  lines.push(nameParts.join(gap));
+  lines.push(`${muted}${roleParts.join(gap)}${reset}`);
 
   return { frame: lines.join("\n"), lines: lines.length };
 }
@@ -198,12 +206,12 @@ export async function printPostInitTeamWave(agents: TeamWaveAgent[]): Promise<vo
   if (agents.length === 0) return;
 
   const waveAgents = agents.slice(0, 8);
-  const frames = [1, 2, 1, 2, 1, 0];
-  const frameDelayMs = 130;
+  const frames = [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 0];
+  const frameDelayMs = 140;
 
   const muted = "\x1b[38;5;245m";
   const reset = "\x1b[0m";
-  console.log(`${muted}Team wave:${reset}`);
+  console.log("Say hi to your new team!");
 
   let previousLines = 0;
   for (const waveFrame of frames) {
@@ -215,6 +223,8 @@ export async function printPostInitTeamWave(agents: TeamWaveAgent[]): Promise<vo
     previousLines = rendered.lines;
     await sleep(frameDelayMs);
   }
+  console.log("");
+  console.log(`${muted}Now run \`termlings\` to start workspace and \`termlings spawn\` to spawn an agent.${reset}`);
   console.log("");
 }
 

@@ -81,7 +81,7 @@ EXAMPLES:
 
 NEXT STEPS:
   1. termlings             Start the workspace TUI
-  2. termlings claude      Launch Claude Code as an agent
+  2. termlings spawn       Launch an agent runtime (Claude/Codex)
   3. termlings org-chart   See team hierarchy
   4. termlings task list   Check available tasks
 `);
@@ -123,10 +123,11 @@ NEXT STEPS:
     const waveAgents = agents
       .map((agent) => ({
         dna: clean(agent.soul?.dna),
-        label: clean(agent.soul?.title_short)
+        name: clean(agent.soul?.name) || agent.name,
+        role: clean(agent.soul?.title_short)
           || clean(agent.soul?.title)
-          || clean(agent.soul?.name)
-          || agent.name,
+          || clean(agent.soul?.role)
+          || "Agent",
       }))
       .filter((agent) => /^[0-9a-f]{7}$/i.test(agent.dna));
     await printPostInitTeamWave(waveAgents);

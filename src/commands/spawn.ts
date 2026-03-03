@@ -29,6 +29,20 @@ const DEFAULT_CONFIG: SpawnConfig = {
       command: "termlings claude",
     },
   },
+  codex: {
+    default: {
+      description: "Launch with full autonomy",
+      command: "termlings codex --dangerously-bypass-approvals-and-sandbox",
+    },
+    auto: {
+      description: "Launch with full autonomy (bypass approvals and sandbox)",
+      command: "termlings codex --dangerously-bypass-approvals-and-sandbox",
+    },
+    safe: {
+      description: "Launch in safe mode (default permissions)",
+      command: "termlings codex",
+    },
+  },
 };
 
 function loadSpawnConfig(projectRoot = process.cwd()): SpawnConfig | null {
@@ -76,8 +90,9 @@ async function routePresetCommand(command: string): Promise<void> {
 
   // Route to the agent launcher directly
   const { agents: agentRegistry } = await import("../agents/index.js");
+  const runtimeAdapter = subcommand ? agentRegistry[subcommand] : undefined;
 
-  if (subcommand === "claude" || agentRegistry[subcommand!]) {
+  if (runtimeAdapter) {
     const { ensureWorkspaceDirs } = await import("../workspace/state.js");
     const { discoverLocalAgents, selectLocalAgentWithRoom } = await import("../agents/discover.js");
 
@@ -89,20 +104,20 @@ async function routePresetCommand(command: string): Promise<void> {
 
       if (selected === "create-random") {
         const { generateRandomDNA } = await import("../index.js");
-        opts.name = opts.name || ["Pixel", "Sprout", "Ember", "Nimbus", "Glitch"][Math.floor(Math.random() * 5)];
+        const { generateFunName } = await import("../name-generator.js")
+        opts.name = opts.name || generateFunName();
         opts.dna = opts.dna || generateRandomDNA();
         const { launchAgent } = await import("../agents/launcher.js");
-        await launchAgent(agentRegistry.claude, passthroughArgs, opts);
+        await launchAgent(runtimeAdapter, passthroughArgs, opts);
       } else if (selected) {
         process.env.TERMLINGS_AGENT_NAME = opts.name || selected.soul?.name;
         process.env.TERMLINGS_AGENT_DNA = opts.dna || selected.soul?.dna;
         const { launchLocalAgent } = await import("../agents/launcher.js");
-        await launchLocalAgent(selected, passthroughArgs, opts);
+        await launchLocalAgent(selected, passthroughArgs, opts, runtimeAdapter);
       }
     } else {
-      const adapter = agentRegistry[subcommand!] || agentRegistry.claude;
       const { launchAgent } = await import("../agents/launcher.js");
-      await launchAgent(adapter, passthroughArgs, opts);
+      await launchAgent(runtimeAdapter, passthroughArgs, opts);
     }
   }
 }
@@ -127,6 +142,8 @@ USAGE:
 EXAMPLES:
   termlings spawn claude auto        Launch claude with full autonomy
   termlings spawn claude safe        Launch claude in safe mode
+  termlings spawn codex auto         Launch codex with full autonomy
+  termlings spawn codex safe         Launch codex in safe mode
 
 PRESET FILE (.termlings/spawn.json):
   {
@@ -138,6 +155,16 @@ PRESET FILE (.termlings/spawn.json):
       "safe": {
         "description": "Launch in safe mode",
         "command": "termlings claude"
+      }
+    },
+    "codex": {
+      "auto": {
+        "description": "Launch with full autonomy",
+        "command": "termlings codex --dangerously-bypass-approvals-and-sandbox"
+      },
+      "safe": {
+        "description": "Launch in safe mode",
+        "command": "termlings codex"
       }
     }
   }

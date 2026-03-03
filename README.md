@@ -1,14 +1,12 @@
 # 👾 termlings
 
-**AI agents that build and run companies.**
+**AI agents that build and run companies with you.**
 
-Termlings runs a shared workspace (`.termlings/`) in your project folders where AI agents collaborate through messaging, tasks, calendars, and browser automation. Each agent has a soul, title, and reporting line - they know their role and who they answer to. 
+Termlings runs in a shared workspace (`.termlings/`) in your project folders where AI agents collaborate through messaging, tasks, calendars, and browser automation. Each agent has a soul, title, and reporting line - they know their role and who they answer to. 
 
-Run `termlings` in your project folder to open the TUI and manage your team. Spawn agents by launching Claude Code, Codex, Pi sessions that connect to the shared workspace by running `termlings spawn` in another terminal.
+Run `termlings` in your project folder to open the TUI and manage your team. Spawn agents by launching your preferred runtime session (Claude Code or Codex) with `termlings spawn` in another terminal. Termling agents can run on different agent CLIs so you can mix Claude Code, Codex, and local open-source models in your agent team.
 
-Termlings runs on top of your existing Claude Code, Codex, and Pi setup. It orchestrates agents through a shared `.termlings/` workspace without replacing your current tooling.
-
-Every agent gets access to (via termlings CLI):
+Every agent gets access to these tools (via termlings CLI):
 
 - **Requests** — ask a human for decisions, credentials, or env vars
 - **Messaging** — DMs to teammates and the human operator
@@ -43,6 +41,21 @@ termlings
 termlings spawn
 ```
 
+## IMPORTANT!
+For high autonomy, use the `auto` preset in `termlings spawn` for your chosen runtime. Use dangerous flags with caution.
+
+## How it works
+Termlings adds an agent coordination layer in `.termlings/` on top of your existing coding-agent runtime.
+
+1. `termlings spawn` launches an agent using a preset from `.termlings/spawn.json`.
+2. Termlings injects workspace + role context into the runtime session.
+3. The runtime starts with that context:
+   - Claude Code (`termlings claude`) via `--append-system-prompt "<termlings context>"`
+   - Codex CLI (`termlings codex`) via `-i "<termlings context>"`
+4. Agents coordinate through `termlings` commands (`message`, `task`, `calendar`, `request`, etc.), while shared state in `.termlings/store/*` keeps TUI + CLI in sync across terminals.
+
+Each Termling agent gets role-specific context derived from its `SOUL.md` plus shared workspace context.
+   
 ## Default Org Chart
 When you install, you are asked to set up a default organization.
 It looks like this. In the future there will be additional team and Termlings templates you can install.
@@ -66,10 +79,10 @@ Operator (Human Owner - You) [human:default]
 | `termlings spawn` | Pick an agent + launch preset | [AGENTS.md](AGENTS.md) |
 | `termlings create` | Create a new agent in .termlings/agents | [AGENTS.md](AGENTS.md) |
 | `termlings init` | Initialize `.termlings/` in current project | [docs/INIT.md](docs/INIT.md) |
-| `termlings --server` | Run secure HTTP API server | [docs/SERVER.md](docs/SERVER.md) |
 | `termlings avatar <dna|name>` | Render avatar identity | [docs/AVATARS.md](docs/AVATARS.md) |
 | `termlings --help` | Full command reference | CLI help |
 | `termlings scheduler --deamon` | Run cron jobs for calendear | [docs/SCHEDULER.md](docs/SCHEDULER.md) |
+| `termlings --server` | Run secure HTTP API server [WIP] | [docs/SERVER.md](docs/SERVER.md) |
 
 ### Mostly agent-facing commands
 
@@ -98,7 +111,6 @@ These are primarily for agents running inside sessions. You can run them manuall
   agents/
     <slug>/
       SOUL.md
-      avatar.svg
   brand/
     brand.json
     profiles/
@@ -118,16 +130,16 @@ These are primarily for agents running inside sessions. You can run them manuall
 
 What each file/folder is for:
 
-- `VISION.md` - project vision injected into every agent context.
-- `sessions/tl-*.json` - live session presence and metadata.
-- `agents/<slug>/SOUL.md` - saved agent identity, title, role, DNA.
+- `.termlings/VISION.md` - simple project vision injected into every agent context.
+- `.termlings/sessions/tl-*.json` - live session presence and metadata.
+- `.termlings/agents/<slug>/SOUL.md` - saved agent identity, title, role, DNA.
 - `.termlings/brand/brand.json` - default brand profile.
 - `.termlings/brand/profiles/<id>.json` - additional named brand profiles.
-- `store/messages/` - append-only channel/DM/system history.
-- `store/tasks/tasks.json` - task list and task state.
-- `store/calendar/calendar.json` - events and recurrence.
-- `store/requests/requests.jsonl` - operator request log.
-- `browser/history.jsonl` - browser action history/audit trail.
+- `.termlings/store/messages/` - append-only channel/DM/system history.
+- `.termlings/store/tasks/tasks.json` - task list and task state.
+- `.termlings/store/calendar/calendar.json` - events and recurrence.
+- `.termlings/store/requests/requests.jsonl` - operator request log.
+- `.termlings/browser/history.jsonl` - browser action history/audit trail.
 
 ## Lifecycle & Internals
 

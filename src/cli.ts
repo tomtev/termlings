@@ -198,7 +198,9 @@ Sim (optional):
     }
 
     // Agent launch
-    if (positional[0] === "claude") {
+    if (positional[0] && _agentRegistry[positional[0]]) {
+      const runtimeName = positional[0]
+      const runtimeAdapter = _agentRegistry[runtimeName]!
       const { ensureWorkspaceDirs } = await import("./workspace/state.js");
       const { discoverLocalAgents, selectLocalAgentWithRoom } = await import("./agents/discover.js");
 
@@ -211,32 +213,26 @@ Sim (optional):
         if (selected === "create-random") {
           // Generate random agent
           const { generateRandomDNA } = await import("./index.js");
+          const { generateFunName } = await import("./name-generator.js")
           const randomDna = generateRandomDNA();
-          const randomNames = ["Pixel", "Sprout", "Ember", "Nimbus", "Glitch", "Ziggy", "Quill", "Cosmo", "Maple", "Flint", "Wren", "Dusk", "Byte", "Fern", "Spark", "Nova", "Haze", "Basil", "Reef", "Orbit", "Sage", "Rusty", "Coral", "Luna", "Cinder", "Pip", "Storm", "Ivy", "Blaze", "Mochi"];
-          const randomName = randomNames[Math.floor(Math.random() * randomNames.length)];
+          const randomName = generateFunName()
 
           opts.name = opts.name || randomName;
           opts.dna = opts.dna || randomDna;
 
           const { launchAgent } = await import("./agents/launcher.js");
-          await launchAgent(_agentRegistry.claude, agentPassthrough, opts);
+          await launchAgent(runtimeAdapter, agentPassthrough, opts);
         } else if (selected) {
           process.env.TERMLINGS_AGENT_NAME = opts.name || selected.soul?.name;
           process.env.TERMLINGS_AGENT_DNA = opts.dna || selected.soul?.dna;
           const { launchLocalAgent } = await import("./agents/launcher.js");
-          await launchLocalAgent(selected, agentPassthrough, opts);
+          await launchLocalAgent(selected, agentPassthrough, opts, runtimeAdapter);
         }
       } else {
         // No agents, just launch the CLI directly
         const { launchAgent } = await import("./agents/launcher.js");
-        await launchAgent(_agentRegistry.claude, agentPassthrough, opts);
+        await launchAgent(runtimeAdapter, agentPassthrough, opts);
       }
-      process.exit(0);
-    }
-
-    if (positional[0] && _agentRegistry[positional[0]]) {
-      const { launchAgent } = await import("./agents/launcher.js");
-      await launchAgent(_agentRegistry[positional[0]], agentPassthrough, opts);
       process.exit(0);
     }
 

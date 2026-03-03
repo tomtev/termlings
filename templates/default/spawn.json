@@ -12,5 +12,19 @@
       "description": "Launch in safe mode (default permissions)",
       "command": "termlings claude"
     }
+  },
+  "codex": {
+    "default": {
+      "description": "Launch with full autonomy",
+      "command": "termlings codex --dangerously-bypass-approvals-and-sandbox"
+    },
+    "auto": {
+      "description": "Launch with full autonomy (bypass approvals and sandbox)",
+      "command": "termlings codex --dangerously-bypass-approvals-and-sandbox"
+    },
+    "safe": {
+      "description": "Launch in safe mode (default permissions)",
+      "command": "termlings codex"
+    }
   }
 }

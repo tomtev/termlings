@@ -141,7 +141,7 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
  * Marks agents already active in the room as taken
  */
 export async function selectAgent(): Promise<{ type: "builtin" | "local"; name: string; agent?: LocalAgent }> {
-  const builtins = ["claude"];
+  const builtins = ["claude", "codex"];
   const localAgents = discoverLocalAgents();
 
   // Get active agents in this room
@@ -167,7 +167,7 @@ export async function selectAgent(): Promise<{ type: "builtin" | "local"; name: 
   const { selectMenu } = await import("../interactive-menu.js");
   const menuItems = allOptions.map((opt) => {
     if (opt.type === "builtin") {
-      const label = "Claude Code";
+      const label = opt.name === "codex" ? "Codex CLI" : "Claude Code";
       const status = opt.taken ? " (in room)" : "";
       return {
         value: JSON.stringify(opt),

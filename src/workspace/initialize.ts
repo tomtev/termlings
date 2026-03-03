@@ -1,10 +1,12 @@
-import { createReadStream, createWriteStream, existsSync, openSync, closeSync, writeFileSync, readFileSync, unlinkSync } from "fs"
+import { createReadStream, createWriteStream, existsSync, openSync, closeSync, writeFileSync, readFileSync, unlinkSync, readdirSync } from "fs"
 import { createInterface } from "readline/promises"
 import { join } from "path"
 import { spawnSync } from "child_process"
 import { userInfo } from "os"
 import type { Readable, Writable } from "stream"
 
+import { generateRandomDNA } from "../index.js"
+import { generateFunNames } from "../name-generator.js"
 import { ensureWorkspaceDirs } from "./state.js"
 import { initializeWorkspaceFromTemplate, listWorkspaceTemplates } from "./setup.js"
 
@@ -146,6 +148,55 @@ function templateDescription(template: string): string {
   return "Local workspace template."
 }
 
+function updateFrontmatterField(content: string, field: string, value: string): string {
+  const line = `${field}: ${value}`
+  const pattern = new RegExp(`^${field}:\\s*.*$`, "m")
+  if (pattern.test(content)) {
+    return content.replace(pattern, line)
+  }
+  const firstDivider = content.indexOf("---\n")
+  if (firstDivider === -1) return content
+  return `${content.slice(0, firstDivider + 4)}${line}\n${content.slice(firstDivider + 4)}`
+}
+
+function randomizeDefaultTeamIdentities(projectRoot: string): number {
+  const agentsRoot = join(projectRoot, ".termlings", "agents")
+  if (!existsSync(agentsRoot)) return 0
+
+  const orderedSlugs = ["pm", "developer", "growth", "support", "designer"]
+  const availableSlugs = new Set(
+    readdirSync(agentsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name),
+  )
+  const teamSlugs = orderedSlugs.filter((slug) => availableSlugs.has(slug))
+  if (teamSlugs.length === 0) return 0
+
+  const names = generateFunNames(teamSlugs.length)
+  const usedDna = new Set<string>()
+  let updated = 0
+
+  teamSlugs.forEach((slug, index) => {
+    const soulPath = join(agentsRoot, slug, "SOUL.md")
+    if (!existsSync(soulPath)) return
+
+    let dna = generateRandomDNA()
+    while (usedDna.has(dna)) {
+      dna = generateRandomDNA()
+    }
+    usedDna.add(dna)
+
+    const name = names[index] || `Agent${index + 1}`
+    const content = readFileSync(soulPath, "utf8")
+    const withName = updateFrontmatterField(content, "name", name)
+    const withDna = updateFrontmatterField(withName, "dna", dna)
+    writeFileSync(soulPath, withDna, "utf8")
+    updated += 1
+  })
+
+  return updated
+}
+
 export async function ensureWorkspaceInitialized(
   forceSetup = false,
   projectRoot = process.cwd(),
@@ -153,6 +204,10 @@ export async function ensureWorkspaceInitialized(
 ): Promise<boolean> {
   const termlingsDir = join(projectRoot, ".termlings")
   const workspaceExists = existsSync(termlingsDir)
+  const agentsDir = join(termlingsDir, "agents")
+  const hadAgentsBefore = existsSync(agentsDir)
+    && readdirSync(agentsDir, { withFileTypes: true })
+      .some((entry) => entry.isDirectory() && existsSync(join(agentsDir, entry.name, "SOUL.md")))
 
   if (!forceSetup && workspaceExists) {
     ensureWorkspaceDirs(projectRoot)
@@ -168,6 +223,12 @@ export async function ensureWorkspaceInitialized(
   // Initialize automatically in non-interactive shells.
   if (!process.stdout.isTTY) {
     const result = initializeWorkspaceFromTemplate(selectedTemplate, projectRoot)
+    if (!hadAgentsBefore && result.templateName === "default") {
+      const randomized = randomizeDefaultTeamIdentities(projectRoot)
+      if (randomized > 0) {
+        console.log(`Randomized ${randomized} team identities (name + dna).`)
+      }
+    }
     console.log(`Initialized .termlings with template: ${result.templateName}`)
     if (!templateFromOption) {
       console.log("Run 'termlings init' in an interactive terminal to choose a different template.")
@@ -187,6 +248,12 @@ export async function ensureWorkspaceInitialized(
       rlOutput = createWriteStream("/dev/tty", { fd: ttyFd, autoClose: false })
     } catch {
       const result = initializeWorkspaceFromTemplate(selectedTemplate, projectRoot)
+      if (!hadAgentsBefore && result.templateName === "default") {
+        const randomized = randomizeDefaultTeamIdentities(projectRoot)
+        if (randomized > 0) {
+          console.log(`Randomized ${randomized} team identities (name + dna).`)
+        }
+      }
       console.log(`Initialized .termlings with template: ${result.templateName}`)
       if (!templateFromOption) {
         console.log("No interactive TTY detected. Run 'termlings init' later to choose a template manually.")
@@ -244,6 +311,12 @@ export async function ensureWorkspaceInitialized(
     }
 
     const result = initializeWorkspaceFromTemplate(template, projectRoot)
+    if (!hadAgentsBefore && result.templateName === "default") {
+      const randomized = randomizeDefaultTeamIdentities(projectRoot)
+      if (randomized > 0) {
+        console.log(`✓ Randomized ${randomized} team identities`)
+      }
+    }
     console.log(`✓ Initialized .termlings using template: ${result.templateName}`)
 
     rl.close()
