@@ -30,14 +30,9 @@ bun add -g termlings@latest
 
 ```bash
 # 1) Initialize workspace files
-termlings init --template default
-# or from a git template
-termlings init --template https://github.com/your-org/termlings-template.git#main
+termlings init
 
-# 2) Start workspace TUI
-termlings
-
-# 3) Launch an agent session
+# 2) Launch an agent session (in another terminal)
 termlings spawn
 ```
 

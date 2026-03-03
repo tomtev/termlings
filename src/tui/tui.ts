@@ -486,6 +486,12 @@ class WorkspaceTui {
         return
       }
 
+      if (this.view === "messages" && this.isComposerAvailable() && this.inputFocused && this.draft.length > 0) {
+        this.moveDraftCursorVertical(isArrowDown ? 1 : -1)
+        this.render()
+        return
+      }
+
       if (this.view === "requests") {
         this.moveRequestSelection(isArrowUp ? -1 : 1)
         this.render()
@@ -938,6 +944,74 @@ class WorkspaceTui {
     } else {
       this.draftCursorIndex = Math.max(0, this.draftCursorIndex - 1)
     }
+    this.syncMentionSelection()
+  }
+
+  private wrappedDraftSegments(width: number): Array<{ text: string; start: number; end: number; prefix: string }> {
+    const firstPrefix = " ❯ "
+    const continuationPrefix = "   "
+    const firstCapacity = Math.max(1, width - visibleLength(firstPrefix))
+    const continuationCapacity = Math.max(1, width - visibleLength(continuationPrefix))
+
+    const segments: Array<{ text: string; start: number; end: number; prefix: string }> = []
+    if (this.draft.length === 0) {
+      segments.push({ text: "", start: 0, end: 0, prefix: firstPrefix })
+      return segments
+    }
+
+    let start = 0
+    let line = 0
+    while (start < this.draft.length) {
+      const capacity = line === 0 ? firstCapacity : continuationCapacity
+      const end = Math.min(this.draft.length, start + capacity)
+      segments.push({
+        text: this.draft.slice(start, end),
+        start,
+        end,
+        prefix: line === 0 ? firstPrefix : continuationPrefix,
+      })
+      start = end
+      line += 1
+    }
+
+    return segments
+  }
+
+  private moveDraftCursorVertical(direction: -1 | 1): void {
+    if (this.draft.length === 0 || direction === 0) return
+
+    const width = Math.max(this.stdout.columns || 120, 40)
+    const segments = this.wrappedDraftSegments(width)
+    if (segments.length === 0) return
+
+    let lineIndex = Math.max(0, segments.length - 1)
+    for (let index = 0; index < segments.length; index++) {
+      const segment = segments[index]!
+      if (this.draftCursorIndex <= segment.end) {
+        lineIndex = index
+        break
+      }
+    }
+
+    const targetLineIndex = Math.max(0, Math.min(segments.length - 1, lineIndex + direction))
+    if (targetLineIndex === lineIndex) return
+
+    const currentSegment = segments[lineIndex]!
+    const currentColumn = Math.max(0, this.draftCursorIndex - currentSegment.start)
+    const targetSegment = segments[targetLineIndex]!
+    let targetIndex = Math.min(targetSegment.start + currentColumn, targetSegment.end)
+
+    const blockAt = this.findDraftBlockSpanAt(targetIndex)
+    if (blockAt && targetIndex > blockAt.start && targetIndex < blockAt.end) {
+      targetIndex = direction < 0 ? blockAt.start : blockAt.end
+    } else if (targetIndex > 0) {
+      const blockLeft = this.findDraftBlockSpanAt(targetIndex - 1)
+      if (blockLeft && targetIndex > blockLeft.start && targetIndex < blockLeft.end) {
+        targetIndex = direction < 0 ? blockLeft.start : blockLeft.end
+      }
+    }
+
+    this.draftCursorIndex = Math.max(0, Math.min(this.draft.length, targetIndex))
     this.syncMentionSelection()
   }
 
@@ -3691,30 +3765,7 @@ class WorkspaceTui {
       return [composerInputBar(" ❯ ", body, width, true, cursor, cursorIndex)]
     }
 
-    const firstPrefix = " ❯ "
-    const continuationPrefix = "   "
-    const firstCapacity = Math.max(1, width - visibleLength(firstPrefix))
-    const continuationCapacity = Math.max(1, width - visibleLength(continuationPrefix))
-
-    const segments: Array<{ text: string; start: number; end: number; prefix: string }> = []
-    if (body.length === 0) {
-      segments.push({ text: "", start: 0, end: 0, prefix: firstPrefix })
-    } else {
-      let start = 0
-      let line = 0
-      while (start < body.length) {
-        const capacity = line === 0 ? firstCapacity : continuationCapacity
-        const end = Math.min(body.length, start + capacity)
-        segments.push({
-          text: body.slice(start, end),
-          start,
-          end,
-          prefix: line === 0 ? firstPrefix : continuationPrefix,
-        })
-        start = end
-        line += 1
-      }
-    }
+    const segments = this.wrappedDraftSegments(width)
 
     let cursorLineIndex = Math.max(0, segments.length - 1)
     for (let index = 0; index < segments.length; index++) {
