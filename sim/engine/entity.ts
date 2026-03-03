@@ -3,7 +3,7 @@ import {
   getTraitColors,
   HATS,
   LEGS,
-} from "../../index.js"
+} from "../../src/index.js"
 import type { RGB, Cell, Entity, SimConfig } from "./types.js"
 
 export function spriteHeight(dna: string): number {

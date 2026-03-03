@@ -1,4 +1,4 @@
-import type { LocalAgent } from "../agents/discover.js";
+import type { LocalAgent } from "../../src/agents/discover.js";
 import type { AgentStateEntity } from "./ipc.js";
 
 export interface MergedAgent {

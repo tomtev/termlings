@@ -5,7 +5,7 @@ import {
   traitsFromName,
   HATS,
   type DecodedDNA,
-} from "../index.js"
+} from "../src/index.js"
 import {
   createParticleSystem,
   updateParticles,

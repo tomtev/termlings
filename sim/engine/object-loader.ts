@@ -14,7 +14,7 @@ function projectObjectsDir(): string {
 export function loadStarterObjects(): Record<string, ObjectDef> {
   try {
     const dir = dirname(fileURLToPath(import.meta.url))
-    const starterPath = join(dir, "..", "..", "..", "templates", "office", "objects", "starter.json")
+    const starterPath = join(dir, "..", "..", "templates", "office", "objects", "starter.json")
 
     if (!existsSync(starterPath)) {
       return {}

@@ -7,7 +7,7 @@
 import { launchWorkspaceWeb } from "./workspace/web-launch.js";
 import { launchWorkspaceTui } from "./tui/tui.js";
 import { getUpdateNotice, printUpdateNotice } from "./update-check.js";
-import { runSimCommand } from "./sim/index.js";
+import { runSimCommand } from "../sim/index.js";
 
 const args = process.argv.slice(2);
 const flags = new Set<string>();

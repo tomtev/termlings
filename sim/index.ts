@@ -13,7 +13,7 @@ function ensureSimMap(): void {
   const dir = dirname(fileURLToPath(import.meta.url))
   const bundledMap = join(dir, "default-map", "map.json")
   if (!existsSync(bundledMap)) {
-    throw new Error("Bundled sim map missing at src/sim/default-map/map.json")
+    throw new Error("Bundled sim map missing at sim/default-map/map.json")
   }
   copyFileSync(bundledMap, mapPath)
 }

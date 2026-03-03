@@ -1,4 +1,4 @@
-import type { DecodedDNA } from "../../index.js"
+import type { DecodedDNA } from "../../src/index.js"
 
 export type RGB = [number, number, number]
 
