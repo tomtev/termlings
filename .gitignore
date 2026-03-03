@@ -8,3 +8,5 @@ node_modules
 .termlings/store/
 project-termlings/
 .termlings/
+.claude/
+.pi/
