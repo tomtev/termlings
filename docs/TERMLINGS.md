@@ -78,6 +78,10 @@ I'm experienced with SQL, Python, and data visualization.
 
 Edit this file to customize how teammates understand and interact with the termling.
 
+Optional frontmatter permission:
+- `manage_agents: true` allows this agent to manage agent lifecycle (`termlings create`, `termlings spawn --agent`, `termlings spawn --respawn`).
+- When enabled, Termlings injects additional runtime context for safe agent-management workflows.
+
 ### avatar.svg
 
 Auto-generated visual identity based on DNA. Can be viewed with:

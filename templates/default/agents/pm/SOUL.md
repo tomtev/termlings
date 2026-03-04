@@ -6,6 +6,7 @@ role: Own product vision and day-to-day company prioritization
 team: Product
 reports_to: human:default
 sort_order: -1
+manage_agents: true
 dna: 0a3f201
 ---
 

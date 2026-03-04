@@ -1,4 +1,5 @@
 const ANSI_REGEX = /\u001B\[[0-9;?]*[ -/]*[@-~]/g
+const ANSI_PREFIX_REGEX = /^\u001B\[[0-9;?]*[ -/]*[@-~]/
 
 export const REFRESH_MS = 1_000
 export const HEARTBEAT_MS = 10_000
@@ -38,6 +39,39 @@ export const FRAME_BR = "╯"
 
 export function visibleLength(input: string): number {
   return input.replace(ANSI_REGEX, "").length
+}
+
+export function truncateAnsi(input: string, maxWidth: number): string {
+  if (maxWidth <= 0 || input.length === 0) return ""
+
+  let out = ""
+  let visible = 0
+  let index = 0
+  let sawAnsi = false
+
+  while (index < input.length) {
+    const rest = input.slice(index)
+    const ansi = rest.match(ANSI_PREFIX_REGEX)
+    if (ansi && ansi[0]) {
+      out += ansi[0]
+      index += ansi[0].length
+      sawAnsi = true
+      continue
+    }
+
+    if (visible >= maxWidth) break
+    const codePoint = input.codePointAt(index)
+    if (codePoint === undefined) break
+    const ch = String.fromCodePoint(codePoint)
+    out += ch
+    visible += 1
+    index += ch.length
+  }
+
+  if (sawAnsi && !out.endsWith(ANSI_RESET)) {
+    out += ANSI_RESET
+  }
+  return out
 }
 
 export function padAnsi(input: string, width: number): string {

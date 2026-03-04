@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Termlings Avatar Stream Viewer</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #171a21;
+      --muted: #9ea7b3;
+      --text: #f3f6fb;
+      --accent: #4fd1c5;
+      --danger: #f56565;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: radial-gradient(circle at 15% 15%, #18202b 0%, var(--bg) 45%);
+      color: var(--text);
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 12px;
+      padding: 16px;
+    }
+    .panel {
+      background: linear-gradient(180deg, #1c2230, var(--panel));
+      border: 1px solid #293245;
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .top {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      align-items: center;
+    }
+    .muted { color: var(--muted); }
+    .status { font-weight: 700; }
+    .status.ok { color: var(--accent); }
+    .status.err { color: var(--danger); }
+    .viewer-wrap {
+      position: relative;
+      overflow: auto;
+      border: 1px solid #2a3347;
+      border-radius: 12px;
+      background: #050607;
+      min-height: 420px;
+      padding: 10px;
+    }
+    #surface {
+      position: relative;
+      display: inline-block;
+      line-height: 0;
+    }
+    #frameCanvas {
+      image-rendering: auto;
+      border-radius: 6px;
+      max-width: 100%;
+      height: auto;
+      background: #000;
+      border: 1px solid #1d2331;
+    }
+    #avatar {
+      position: absolute;
+      width: 44px;
+      height: 44px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.7));
+      transition: left 120ms linear, top 120ms linear;
+      z-index: 5;
+    }
+    .hint { font-size: 12px; }
+    code {
+      background: #111722;
+      border: 1px solid #283042;
+      border-radius: 5px;
+      padding: 1px 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel top">
+    <div>
+      <div class="muted">WebSocket</div>
+      <div id="wsUrl"></div>
+    </div>
+    <div>
+      <div class="muted">Status</div>
+      <div id="status" class="status err">disconnected</div>
+    </div>
+    <div>
+      <div class="muted">Frames</div>
+      <div id="frames">0</div>
+    </div>
+    <div>
+      <div class="muted">Viewport</div>
+      <div id="viewport">-</div>
+    </div>
+  </div>
+
+  <div class="panel viewer-wrap">
+    <div id="surface">
+      <canvas id="frameCanvas" width="1280" height="720"></canvas>
+      <img id="avatar" alt="avatar" />
+    </div>
+    <p class="hint muted">
+      Click inside the frame to send <code>input_mouse</code> and move the avatar marker.
+      Query params: <code>?ws=ws://127.0.0.1:9448&avatar=/path/to/avatar.svg</code>
+    </p>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const wsEndpoint = params.get("ws") || "ws://127.0.0.1:9448";
+    const avatarParam = params.get("avatar");
+    const fallbackAvatarSvg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
+        <defs>
+          <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#4fd1c5"/>
+            <stop offset="100%" stop-color="#2c7a7b"/>
+          </linearGradient>
+        </defs>
+        <circle cx="22" cy="22" r="18" fill="url(#g)" stroke="#0f172a" stroke-width="2"/>
+        <circle cx="16.5" cy="20" r="2.1" fill="#0f172a"/>
+        <circle cx="27.5" cy="20" r="2.1" fill="#0f172a"/>
+        <path d="M14 27c2.2 3.4 5.1 5 8 5s5.8-1.6 8-5" fill="none" stroke="#0f172a" stroke-width="2.2" stroke-linecap="round"/>
+      </svg>
+    `.trim();
+    const fallbackAvatarDataUrl = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(fallbackAvatarSvg)}`;
+    const avatarSrc = avatarParam || fallbackAvatarDataUrl;
+    const avatar = document.getElementById("avatar");
+    const canvas = document.getElementById("frameCanvas");
+    const ctx = canvas.getContext("2d");
+    const surface = document.getElementById("surface");
+    const statusEl = document.getElementById("status");
+    const framesEl = document.getElementById("frames");
+    const viewportEl = document.getElementById("viewport");
+    const wsEl = document.getElementById("wsUrl");
+
+    wsEl.textContent = wsEndpoint;
+    avatar.addEventListener("error", () => {
+      if (avatar.dataset.fallbackLoaded === "1") return;
+      avatar.dataset.fallbackLoaded = "1";
+      avatar.src = fallbackAvatarDataUrl;
+    });
+    avatar.src = avatarSrc;
+    avatar.style.left = "60px";
+    avatar.style.top = "60px";
+
+    let frames = 0;
+    let ws;
+
+    function setStatus(ok, text) {
+      statusEl.textContent = text;
+      statusEl.className = ok ? "status ok" : "status err";
+    }
+
+    function connect() {
+      ws = new WebSocket(wsEndpoint);
+      ws.addEventListener("open", () => {
+        setStatus(true, "connected");
+        ws.send(JSON.stringify({ type: "status" }));
+      });
+      ws.addEventListener("close", () => {
+        setStatus(false, "disconnected (retrying)");
+        setTimeout(connect, 1200);
+      });
+      ws.addEventListener("error", () => {
+        setStatus(false, "socket error");
+      });
+      ws.addEventListener("message", async (event) => {
+        let msg;
+        try {
+          msg = JSON.parse(event.data);
+        } catch {
+          return;
+        }
+        if (msg.type === "status") {
+          const w = msg.viewportWidth || canvas.width;
+          const h = msg.viewportHeight || canvas.height;
+          viewportEl.textContent = `${w} x ${h}`;
+          return;
+        }
+        if (msg.type !== "frame" || !msg.data) return;
+
+        const image = new Image();
+        image.src = `data:image/jpeg;base64,${msg.data}`;
+        try {
+          await image.decode();
+        } catch {
+          return;
+        }
+        if (msg.metadata?.deviceWidth && msg.metadata?.deviceHeight) {
+          canvas.width = msg.metadata.deviceWidth;
+          canvas.height = msg.metadata.deviceHeight;
+          viewportEl.textContent = `${canvas.width} x ${canvas.height}`;
+        }
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        frames += 1;
+        framesEl.textContent = String(frames);
+      });
+    }
+
+    surface.addEventListener("click", (evt) => {
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.round(evt.clientX - rect.left);
+      const y = Math.round(evt.clientY - rect.top);
+      avatar.style.left = `${x}px`;
+      avatar.style.top = `${y}px`;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: "input_mouse",
+          eventType: "mouseMoved",
+          x,
+          y,
+          button: "none",
+        }));
+        ws.send(JSON.stringify({
+          type: "input_mouse",
+          eventType: "mousePressed",
+          x,
+          y,
+          button: "left",
+          clickCount: 1,
+        }));
+        ws.send(JSON.stringify({
+          type: "input_mouse",
+          eventType: "mouseReleased",
+          x,
+          y,
+          button: "left",
+          clickCount: 1,
+        }));
+      }
+    });
+
+    connect();
+  </script>
+</body>
+</html>

@@ -13,6 +13,7 @@ export interface LocalAgent {
     team?: string;
     reports_to?: string;
     sort_order?: number;
+    manage_agents?: boolean;
     dna: string;
     description: string;
   };
@@ -24,6 +25,14 @@ function parseFrontmatterNumber(input?: string): number | undefined {
   if (!/^-?\d+$/.test(cleaned)) return undefined;
   const value = Number.parseInt(cleaned, 10);
   return Number.isFinite(value) ? value : undefined;
+}
+
+function parseFrontmatterBoolean(input?: string): boolean | undefined {
+  if (!input) return undefined;
+  const cleaned = input.trim().replace(/^['"]|['"]$/g, "").toLowerCase();
+  if (["true", "yes", "1", "on"].includes(cleaned)) return true;
+  if (["false", "no", "0", "off"].includes(cleaned)) return false;
+  return undefined;
 }
 
 /**
@@ -63,6 +72,7 @@ export function discoverLocalAgents(): LocalAgent[] {
         const team = yaml.match(/^team:\s*(.+)$/m)?.[1];
         const reports_to = yaml.match(/^reports_to:\s*(.+)$/m)?.[1];
         const sort_order = parseFrontmatterNumber(yaml.match(/^sort_order:\s*(.+)$/m)?.[1]);
+        const manage_agents = parseFrontmatterBoolean(yaml.match(/^manage_agents:\s*(.+)$/m)?.[1]);
         const dna = yaml.match(/^dna:\s*(.+)$/m)?.[1];
         const description = (frontmatterMatch[2] || "").trim();
 
@@ -75,6 +85,7 @@ export function discoverLocalAgents(): LocalAgent[] {
             team,
             reports_to,
             sort_order,
+            manage_agents,
             dna,
             description,
           };

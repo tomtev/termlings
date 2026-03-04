@@ -34,6 +34,16 @@ function pickRandomName(): string {
   return RANDOM_NAMES[idx]!
 }
 
+function runtimeLabelForAdapter(adapter: AgentAdapter): string {
+  const bin = (adapter.bin || "").trim().toLowerCase()
+  if (bin === "claude") return "Claude"
+  if (bin === "codex") return "Codex"
+  if (bin === "pi") return "Pi"
+
+  const fallback = (adapter.defaultName || "").trim()
+  return fallback || adapter.bin || "Unknown"
+}
+
 function isTruthyEnv(value?: string): boolean {
   if (!value) return false
   const normalized = value.trim().toLowerCase()
@@ -104,6 +114,15 @@ function loadContext(profile: ContextProfile): string {
   return context
 }
 
+function loadManageAgentsContext(): string {
+  return readFirstContextFile([
+    // Installed / built layout
+    joinPath(__dirname, "..", "termlings-system-message-manage-agents.md"),
+    // Dev mode
+    resolvePath("src/termlings-system-message-manage-agents.md"),
+  ]).trim()
+}
+
 function parseSoul(): { name: string; dna: string } {
   const agentsMdPath = resolvePath("AGENTS.md")
   if (!existsSync(agentsMdPath)) return { name: "", dna: "" }
@@ -158,6 +177,7 @@ export async function launchLocalAgent(
     title: localAgent.soul?.title,
     title_short: localAgent.soul?.title_short,
     role: localAgent.soul?.role,
+    manage_agents: localAgent.soul?.manage_agents,
   })
 }
 
@@ -169,7 +189,15 @@ export async function launchAgent(
   adapter: AgentAdapter,
   passthroughArgs: string[],
   termlingOpts: Record<string, string>,
-  soulData?: { name: string; description: string; dna: string; title?: string; title_short?: string; role?: string },
+  soulData?: {
+    name: string;
+    description: string;
+    dna: string;
+    title?: string;
+    title_short?: string;
+    role?: string;
+    manage_agents?: boolean;
+  },
 ): Promise<never> {
   const sessionId = `tl-${randomBytes(4).toString("hex")}`
   const contextProfile = detectContextProfile()
@@ -188,6 +216,7 @@ export async function launchAgent(
   const agentTitle = soulData?.title
   const agentTitleShort = soulData?.title_short
   const agentRole = soulData?.role
+  const agentCanManageAgents = Boolean(soulData?.manage_agents)
 
   // Apply context substitutions BEFORE passing to adapter
   let finalContext = context
@@ -204,6 +233,15 @@ export async function launchAgent(
     }
     for (const [field, value] of Object.entries(dynamicFields)) {
       finalContext = finalContext.replace(new RegExp(`\\$${field}\\b`, "g"), value)
+    }
+  }
+
+  if (agentCanManageAgents) {
+    const manageAgentsContext = loadManageAgentsContext()
+    if (manageAgentsContext) {
+      finalContext = finalContext
+        ? `${finalContext}\n\n${manageAgentsContext}\n`
+        : `${manageAgentsContext}\n`
     }
   }
 
@@ -271,6 +309,7 @@ export async function launchAgent(
     TERMLINGS_AGENT_TITLE: agentTitle || "",
     TERMLINGS_AGENT_TITLE_SHORT: agentTitleShort || "",
     TERMLINGS_AGENT_ROLE: agentRole || "",
+    TERMLINGS_AGENT_MANAGE_AGENTS: agentCanManageAgents ? "1" : "0",
     TERMLINGS_IPC_DIR: ipcDir,
     TERMLINGS_CONTEXT_PROFILE: contextProfile,
     TERMLINGS_SIM_MODE: contextProfile === "sim" ? "1" : "0",
@@ -373,7 +412,7 @@ export async function launchAgent(
     kind: "system",
     from: "system",
     fromName: "Workspace",
-    text: `${agentName} joined`,
+    text: `${agentName} joined via ${runtimeLabelForAdapter(adapter)}`,
   })
   const heartbeatTimer = setInterval(() => {
     try {

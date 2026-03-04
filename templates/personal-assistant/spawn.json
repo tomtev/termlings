@@ -1,0 +1,44 @@
+{
+  "default": {
+    "runtime": "claude",
+    "preset": "default"
+  },
+  "agents": {
+    "personal-assistant": {
+      "runtime": "claude",
+      "preset": "default"
+    }
+  },
+  "runtimes": {
+    "claude": {
+      "default": {
+        "description": "Launch with full autonomy",
+        "command": "termlings claude --dangerously-skip-permissions"
+      },
+      "auto": {
+        "description": "Launch with full autonomy (skip all permission prompts)",
+        "command": "termlings claude --dangerously-skip-permissions"
+      }
+    },
+    "codex": {
+      "default": {
+        "description": "Launch with full autonomy",
+        "command": "termlings codex --dangerously-bypass-approvals-and-sandbox"
+      },
+      "auto": {
+        "description": "Launch with full autonomy (bypass approvals and sandbox)",
+        "command": "termlings codex --dangerously-bypass-approvals-and-sandbox"
+      }
+    },
+    "pi": {
+      "default": {
+        "description": "Launch with Pi default tool mode",
+        "command": "termlings pi"
+      },
+      "auto": {
+        "description": "Launch with Pi default tool mode",
+        "command": "termlings pi"
+      }
+    }
+  }
+}

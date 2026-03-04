@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "name": "Termlings",
+  "voice": "Clear, pragmatic, direct. Friendly but not fluffy. Avoid hype and jargon.",
+  "colors": {
+    "primary": "#574747",
+    "secondary": "#F4F4F5",
+    "accent": "#F4F4F5",
+    "background": "#FFFFFF",
+    "foreground": "#09090B",
+    "palette": []
+  },
+  "logos": {
+    "main": "",
+    "mark": "",
+    "favicon": ""
+  },
+  "identity": {
+    "domain": {
+      "primary": "",
+      "website": "",
+      "app": "",
+      "docs": "",
+      "api": ""
+    },
+    "email": {
+      "fromName": "Termlings",
+      "fromAddress": "",
+      "replyTo": "",
+      "support": "",
+      "sales": "",
+      "security": "",
+      "noreply": ""
+    }
+  },
+  "sources": [
+    "template:executeive-team"
+  ],
+  "updatedAt": "2026-03-04T00:00:00.000Z"
+}

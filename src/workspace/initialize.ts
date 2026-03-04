@@ -5,7 +5,7 @@ import { spawnSync } from "child_process"
 import { userInfo } from "os"
 import type { Readable, Writable } from "stream"
 
-import { generateRandomDNA } from "../index.js"
+import { generateRandomDNA, renderSVG } from "../index.js"
 import { generateFunNames } from "../name-generator.js"
 import { ensureWorkspaceDirs } from "./state.js"
 import { initializeWorkspaceFromTemplate, listWorkspaceTemplates } from "./setup.js"
@@ -293,6 +293,12 @@ function templateDescription(template: string): string {
   if (template === "default") {
     return "PM-led startup team: PM, Designer, Developer, Growth, Support."
   }
+  if (template === "executeive-team") {
+    return "Owner-led executive team: CEO, CTO, CPO, CMO, CFO."
+  }
+  if (template === "personal-assistant") {
+    return "Single Personal Assistant focused on execution and agent operations."
+  }
   return "Local workspace template."
 }
 
@@ -445,6 +451,42 @@ function randomizeDefaultTeamIdentities(projectRoot: string): number {
   return updated
 }
 
+function parseDnaFromSoul(content: string): string | null {
+  const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (!frontmatterMatch) return null
+  const rawDna = frontmatterMatch[1].match(/^dna:\s*(.+)$/m)?.[1]
+  if (!rawDna) return null
+  const dna = rawDna.trim().replace(/^['"]|['"]$/g, "").toLowerCase()
+  return /^[0-9a-f]{7}$/.test(dna) ? dna : null
+}
+
+function ensureAgentAvatarSvgs(projectRoot: string, overwrite = false): number {
+  const agentsRoot = join(projectRoot, ".termlings", "agents")
+  if (!existsSync(agentsRoot)) return 0
+
+  let written = 0
+  const entries = readdirSync(agentsRoot, { withFileTypes: true })
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    if (entry.name.startsWith(".")) continue
+
+    const soulPath = join(agentsRoot, entry.name, "SOUL.md")
+    const avatarPath = join(agentsRoot, entry.name, "avatar.svg")
+    if (!existsSync(soulPath)) continue
+    if (!overwrite && existsSync(avatarPath)) continue
+
+    try {
+      const content = readFileSync(soulPath, "utf8")
+      const dna = parseDnaFromSoul(content)
+      if (!dna) continue
+      writeFileSync(avatarPath, renderSVG(dna, 10, 0, null), "utf8")
+      written += 1
+    } catch {}
+  }
+
+  return written
+}
+
 export async function ensureWorkspaceInitialized(
   forceSetup = false,
   projectRoot = process.cwd(),
@@ -476,11 +518,16 @@ export async function ensureWorkspaceInitialized(
       const selectedRuntime = recommendedRuntime(detectRuntimeChoices())
       updateSpawnDefaults(projectRoot, selectedRuntime)
     }
+    let randomized = 0
     if (!hadAgentsBefore && result.templateName === "default") {
-      const randomized = randomizeDefaultTeamIdentities(projectRoot)
+      randomized = randomizeDefaultTeamIdentities(projectRoot)
       if (randomized > 0) {
         console.log(`Randomized ${randomized} team identities (name + dna).`)
       }
+    }
+    const avatarsWritten = ensureAgentAvatarSvgs(projectRoot, randomized > 0)
+    if (avatarsWritten > 0) {
+      console.log(`Generated ${avatarsWritten} avatar.svg files.`)
     }
     console.log(`Initialized .termlings with template: ${result.templateName}`)
     if (!templateFromOption) {
@@ -505,11 +552,16 @@ export async function ensureWorkspaceInitialized(
         const selectedRuntime = recommendedRuntime(detectRuntimeChoices())
         updateSpawnDefaults(projectRoot, selectedRuntime)
       }
+      let randomized = 0
       if (!hadAgentsBefore && result.templateName === "default") {
-        const randomized = randomizeDefaultTeamIdentities(projectRoot)
+        randomized = randomizeDefaultTeamIdentities(projectRoot)
         if (randomized > 0) {
           console.log(`Randomized ${randomized} team identities (name + dna).`)
         }
+      }
+      const avatarsWritten = ensureAgentAvatarSvgs(projectRoot, randomized > 0)
+      if (avatarsWritten > 0) {
+        console.log(`Generated ${avatarsWritten} avatar.svg files.`)
       }
       console.log(`Initialized .termlings with template: ${result.templateName}`)
       if (!templateFromOption) {
@@ -570,11 +622,16 @@ export async function ensureWorkspaceInitialized(
     }
 
     const result = initializeWorkspaceFromTemplate(template, projectRoot)
+    let randomized = 0
     if (!hadAgentsBefore && result.templateName === "default") {
-      const randomized = randomizeDefaultTeamIdentities(projectRoot)
+      randomized = randomizeDefaultTeamIdentities(projectRoot)
       if (randomized > 0) {
         console.log(`✓ Randomized ${randomized} team identities`)
       }
+    }
+    const avatarsWritten = ensureAgentAvatarSvgs(projectRoot, randomized > 0)
+    if (avatarsWritten > 0) {
+      console.log(`✓ Generated ${avatarsWritten} avatar.svg files`)
     }
     console.log(`✓ Initialized .termlings using template: ${result.templateName}`)
 

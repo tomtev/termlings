@@ -107,6 +107,105 @@ function printBrowserRuntimePreflight(): void {
   console.log("  Then run: agent-browser install");
 }
 
+type CodingRuntimePreflight = {
+  bin: "claude" | "codex";
+  label: "Claude Code" | "Codex CLI";
+  installed: boolean;
+  authenticated: boolean;
+};
+
+function runQuiet(bin: string, args: string[]): { ok: boolean; stdout: string; stderr: string } {
+  try {
+    const proc = spawnSync(bin, args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 8000,
+    });
+    return {
+      ok: (proc.status ?? 1) === 0,
+      stdout: typeof proc.stdout === "string" ? proc.stdout.trim() : "",
+      stderr: typeof proc.stderr === "string" ? proc.stderr.trim() : "",
+    };
+  } catch {
+    return { ok: false, stdout: "", stderr: "" };
+  }
+}
+
+function looksAuthenticated(output: string): boolean {
+  const lower = output.toLowerCase();
+  if (!lower) return false;
+  if (/not logged|logged out|unauthorized|no auth|not authenticated/.test(lower)) return false;
+  if (/logged in|authenticated|subscription/.test(lower)) return true;
+  return false;
+}
+
+function checkClaudeAuthenticated(): boolean {
+  if (!hasCommand("claude")) return false;
+  const result = runQuiet("claude", ["auth", "status"]);
+  if (!result.ok) return false;
+
+  const stdout = result.stdout;
+  if (stdout.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(stdout) as { loggedIn?: unknown };
+      if (typeof parsed.loggedIn === "boolean") return parsed.loggedIn;
+    } catch {}
+  }
+
+  return looksAuthenticated([result.stdout, result.stderr].filter(Boolean).join("\n"));
+}
+
+function checkCodexAuthenticated(): boolean {
+  if (!hasCommand("codex")) return false;
+  const result = runQuiet("codex", ["login", "status"]);
+  if (!result.ok) return false;
+  return looksAuthenticated([result.stdout, result.stderr].filter(Boolean).join("\n"));
+}
+
+function codingRuntimePreflight(): CodingRuntimePreflight[] {
+  const claudeInstalled = hasCommand("claude");
+  const codexInstalled = hasCommand("codex");
+  return [
+    {
+      bin: "claude",
+      label: "Claude Code",
+      installed: claudeInstalled,
+      authenticated: claudeInstalled ? checkClaudeAuthenticated() : false,
+    },
+    {
+      bin: "codex",
+      label: "Codex CLI",
+      installed: codexInstalled,
+      authenticated: codexInstalled ? checkCodexAuthenticated() : false,
+    },
+  ];
+}
+
+function printCodingRuntimePreflight(): boolean {
+  const statuses = codingRuntimePreflight();
+  const hasReadyRuntime = statuses.some((status) => status.installed && status.authenticated);
+  if (hasReadyRuntime) return true;
+
+  console.log("! No authenticated coding runtime found.");
+  console.log("  Termlings requires at least one runtime that is installed and logged in:");
+  console.log("  - Claude Code (`claude`)");
+  console.log("  - Codex CLI (`codex`)");
+  console.log("");
+  console.log("Current status:");
+  for (const runtime of statuses) {
+    if (!runtime.installed) {
+      console.log(`  - ${runtime.label}: not installed`);
+      continue;
+    }
+    console.log(`  - ${runtime.label}: installed, not logged in`);
+  }
+  console.log("");
+  console.log("How to fix:");
+  console.log("  - Claude Code: install CLI, then run `claude auth login`");
+  console.log("  - Codex CLI: install CLI, then run `codex login`");
+  return false;
+}
+
 async function maybeAutoExtractShadcnBrand(root = process.cwd()): Promise<void> {
   const { existsSync } = await import("fs");
   const { join } = await import("path");
@@ -149,6 +248,11 @@ export async function handleInit(flags: Set<string>, positional: string[], opts:
 
 Set up a new Termlings project with agents, tasks, calendar, and storage.
 
+REQUIREMENTS:
+  At least one coding runtime must be installed and logged in:
+  - claude (Claude Code)
+  - codex  (Codex CLI)
+
 USAGE:
   termlings init              Initialize new workspace (interactive)
   termlings init --force      Re-run setup and template selection
@@ -165,8 +269,9 @@ CREATES:
 
 TEMPLATES:
   Currently available:
-  • default - Corporate setting with 5 default agents
-  (More templates coming)
+  • default - Corporate setting (PM, Designer, Developer, Growth, Support)
+  • executeive-team - Executive leadership team (CEO, CTO, CPO, CMO, CFO)
+  • personal-assistant - Single assistant that can create/manage agents
 
 EXAMPLES:
   $ termlings init
@@ -212,6 +317,10 @@ NEXT STEPS:
     printSetupWizardBanner(forceSetup);
     printBunPreflight();
     printBrowserRuntimePreflight();
+    if (!printCodingRuntimePreflight()) {
+      exitCode = 1;
+      return;
+    }
 
     const { ensureWorkspaceInitialized } = await import("../workspace/initialize.js");
     const ready = await ensureWorkspaceInitialized(forceSetup, process.cwd(), opts.template);

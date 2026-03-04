@@ -34,9 +34,16 @@ bun add -g termlings@latest
 
 ## Quick Start (Operator)
 
+Prerequisite: install and log in to at least one runtime CLI (`claude` or `codex`).
+
 ```bash
 # 1) Initialize workspace files
 termlings init
+
+# Optional: choose a specific local template
+termlings init --template default
+termlings init --template executeive-team
+termlings init --template personal-assistant
 
 # 2A) One-terminal startup (requires tmux)
 termlings --auto-spawn

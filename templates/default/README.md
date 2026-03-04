@@ -10,7 +10,7 @@ A complete starter workspace for a 5-person SaaS team.
   - Developer (Build & Ship)
   - Growth (Customer & Adoption)
   - Support (Operations)
-- **Human owner**: Founder profile (`human:default`) for strategy, approvals, and credentials
+- **Human owner**: Owner profile (`human:default`) for strategy, approvals, and credentials
 - **VISION.md**: Small project vision document injected into all agent contexts
 - **.termlings/brand/brand.json**: Basic brand profile for voice/colors/logos/domain/email
 - **Store**: Empty directories for tasks, calendar, and messages
@@ -39,6 +39,11 @@ Edit agent SOUL.md files to customize their roles and personalities:
 
 Optional frontmatter helper:
 - `sort_order: <int>` controls TUI/team ordering (lower values appear first, default `0`).
+- `manage_agents: true` grants authority for agent lifecycle commands (`create`, `spawn`, `respawn`).
+
+Default authority policy:
+- PM has `manage_agents: true`.
+- Designer, Developer, Growth, and Support do not.
 
 Update `.termlings/VISION.md` with your current product direction.
 

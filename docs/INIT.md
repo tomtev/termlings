@@ -10,6 +10,15 @@ termlings init
 
 This creates `.termlings/` directory with all necessary files and folders.
 
+## Prerequisites
+
+Before running `termlings init`, have at least one coding runtime installed and logged in:
+
+- Claude Code CLI (`claude`)
+- Codex CLI (`codex`)
+
+`init` now checks this and exits early if neither runtime is authenticated.
+
 ## Start the Workspace
 
 After init, you have two launch patterns:
@@ -85,6 +94,8 @@ Re-runs initialization even if `.termlings/` already exists. Useful for:
 ### Choose explicit template
 ```bash
 termlings init --template default
+termlings init --template executeive-team
+termlings init --template personal-assistant
 termlings init --template https://github.com/your-org/termlings-template.git#main
 ```
 
@@ -98,7 +109,12 @@ When you first run `termlings` in a project:
 2. If missing, it shows the init banner and creates minimal workspace directories
 3. Launches the terminal workspace UI
 
-For full template setup, run `termlings init --template default`.
+For full template setup, run `termlings init --template <template-name>`.
+
+Available local templates:
+- `default` - PM-led startup team (PM has `manage_agents: true`; others do not)
+- `executeive-team` - Executive leadership team (all executive agents have `manage_agents: true`)
+- `personal-assistant` - Single personal assistant (`agent:personal-assistant`) with `manage_agents: true`
 
 ## Reset Runtime Files
 
@@ -128,6 +144,17 @@ termlings init
 ```
 
 Make sure you're in the project root where you want the workspace.
+
+**"No authenticated coding runtime found"**
+```bash
+# Option 1
+claude auth login
+
+# Option 2
+codex login
+```
+
+You only need one of Claude or Codex installed and logged in.
 
 ## File Structure Reference
 

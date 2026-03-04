@@ -331,6 +331,17 @@ function unique(items: string[]): string[] {
   return Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)))
 }
 
+function hasCodexResumeArgs(args: string[]): boolean {
+  return args.some((arg) => arg === "resume" || arg === "--last")
+}
+
+function targetExtraArgs(runtimeName: string, baseArgs: string[], respawn: boolean): string[] {
+  if (!respawn) return baseArgs
+  if (runtimeName !== "codex") return baseArgs
+  if (hasCodexResumeArgs(baseArgs)) return baseArgs
+  return [...baseArgs, "resume", "--last"]
+}
+
 function tmuxInstallHint(): string {
   if (process.platform === "darwin") return "macOS: brew install tmux"
   if (process.platform === "win32") return "Windows (WSL): sudo apt install tmux"
@@ -342,6 +353,8 @@ async function spawnAgentWindows(
   extraArgs: string[],
   quiet = false,
   attach = true,
+  cleanupLegacyControlWindow = false,
+  respawn = false,
 ): Promise<void> {
   if (!isTmuxAvailable()) {
     console.error("tmux is required for batch spawn.")
@@ -359,19 +372,41 @@ async function spawnAgentWindows(
 
   const created: string[] = []
   const existing: string[] = []
+  const respawned: string[] = []
   const failed: Array<{ slug: string; route: string; error: string }> = []
 
   for (const target of targets) {
+    const targetArgs = targetExtraArgs(target.runtimeName, extraArgs, respawn)
+    let targetRespawned = false
+    if (respawn && tmuxHasSession(sessionName)) {
+      const existingWindow = listTmuxWindows(sessionName).find((window) => window.name === `agent:${target.slug}`)
+      if (existingWindow) {
+        const killed = killTmuxWindow(sessionName, String(existingWindow.index))
+        if (!killed.ok) {
+          failed.push({
+            slug: target.slug,
+            route: formatRoute(target.runtimeName, target.presetName),
+            error: killed.error || "failed to respawn existing window",
+          })
+          continue
+        }
+        targetRespawned = true
+        respawned.push(`${target.slug} (${formatRoute(target.runtimeName, target.presetName)})`)
+      }
+    }
+
     const result = openAgentWindow(
       sessionName,
       root,
       target.runtimeName,
       target.presetName,
       target.slug,
-      extraArgs,
+      targetArgs,
     )
     if (result.ok && result.created) {
-      created.push(`${target.slug} (${formatRoute(target.runtimeName, target.presetName)})`)
+      if (!targetRespawned) {
+        created.push(`${target.slug} (${formatRoute(target.runtimeName, target.presetName)})`)
+      }
     } else if (result.ok) {
       existing.push(`${target.slug} (${formatRoute(target.runtimeName, target.presetName)})`)
     } else {
@@ -386,6 +421,9 @@ async function spawnAgentWindows(
   if (!quiet && created.length > 0) {
     console.log(`Launched ${created.length} agent window(s): ${created.join(", ")}`)
   }
+  if (!quiet && respawned.length > 0) {
+    console.log(`Respawned ${respawned.length} agent window(s): ${respawned.join(", ")}`)
+  }
   if (!quiet && existing.length > 0) {
     console.log(`Already running (${existing.length}): ${existing.join(", ")}`)
   }
@@ -399,7 +437,7 @@ async function spawnAgentWindows(
   const windowsAfterLaunch = listTmuxWindows(sessionName)
   const hasAgentWindows = windowsAfterLaunch.some((window) => window.name.startsWith("agent:"))
   const controlWindow = windowsAfterLaunch.find((window) => window.name === "control")
-  if (hasAgentWindows && controlWindow && windowsAfterLaunch.length > 1) {
+  if (cleanupLegacyControlWindow && hasAgentWindows && controlWindow && windowsAfterLaunch.length > 1) {
     const killed = killTmuxWindow(sessionName, String(controlWindow.index))
     if (!killed.ok && !quiet) {
       console.error(killed.error || "Failed to remove legacy control window.")
@@ -437,7 +475,9 @@ USAGE:
   termlings spawn <runtime> <preset>        Run a specific preset
   termlings spawn --all [runtime] [preset]  Spawn all agents (requires tmux)
   termlings spawn --all --detached          Spawn all agents without attaching tmux
+  termlings spawn --all --respawn           Restart all running agent windows, then launch
   termlings spawn --agent=<slug> [runtime] [preset]  Launch one specific agent
+  termlings spawn --agent=<slug> --respawn  Restart this agent window if running
   termlings spawn --inline ...              Run one agent in current terminal
 
 EXAMPLES:
@@ -451,7 +491,10 @@ NOTES:
   - Run this command in another terminal while \`termlings\` is open.
   - Batch launch (\`--all\`) uses tmux windows named agent:<slug>.
   - Agents run as normal PTY terminal sessions that you can inspect/interact with at any time.
+  - Inside agent sessions, requires \`manage_agents: true\` in your SOUL frontmatter.
   - If runtime/preset is omitted for batch launch, \`.termlings/spawn.json\` \`default\` + \`agents.<slug>\` routing is used.
+  - Use \`--respawn\` to restart already-running tmux agent windows after SOUL/config changes.
+  - For Codex routes, \`--respawn\` appends \`resume --last\` unless you pass explicit resume args.
   - \`--all\` prompts for confirmation when dangerous launch flags are detected.
   - Use \`--dangerous-skip-confirmation\` only for trusted automation.
   - Edit \`.termlings/spawn.json\` to change default runtime/preset and agent launch commands.
@@ -459,12 +502,16 @@ NOTES:
     return
   }
 
+  const { ensureAgentCanManageAgents } = await import("../agents/permissions.js")
+  ensureAgentCanManageAgents("termlings spawn")
+
   const config = loadSpawnConfig() || DEFAULT_CONFIG
   const runtimes = Object.keys(config.runtimes)
   let spawnAll = flags.has("all")
   const quiet = flags.has("quiet")
   const detached = flags.has("detached")
   const inline = flags.has("inline")
+  const respawn = flags.has("respawn")
   const specificAgent = (opts.agent || "").trim()
 
   let runtimeName = positional[1]?.trim()
@@ -538,6 +585,11 @@ NOTES:
   }
 
   const hasBatchTarget = spawnAll || specificAgent.length > 0
+
+  if (respawn && !hasBatchTarget) {
+    console.error("`--respawn` requires `--all` or `--agent=<slug>`.")
+    process.exit(1)
+  }
 
   if (!hasBatchTarget) {
     if (!presetName) {
@@ -620,6 +672,10 @@ NOTES:
   }
 
   if (inline) {
+    if (respawn) {
+      console.error("`--respawn` is not supported with `--inline`.")
+      process.exit(1)
+    }
     if (launchTargets.length !== 1) {
       console.error("`--inline` requires exactly one agent (use --agent=<slug>).")
       process.exit(1)
@@ -634,5 +690,5 @@ NOTES:
     return
   }
 
-  await spawnAgentWindows(launchTargets, extraArgs, quiet, !detached)
+  await spawnAgentWindows(launchTargets, extraArgs, quiet, !detached, spawnAll, respawn)
 }

@@ -10,6 +10,7 @@ Default values are optimized for human-in-the-loop operations:
 - Workspace-scoped persistent profile (one profile per project)
 - Shared browser instance for all agents (coordination via tabs)
 - Operator takeover is always possible in the visible browser
+- In-page avatar cursor auto-reinjection watchdog while browser is running
 
 This default is ideal for login-heavy workflows, approvals, and assisted browsing.
 
@@ -106,10 +107,15 @@ termlings browser screenshot [--tab <index>] [--out /tmp/page.png]
 termlings browser extract [--tab <index>]
 termlings browser type "text" [--tab <index>]
 termlings browser click "button.submit" [--tab <index>]
+termlings browser focus "input[name='email']" [--tab <index>]
+termlings browser cursor [--tab <index>]
 termlings browser cookies list [--tab <index>]
 termlings browser check-login [--tab <index>]
 termlings browser request-help "Need manual login"
 ```
+
+`termlings browser click ...` automatically animates the in-page avatar cursor toward the target before issuing the click (single command, no separate cursor call needed).
+`termlings browser focus ...` and selector-based `termlings browser type ...` use the same pre-action cursor movement.
 
 ## Tabs and Shared Access
 
@@ -139,7 +145,10 @@ Example:
   "binaryPath": "google-chrome",
   "autoStart": false,
   "profilePath": "/Users/you/.termlings/chrome-profiles/myproj-abc123def0",
-  "timeout": 30000
+  "timeout": 30000,
+  "startupTimeoutMs": 30000,
+  "startupAttempts": 3,
+  "startupPollMs": 250
 }
 ```
 
@@ -149,6 +158,18 @@ Notes:
 - `binaryPath`: Chrome/Chromium binary (override if auto-detect fails)
 - `profilePath`: workspace profile path (persisted auth/cookies)
 - `timeout`: command timeout for wrapped browser operations
+- `startupTimeoutMs`: max wait per launch attempt for CDP readiness
+- `startupAttempts`: how many launch attempts before giving up
+- `startupPollMs`: polling interval while waiting for CDP readiness
+
+Environment toggles:
+
+- `TERMLINGS_BROWSER_INPAGE_CURSOR=true|false`: enable/disable in-page avatar cursor overlay injection (default: `true`)
+
+TUI integration:
+
+- `All activity` includes browser visit events (e.g. `<agent> visited <url>`).
+- In `Settings`, toggle `Browser activity in feed` to hide/show those events.
 
 ## Workspace Files
 
@@ -183,6 +204,14 @@ Set explicit Chrome path in `.termlings/browser/config.json`:
 ```json
 { "binaryPath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" }
 ```
+
+If startup still fails, check diagnostics:
+
+```bash
+tail -n 50 .termlings/browser/startup-errors.jsonl
+```
+
+Each failed attempt logs pid/port/profile/error details to help identify profile lock issues and slow startup timing.
 
 ### Port already in use
 

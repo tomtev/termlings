@@ -52,6 +52,7 @@ EXAMPLES:
     --dna 1a2b3c4
 
 NOTES:
+  - Inside agent sessions, requires \`manage_agents: true\` in your SOUL frontmatter.
   - If --dna is omitted, DNA is generated randomly.
   - If --role is omitted, role = purpose.
   - If --name is omitted, display name is derived from slug.
@@ -69,6 +70,9 @@ NEXT STEPS:
 `);
     return;
   }
+
+  const { ensureAgentCanManageAgents } = await import("../agents/permissions.js");
+  ensureAgentCanManageAgents("termlings create");
 
   const { runCreate } = await import("../create.js");
   const reportsTo = opts["reports-to"] || opts["reports_to"];

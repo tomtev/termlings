@@ -40,6 +40,7 @@ export type AvatarSizeMode = "large" | "small" | "tiny"
 
 export interface WorkspaceSettings {
   avatarSize?: AvatarSizeMode
+  showBrowserActivity?: boolean
 }
 
 interface WorkspaceMeta {
@@ -105,6 +106,9 @@ function sanitizeWorkspaceSettings(raw: unknown): WorkspaceSettings {
   const out: WorkspaceSettings = {}
   if (isValidAvatarSize(input.avatarSize)) {
     out.avatarSize = input.avatarSize
+  }
+  if (typeof input.showBrowserActivity === "boolean") {
+    out.showBrowserActivity = input.showBrowserActivity
   }
   return out
 }

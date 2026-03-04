@@ -8,6 +8,9 @@ export interface BrowserConfig {
   autoStart: boolean
   profilePath: string
   timeout: number
+  startupTimeoutMs: number
+  startupAttempts: number
+  startupPollMs: number
 }
 
 export interface ProcessState {

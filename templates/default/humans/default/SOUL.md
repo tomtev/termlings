@@ -1,47 +1,37 @@
 ---
-name: Founder
-title: Founder & CEO
-role: Lead the team, make strategic decisions, and manage environment credentials
-team: Leadership
+name: Owner
+title: Owner
+role: Own strategic direction, approvals, and credentials for an autonomous agent team
+team: Ownership
 ---
 
 ## Purpose
 
-Lead the team, make strategic decisions, and ensure the company succeeds.
+Provide strategic direction while the agent team executes autonomously.
 
 ## Responsibilities
 
-- Define company vision and strategy
-- Make final decisions on priorities and direction
-- Unblock the team when they're stuck
-- Provide feedback and guidance to team members
-- Monitor progress and adjust as needed
-- Add and manage environment credentials and secrets
-- Grant team members access to resources (databases, APIs, services)
-- Handle manual tasks that require human judgment or authentication
-- Respond to team blockers and requests for help
+- Set strategic intent and decision guardrails
+- Approve key, irreversible company-level decisions
+- Provide environment keys, credentials, and external access when needed
+- Review concise escalations and decide quickly
+- Keep the team unblocked on owner-only dependencies
 
 ## Owns
 
-- Company direction and strategy
-- Final decision authority
-- Team health and morale
-- Overall project success
-- Environment setup and credentials
-- Resource access and permissions
+- Company ownership and strategic direction
+- Final approval on owner-level decisions
+- Credentials, secrets, and access control
+- Legal/financial decisions that exceed agent authority
 
-## Context
+## Escalation Contract
 
-As the founder, you are the ultimate decision-maker and orchestrator of the team's work. While agents work autonomously on tasks, you stay informed, remove blockers, and ensure the team is aligned on goals. You're responsible for maintaining the technical infrastructure (credentials, access, secrets) that agents need to operate.
+Agents should contact `human:default` only when one of these is true:
+- Environment keys, credentials, access, or authentication are required.
+- A key owner decision is needed (major strategic pivot, high-risk legal/financial commitment, or irreversible company-level choice).
+
+Escalation messages should include concise context, options with tradeoffs, and a recommended action.
 
 ---
 
-You are the operator and owner of this Termlings workspace. Team members will message you when they need:
-- **Strategic decisions** — Which direction to go, tradeoffs, prioritization
-- **Environment setup** — API keys, database credentials, service tokens
-- **Resource access** — Permissions for external services, databases, APIs
-- **Help unblocking** — When they're stuck waiting on external dependencies
-- **Final approval** — Sign-off on important decisions and deliverables
-- **Manual tasks** — Actions requiring human authentication or judgment
-
-Always respond promptly to team messages. Use `termlings message human:default "..."` when agents message you, and `termlings message agent:<slug> "..."` to message team members.
+You are the owner of this Termlings workspace. Keep interruptions minimal, decisions clear, and escalations fast to unblock autonomous execution.

@@ -7,6 +7,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readlinkSync,
   readdirSync,
   statSync,
   unlinkSync,
@@ -121,6 +122,31 @@ export function getProcessStatePath(): string {
   return join(getTermlingsBrowserDir(), "process.json")
 }
 
+interface CursorWatcherState {
+  pid: number | null
+  port: number
+  status: "running" | "stopped"
+  startedAt: number | null
+}
+
+function getCursorWatcherStatePath(): string {
+  return join(getTermlingsBrowserDir(), "cursor-watcher.json")
+}
+
+function readCursorWatcherState(): CursorWatcherState | null {
+  const path = getCursorWatcherStatePath()
+  if (!existsSync(path)) return null
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as CursorWatcherState
+  } catch {
+    return null
+  }
+}
+
+function writeCursorWatcherState(state: CursorWatcherState): void {
+  writeFileSync(getCursorWatcherStatePath(), JSON.stringify(state, null, 2) + "\n")
+}
+
 /**
  * Get browser history directory (.termlings/browser/history)
  */
@@ -167,6 +193,9 @@ export const DEFAULT_BROWSER_CONFIG: BrowserConfig = {
   autoStart: false,
   profilePath: getBrowserProfileDir(),
   timeout: 30000,
+  startupTimeoutMs: 30000,
+  startupAttempts: 3,
+  startupPollMs: 250,
 }
 
 /**
@@ -255,6 +284,178 @@ async function fetchCdpVersion(port: number, timeoutMs: number = 2000): Promise<
     throw new Error(`CDP endpoint returned ${response.status}`)
   }
   return (await response.json()) as Record<string, unknown>
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function clampInt(input: unknown, fallback: number, min: number, max: number): number {
+  const value = typeof input === "number" ? input : Number.parseInt(String(input ?? ""), 10)
+  if (!Number.isFinite(value)) return fallback
+  return Math.max(min, Math.min(max, Math.round(value)))
+}
+
+function getStartupConfig(config: BrowserConfig): { timeoutMs: number; attempts: number; pollMs: number } {
+  const timeoutFromConfig = config.startupTimeoutMs ?? config.timeout
+  return {
+    timeoutMs: clampInt(timeoutFromConfig, 30000, 3000, 120000),
+    attempts: clampInt(config.startupAttempts, 3, 1, 8),
+    pollMs: clampInt(config.startupPollMs, 250, 80, 2000),
+  }
+}
+
+function buildStoppedProcessState(port: number, profilePath?: string): ProcessState {
+  return {
+    pid: null,
+    port,
+    status: "stopped",
+    startedAt: null,
+    profilePath,
+    mode: "cdp",
+  }
+}
+
+export function getBrowserStartupErrorLogPath(): string {
+  return join(getTermlingsBrowserDir(), "startup-errors.jsonl")
+}
+
+export function parseSingletonLockPid(lockTarget: string): number | null {
+  const match = lockTarget.match(/-(\d+)$/)
+  if (!match) return null
+  const pid = Number.parseInt(match[1]!, 10)
+  if (!Number.isFinite(pid) || pid <= 0) return null
+  return pid
+}
+
+function clearProfileSingletonLocks(profilePath: string): void {
+  for (const fileName of ["SingletonLock", "SingletonSocket", "SingletonCookie"]) {
+    const lockPath = join(profilePath, fileName)
+    if (!existsSync(lockPath)) continue
+    try {
+      unlinkSync(lockPath)
+    } catch {
+      // ignore best-effort cleanup
+    }
+  }
+}
+
+function cleanupStaleProfileLocks(profilePath: string): void {
+  const singletonLockPath = join(profilePath, "SingletonLock")
+  if (!existsSync(singletonLockPath)) return
+
+  let stale = false
+  try {
+    const target = readlinkSync(singletonLockPath)
+    const pid = parseSingletonLockPid(target)
+    if (pid && !isProcessAlive(pid)) {
+      stale = true
+    }
+  } catch {
+    // If we cannot parse lock ownership safely, leave it untouched.
+  }
+
+  if (stale) {
+    clearProfileSingletonLocks(profilePath)
+  }
+}
+
+function listPidsUsingProfile(profilePath: string): number[] {
+  const normalized = profilePath.trim()
+  if (!normalized) return []
+
+  try {
+    const proc = spawnSync("ps", ["-ax", "-o", "pid=,command="], {
+      encoding: "utf8",
+      maxBuffer: 20 * 1024 * 1024,
+    })
+    if ((proc.status ?? 1) !== 0 || !proc.stdout) return []
+
+    const out = String(proc.stdout)
+    const needle = `--user-data-dir=${normalized}`
+    const pids = new Set<number>()
+
+    for (const rawLine of out.split("\n")) {
+      const line = rawLine.trim()
+      if (!line || !line.includes(needle)) continue
+      const match = line.match(/^(\d+)\s+/)
+      if (!match) continue
+      const pid = Number.parseInt(match[1] || "", 10)
+      if (!Number.isFinite(pid) || pid <= 0 || pid === process.pid) continue
+      pids.add(pid)
+    }
+
+    return Array.from(pids)
+  } catch {
+    return []
+  }
+}
+
+async function terminateProcessesUsingProfile(profilePath: string): Promise<void> {
+  const pids = listPidsUsingProfile(profilePath)
+  if (pids.length <= 0) return
+  for (const pid of pids) {
+    await terminateProcess(pid, 1200)
+  }
+}
+
+async function terminateProcess(pid: number, graceMs: number = 2500): Promise<void> {
+  try {
+    process.kill(pid, "SIGTERM")
+  } catch {
+    // ignore
+  }
+
+  const startedWait = Date.now()
+  while (Date.now() - startedWait < graceMs) {
+    if (!isProcessAlive(pid)) return
+    await sleep(120)
+  }
+
+  if (isProcessAlive(pid)) {
+    try {
+      process.kill(pid, "SIGKILL")
+    } catch {
+      // ignore
+    }
+  }
+}
+
+async function waitForCdpReady(
+  pid: number,
+  port: number,
+  timeoutMs: number,
+  pollMs: number,
+): Promise<Record<string, unknown>> {
+  const startedAt = Date.now()
+  let lastError: unknown = null
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (!isProcessAlive(pid)) {
+      throw new Error(`Chrome process exited before CDP was ready (pid ${pid}).`)
+    }
+    try {
+      return await fetchCdpVersion(port, Math.min(2000, pollMs * 4))
+    } catch (error) {
+      lastError = error
+    }
+    await sleep(pollMs)
+  }
+
+  const detail = lastError instanceof Error
+    ? lastError.message
+    : lastError !== null
+      ? String(lastError)
+      : "timed out"
+  throw new Error(`Timed out waiting for CDP on port ${port} after ${timeoutMs}ms (${detail})`)
+}
+
+function appendStartupFailureLog(entry: Record<string, unknown>): void {
+  try {
+    appendFileSync(getBrowserStartupErrorLogPath(), `${JSON.stringify(entry)}\n`, "utf8")
+  } catch {
+    // ignore logging failures
+  }
 }
 
 /**
@@ -369,6 +570,72 @@ export async function initializeBrowserDirs(): Promise<void> {
   getOrCreateProfileReference()
 }
 
+export async function stopInPageCursorWatcher(): Promise<void> {
+  const state = readCursorWatcherState()
+  if (!state || !state.pid) return
+  await terminateProcess(state.pid, 1200)
+  writeCursorWatcherState({
+    pid: null,
+    port: state.port,
+    status: "stopped",
+    startedAt: null,
+  })
+}
+
+export async function ensureInPageCursorWatcher(
+  port: number,
+  options: { intervalMs?: number } = {},
+): Promise<void> {
+  const disabled = (process.env.TERMLINGS_BROWSER_INPAGE_CURSOR || "").trim().toLowerCase()
+  if (disabled === "0" || disabled === "false" || disabled === "off" || disabled === "no") {
+    await stopInPageCursorWatcher()
+    return
+  }
+
+  const existing = readCursorWatcherState()
+  if (existing && existing.status === "running" && existing.pid && isProcessAlive(existing.pid) && existing.port === port) {
+    return
+  }
+  if (existing && existing.pid && isProcessAlive(existing.pid)) {
+    await terminateProcess(existing.pid, 800)
+  }
+
+  const spawn = (await import("bun")).spawn
+  const intervalMs = Math.max(80, Math.min(2000, Math.round(options.intervalMs ?? 240)))
+  const execPath = process.execPath || "bun"
+  const cliPath = process.argv[1] || join(process.cwd(), "bin", "termlings.js")
+  const proc = spawn(
+    [
+      execPath,
+      cliPath,
+      "browser",
+      "__cursor-watch",
+      "--port",
+      String(port),
+      "--interval-ms",
+      String(intervalMs),
+    ],
+    {
+      detached: true,
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      env: {
+        ...process.env,
+        TERMLINGS_BROWSER_CURSOR_WATCHER: "1",
+      },
+    },
+  )
+  proc.unref()
+
+  writeCursorWatcherState({
+    pid: proc.pid,
+    port,
+    status: "running",
+    startedAt: Date.now(),
+  })
+}
+
 /**
  * Start headed Chrome with CDP enabled for this workspace.
  */
@@ -376,6 +643,7 @@ export async function startBrowser(options: { headless?: boolean } = {}): Promis
   await initializeBrowserDirs()
 
   const config = getBrowserConfig()
+  const startupConfig = getStartupConfig(config)
 
   const existing = readProcessState()
   if (existing && existing.status === "running" && existing.pid !== null) {
@@ -393,8 +661,12 @@ export async function startBrowser(options: { headless?: boolean } = {}): Promis
         })
         return { pid: existing.pid, port: existing.port }
       } catch {
-        // stale endpoint; restart below
+        // Stale process state; terminate the stale process before restart.
+        await terminateProcess(existing.pid)
+        updateProcessState(buildStoppedProcessState(existing.port, existing.profilePath || config.profilePath))
       }
+    } else {
+      updateProcessState(buildStoppedProcessState(existing.port, existing.profilePath || config.profilePath))
     }
   }
 
@@ -403,105 +675,116 @@ export async function startBrowser(options: { headless?: boolean } = {}): Promis
   }
 
   const spawn = (await import("bun")).spawn
-  const availablePort = await findAvailablePort(config.port)
   const profilePath = config.profilePath && config.profilePath.trim().length > 0
     ? config.profilePath
     : getBrowserProfileDir()
   mkdirSync(profilePath, { recursive: true })
+  await terminateProcessesUsingProfile(profilePath)
+  cleanupStaleProfileLocks(profilePath)
 
   const binary = resolveChromeBinary(config.binaryPath)
   const headless = options.headless === true
-  const launchArgs = [
-    `--remote-debugging-port=${availablePort}`,
-    `--user-data-dir=${profilePath}`,
-    "--profile-directory=Default",
-    "--no-first-run",
-    "--disable-search-engine-choice-screen",
-    "--no-default-browser-check",
-    ...(headless ? ["--headless=new", "--disable-gpu", "--hide-scrollbars"] : []),
-    "about:blank",
-  ]
 
-  const proc = spawn([binary, ...launchArgs], {
-    detached: true,
-    stdin: "ignore",
-    stdout: "ignore",
-    stderr: "ignore",
-    env: {
-      ...process.env,
-    },
-  })
-  proc.unref()
+  const failures: Array<Record<string, unknown>> = []
+  for (let attempt = 1; attempt <= startupConfig.attempts; attempt++) {
+    const portBase = config.port + ((attempt - 1) * 20)
+    const availablePort = await findAvailablePort(portBase)
+    const launchArgs = [
+      `--remote-debugging-port=${availablePort}`,
+      `--user-data-dir=${profilePath}`,
+      "--profile-directory=Default",
+      "--no-first-run",
+      "--disable-search-engine-choice-screen",
+      "--no-default-browser-check",
+      ...(headless ? ["--headless=new", "--disable-gpu", "--hide-scrollbars"] : []),
+      "about:blank",
+    ]
 
-  const pid = proc.pid
+    const proc = spawn([binary, ...launchArgs], {
+      detached: true,
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      env: {
+        ...process.env,
+      },
+    })
+    proc.unref()
 
-  let cdpInfo: Record<string, unknown> | null = null
-  for (let i = 0; i < 30; i++) {
+    const pid = proc.pid
+
     try {
-      cdpInfo = await fetchCdpVersion(availablePort, 1000)
-      break
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 200))
+      const cdpInfo = await waitForCdpReady(pid, availablePort, startupConfig.timeoutMs, startupConfig.pollMs)
+      updateProcessState({
+        pid,
+        port: availablePort,
+        status: "running",
+        startedAt: Date.now(),
+        url: `http://127.0.0.1:${availablePort}`,
+        cdpWsUrl: typeof cdpInfo.webSocketDebuggerUrl === "string" ? cdpInfo.webSocketDebuggerUrl : undefined,
+        profilePath,
+        mode: "cdp",
+      })
+
+      updateProfileReference()
+
+      return { pid, port: availablePort }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const entry: Record<string, unknown> = {
+        ts: Date.now(),
+        attempt,
+        attempts: startupConfig.attempts,
+        timeoutMs: startupConfig.timeoutMs,
+        pollMs: startupConfig.pollMs,
+        pid,
+        port: availablePort,
+        profilePath,
+        binary,
+        headless,
+        error: errorMessage,
+      }
+      failures.push(entry)
+      appendStartupFailureLog(entry)
+
+      await terminateProcess(pid)
+      cleanupStaleProfileLocks(profilePath)
+
+      if (attempt < startupConfig.attempts) {
+        await sleep(Math.min(1000, 200 * attempt))
+      }
     }
   }
 
-  if (!cdpInfo) {
-    throw new Error(`Chrome CDP did not become ready on port ${availablePort}.`)
-  }
-
-  updateProcessState({
-    pid,
-    port: availablePort,
-    status: "running",
-    startedAt: Date.now(),
-    url: `http://127.0.0.1:${availablePort}`,
-    cdpWsUrl: typeof cdpInfo.webSocketDebuggerUrl === "string" ? cdpInfo.webSocketDebuggerUrl : undefined,
-    profilePath,
-    mode: "cdp",
-  })
-
-  updateProfileReference()
-
-  return { pid, port: availablePort }
+  updateProcessState(buildStoppedProcessState(config.port, profilePath))
+  const lastFailure = failures[failures.length - 1]
+  const lastError = typeof lastFailure?.error === "string" ? lastFailure.error : "unknown startup error"
+  throw new Error(
+    `Chrome CDP did not become ready after ${startupConfig.attempts} attempt(s). `
+    + `Last error: ${lastError}. `
+    + `See ${getBrowserStartupErrorLogPath()} for diagnostics.`
+  )
 }
 
 /**
  * Stop Chrome CDP browser process
  */
 export async function stopBrowser(): Promise<void> {
+  await stopInPageCursorWatcher()
+
   const state = readProcessState()
   if (!state || !state.pid) return
 
   const pid = state.pid
+  const profilePath = state.profilePath
 
-  try {
-    process.kill(pid, "SIGTERM")
-  } catch {
-    // ignore
+  await terminateProcess(pid, 3000)
+
+  if (profilePath) {
+    cleanupStaleProfileLocks(profilePath)
   }
 
-  const startedWait = Date.now()
-  while (Date.now() - startedWait < 3000) {
-    if (!isProcessAlive(pid)) break
-    await new Promise((resolve) => setTimeout(resolve, 120))
-  }
-
-  if (isProcessAlive(pid)) {
-    try {
-      process.kill(pid, "SIGKILL")
-    } catch {
-      // ignore
-    }
-  }
-
-  updateProcessState({
-    pid: null,
-    port: state.port,
-    status: "stopped",
-    startedAt: null,
-    profilePath: state.profilePath,
-    mode: "cdp",
-  })
+  updateProcessState(buildStoppedProcessState(state.port, state.profilePath))
 }
 
 /**

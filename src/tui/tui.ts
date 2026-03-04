@@ -1,5 +1,5 @@
 import { discoverLocalAgents } from "../agents/discover.js"
-import { existsSync, readFileSync } from "fs"
+import { existsSync, readFileSync, statSync } from "fs"
 import { getAllCalendarEvents, type CalendarEvent, type CalendarRecurrence } from "../engine/calendar.js"
 import { writeMessages } from "../engine/ipc.js"
 import { getAllTasks, type Task, type TaskPriority, type TaskStatus } from "../engine/tasks.js"
@@ -75,6 +75,7 @@ import {
   padAnsi,
   panelBodyLine,
   statusIcon,
+  truncateAnsi,
   truncatePlain,
   visibleLength,
   wrapPlain,
@@ -92,11 +93,27 @@ const PASTE_COMPACT_MULTILINE_MIN_CHARS = 300
 const PASTE_COMPACT_MULTILINE_MIN_LINES = 4
 const DRAFT_BLOCK_TOKEN_PATTERN = /(?:\[Image #\d+\]|\[Pasted Content(?: #\d+)? \d+ chars\])$/
 const DRAFT_BLOCK_TOKEN_GLOBAL = /\[Image #\d+\]|\[Pasted Content(?: #\d+)? \d+ chars\]/g
+const FG_RUNTIME_CLAUDE = "\x1b[38;2;217;119;87m"
+const FG_RUNTIME_CODEX = "\x1b[38;2;148;163;184m"
+const FG_RUNTIME_PI = "\x1b[38;5;114m"
+const BROWSER_ACTIVITY_MAX_MESSAGES = 200
+const BROWSER_ACTIVITY_CACHE_MULTIPLIER = 3
 
 interface SessionTypingState {
   typing: boolean
   updatedAt: number
   source?: "terminal"
+}
+
+interface BrowserActivityEntry {
+  ts: number
+  sessionId?: string
+  agentName?: string
+  agentSlug?: string
+  agentDna?: string
+  command?: string
+  args?: unknown[]
+  result?: "success" | "error" | "timeout"
 }
 
 interface WorkspaceTuiOptions {
@@ -186,6 +203,10 @@ class WorkspaceTui {
   private settingsSelectionIndex = 0
 
   private avatarSizeMode: "large" | "small" | "tiny" = "small"
+  private showBrowserActivityInFeed = true
+  private browserActivityCache: WorkspaceMessage[] = []
+  private browserActivityCacheMtimeMs = 0
+  private browserActivityCacheSize = -1
   private avatarVisibleAgentCount = 0
   private avatarTotalAgentCount = 0
   private renderScheduled = false
@@ -297,11 +318,7 @@ class WorkspaceTui {
     }, HEARTBEAT_MS)
 
     this.animationTimer = setInterval(() => {
-      if (this.shouldShowComposerCursor()) {
-        this.cursorBlinkVisible = !this.cursorBlinkVisible
-      } else {
-        this.cursorBlinkVisible = true
-      }
+      this.cursorBlinkVisible = true
       this.render()
     }, UI_ANIMATION_TICK_MS)
 
@@ -1195,17 +1212,24 @@ class WorkspaceTui {
     }
   }
 
-  private settingsItems(): Array<{ key: "avatar-size"; label: string; value: string; hint: string }> {
+  private settingsItems(): Array<{ key: "avatar-size" | "browser-activity"; label: string; value: string; hint: string }> {
     const avatarSizeLabel =
       this.avatarSizeMode === "large" ? "Large"
       : this.avatarSizeMode === "tiny" ? "Tiny"
       : "Small"
+    const browserActivityLabel = this.showBrowserActivityInFeed ? "On" : "Off"
     return [
       {
         key: "avatar-size",
         label: "Avatar size",
         value: avatarSizeLabel,
         hint: "Large = full avatar, Small = compact avatar (default), Tiny = color square only.",
+      },
+      {
+        key: "browser-activity",
+        label: "Browser activity in feed",
+        value: browserActivityLabel,
+        hint: "Show browser visit events in All activity.",
       },
     ]
   }
@@ -1215,6 +1239,11 @@ class WorkspaceTui {
       const settings = readWorkspaceSettings(this.root)
       if (settings.avatarSize === "large" || settings.avatarSize === "small" || settings.avatarSize === "tiny") {
         this.avatarSizeMode = settings.avatarSize
+      }
+      if (typeof settings.showBrowserActivity === "boolean") {
+        this.showBrowserActivityInFeed = settings.showBrowserActivity
+      } else {
+        this.showBrowserActivityInFeed = true
       }
     } catch {}
   }
@@ -1246,6 +1275,23 @@ class WorkspaceTui {
         updateWorkspaceSettings({ avatarSize: this.avatarSizeMode }, this.root)
       } catch {}
       this.statusMessage = `Avatar size set to ${this.avatarSizeMode}.`
+      return
+    }
+
+    if (selected.key === "browser-activity") {
+      this.showBrowserActivityInFeed = !this.showBrowserActivityInFeed
+      if (!this.showBrowserActivityInFeed) {
+        this.browserActivityCache = []
+        this.browserActivityCacheMtimeMs = 0
+        this.browserActivityCacheSize = -1
+      }
+      try {
+        updateWorkspaceSettings({ showBrowserActivity: this.showBrowserActivityInFeed }, this.root)
+      } catch {}
+      this.statusMessage = this.showBrowserActivityInFeed
+        ? "Browser activity is now visible in All activity."
+        : "Browser activity is now hidden from All activity."
+      void this.reloadSnapshot().then(() => this.render())
     }
   }
 
@@ -1631,6 +1677,114 @@ class WorkspaceTui {
     return { delivered, record }
   }
 
+  private browserActivityHistoryPath(): string {
+    return join(this.root, ".termlings", "browser", "history", "all.jsonl")
+  }
+
+  private browserActivityEntryToMessage(entry: BrowserActivityEntry, lineNumber: number): WorkspaceMessage | null {
+    if (!entry || typeof entry !== "object") return null
+    if (entry.result !== "success") return null
+    if (typeof entry.ts !== "number" || !Number.isFinite(entry.ts)) return null
+    const command = typeof entry.command === "string" ? entry.command : ""
+    if (!command) return null
+
+    let text: string | null = null
+    if (command === "navigate") {
+      const url = Array.isArray(entry.args)
+        ? entry.args.find((arg) => typeof arg === "string" && arg.trim().length > 0)
+        : null
+      if (typeof url === "string") {
+        text = `visited ${url}`
+      }
+    } else if (command === "patterns-execute") {
+      const args = Array.isArray(entry.args) ? entry.args : []
+      const patternId = typeof args[0] === "string" ? args[0] : "pattern"
+      const url = typeof args[1] === "string" ? args[1] : undefined
+      if (url) {
+        text = `visited ${url} via pattern ${patternId}`
+      }
+    }
+    if (!text) return null
+
+    const fromName = (() => {
+      const direct = (entry.agentName || "").trim()
+      if (direct.length > 0) return direct
+
+      const bySlug = (entry.agentSlug || "").trim()
+      if (bySlug.length > 0) {
+        const thread = this.snapshot.dmThreads.find((candidate) => candidate.slug === bySlug)
+        if (thread?.label) return thread.label
+        return bySlug
+      }
+
+      const byDna = (entry.agentDna || "").trim()
+      if (byDna.length > 0) {
+        const thread = this.snapshot.dmThreads.find((candidate) => candidate.dna === byDna)
+        if (thread?.label) return thread.label
+      }
+
+      return "Browser"
+    })()
+
+    const from = (entry.sessionId || "").trim() || `browser:${(entry.agentSlug || entry.agentDna || "unknown").toString()}`
+    const fromDna = (entry.agentDna || "").trim() || this.resolveDnaByName(fromName)
+    return {
+      id: `browser-${entry.ts}-${lineNumber}-${command}`,
+      kind: "system",
+      from,
+      fromName,
+      ...(fromDna ? { fromDna } : {}),
+      text,
+      ts: entry.ts,
+    }
+  }
+
+  private readBrowserActivityMessages(limit = BROWSER_ACTIVITY_MAX_MESSAGES): WorkspaceMessage[] {
+    if (!this.showBrowserActivityInFeed) return []
+
+    const historyPath = this.browserActivityHistoryPath()
+    if (!existsSync(historyPath)) {
+      this.browserActivityCache = []
+      this.browserActivityCacheMtimeMs = 0
+      this.browserActivityCacheSize = -1
+      return []
+    }
+
+    try {
+      const stats = statSync(historyPath)
+      if (
+        this.browserActivityCache.length > 0
+        && this.browserActivityCacheMtimeMs === stats.mtimeMs
+        && this.browserActivityCacheSize === stats.size
+      ) {
+        return this.browserActivityCache.slice(-limit)
+      }
+
+      const raw = readFileSync(historyPath, "utf8")
+      const lines = raw.split("\n")
+      const parsed: WorkspaceMessage[] = []
+      for (let index = 0; index < lines.length; index++) {
+        const line = lines[index]?.trim()
+        if (!line) continue
+        try {
+          const entry = JSON.parse(line) as BrowserActivityEntry
+          const mapped = this.browserActivityEntryToMessage(entry, index)
+          if (mapped) parsed.push(mapped)
+        } catch {
+          // Ignore malformed line.
+        }
+      }
+
+      const cacheLimit = Math.max(limit, BROWSER_ACTIVITY_MAX_MESSAGES) * BROWSER_ACTIVITY_CACHE_MULTIPLIER
+      this.browserActivityCache = parsed.slice(-cacheLimit)
+      this.browserActivityCacheMtimeMs = stats.mtimeMs
+      this.browserActivityCacheSize = stats.size
+      return this.browserActivityCache.slice(-limit)
+    } catch {
+      return this.browserActivityCache.slice(-limit)
+    }
+  }
+
   private async reloadSnapshot(): Promise<void> {
     if (this.refreshing) return
     this.refreshing = true
@@ -1655,7 +1809,14 @@ class WorkspaceTui {
         }
       }
 
-      const messages = readWorkspaceMessages({ limit: 1000 }, this.root)
+      const workspaceMessages = readWorkspaceMessages({ limit: 1000 }, this.root)
+      const browserActivityMessages = this.readBrowserActivityMessages()
+      const messages = [...workspaceMessages, ...browserActivityMessages]
+        .sort((a, b) => {
+          if (a.ts !== b.ts) return a.ts - b.ts
+          return a.id.localeCompare(b.id)
+        })
+        .slice(-1000)
       const sessionDnaById = new Map(sessions.map((session) => [session.sessionId, session.dna]))
       const typingBySessionId = this.collectSessionTypingBySession(sessions, messages)
       const nextMessageIds = new Set(messages.map((message) => message.id))
@@ -2242,6 +2403,33 @@ class WorkspaceTui {
     }
   }
 
+  private runtimeKindFromLabel(label?: string): "claude" | "codex" | "pi" | "other" | undefined {
+    const normalized = (label || "").trim().toLowerCase()
+    if (!normalized) return undefined
+    if (normalized.includes("claude")) return "claude"
+    if (normalized.includes("codex")) return "codex"
+    if (normalized === "pi" || normalized.startsWith("pi ")) return "pi"
+    return "other"
+  }
+
+  private runtimeLabelForDisplay(
+    runtimeKind: "claude" | "codex" | "pi" | "other" | undefined,
+    rawLabel?: string,
+  ): string | undefined {
+    if (runtimeKind === "claude") return "Claude"
+    if (runtimeKind === "codex") return "Codex"
+    if (runtimeKind === "pi") return "Pi"
+    const trimmed = (rawLabel || "").trim()
+    return trimmed.length > 0 ? trimmed : undefined
+  }
+
+  private runtimeColorChip(runtimeKind?: "claude" | "codex" | "pi" | "other"): string {
+    if (runtimeKind === "claude") return `${FG_RUNTIME_CLAUDE}■${ANSI_RESET}`
+    if (runtimeKind === "codex") return `${FG_RUNTIME_CODEX}■${ANSI_RESET}`
+    if (runtimeKind === "pi") return `${FG_RUNTIME_PI}■${ANSI_RESET}`
+    return `${FG_META}■${ANSI_RESET}`
+  }
+
   private requestSenderDna(req: AgentRequest): string | undefined {
     if (req.fromDna) return req.fromDna
 
@@ -2631,21 +2819,46 @@ class WorkspaceTui {
       .replace(/\\([!'"$`])/g, "$1")
   }
 
-  private parseSystemPresenceEvent(message: WorkspaceMessage): { name: string; action: "joined" | "left"; dna?: string } | null {
+  private parseSystemPresenceEvent(message: WorkspaceMessage): {
+    name: string
+    action: "joined" | "left"
+    dna?: string
+    runtimeKind?: "claude" | "codex" | "pi" | "other"
+    runtimeLabel?: string
+  } | null {
     if (message.kind !== "system") return null
     const text = (message.text || "").trim()
-    const match = text.match(/^(.+?)\s+(joined|left)\b/i)
+    const match = text.match(/^(.+?)\s+(joined|left)\b(?:\s+via\s+(.+))?$/i)
     if (!match) return null
 
     const name = (match[1] || "").trim()
     if (!name) return null
 
     const action = (match[2] || "").toLowerCase() as "joined" | "left"
+    const runtimeRaw = (match[3] || "").trim()
+    const runtimeKind = this.runtimeKindFromLabel(runtimeRaw)
+    const runtimeLabel = this.runtimeLabelForDisplay(runtimeKind, runtimeRaw)
     return {
       name,
       action,
       dna: this.resolveDnaByName(name),
+      runtimeKind,
+      runtimeLabel,
     }
+  }
+
+  private parseSystemBrowserVisitEvent(message: WorkspaceMessage): {
+    actionText: string
+    name: string
+    dna?: string
+  } | null {
+    if (message.kind !== "system") return null
+    const text = (message.text || "").trim()
+    if (!/^visited\s+\S+/i.test(text)) return null
+
+    const name = (message.fromName || message.from || "").trim() || "Browser"
+    const dna = message.fromDna || this.resolveDnaByName(name)
+    return { actionText: text, name, ...(dna ? { dna } : {}) }
   }
 
   private normalizeInlineMarkdown(input: string): string {
@@ -2755,15 +2968,10 @@ class WorkspaceTui {
     const senderIsYou = this.isOperatorSender(message)
     const targetIsYou = this.isOperatorTarget(message)
     const details: string[] = []
-    let dateTimeText = truncatePlain(new Date(message.ts).toLocaleString(), Math.min(28, contentWidth))
-    let leftMaxWidth = contentWidth - dateTimeText.length - 1
-    if (leftMaxWidth < 3) {
-      dateTimeText = truncatePlain(dateTimeText, Math.max(4, contentWidth - 4))
-      leftMaxWidth = contentWidth - dateTimeText.length - 1
-    }
-    leftMaxWidth = Math.max(3, leftMaxWidth)
+    const leftMaxWidth = Math.max(3, contentWidth)
 
     const presenceEvent = this.parseSystemPresenceEvent(message)
+    const browserVisitEvent = this.parseSystemBrowserVisitEvent(message)
 
     let headerLeft = `${this.senderColorChip(message)} ${this.formatNameWithShortTitle(
       fromName,
@@ -2790,29 +2998,59 @@ class WorkspaceTui {
     } else if (presenceEvent) {
       // Render presence events on one compact row:
       // actor (+ muted short title) + action on the left, timestamp on the right.
-      const maxActionWidth = Math.max(0, leftMaxWidth - 4) // reserve: "<chip> " + at least 1 char name
-      const actionText = maxActionWidth > 0
-        ? truncatePlain(presenceEvent.action, maxActionWidth)
-        : ""
-      const reservedLeft = 2 + (actionText.length > 0 ? actionText.length + 1 : 0) // "<chip> " + optional "action"
-      const nameBudget = Math.max(1, leftMaxWidth - reservedLeft)
+      const actionWord = presenceEvent.action
+      let runtimeLabel = presenceEvent.action === "joined" ? (presenceEvent.runtimeLabel || "") : ""
+      const runtimeReserved = (label: string) => (label.length > 0 ? 7 + label.length : 0) // " via " + chip + " " + label
+      const baseReserved = 3 + actionWord.length // "<chip> " + " action"
+      let nameBudget = leftMaxWidth - baseReserved - runtimeReserved(runtimeLabel)
+      if (nameBudget < 1 && runtimeLabel.length > 0) {
+        const maxRuntimeLabel = Math.max(0, leftMaxWidth - baseReserved - 8) // keep 1 char for name
+        runtimeLabel = truncatePlain(runtimeLabel, maxRuntimeLabel)
+        nameBudget = leftMaxWidth - baseReserved - runtimeReserved(runtimeLabel)
+      }
+      nameBudget = Math.max(1, nameBudget)
       const displayName = this.formatNameWithShortTitle(
         presenceEvent.name,
         presenceEvent.dna,
         nameBudget,
       )
-      headerLeft = `${this.colorChipForDna(presenceEvent.dna)} ${displayName}${actionText ? `${FG_META} ${actionText}${ANSI_RESET}` : ""}`
+      const runtimeSuffix = runtimeLabel.length > 0
+        ? `${FG_META} via ${ANSI_RESET}${this.runtimeColorChip(presenceEvent.runtimeKind)} ${FG_META}${runtimeLabel}${ANSI_RESET}`
+        : ""
+      headerLeft = `${this.colorChipForDna(presenceEvent.dna)} ${displayName}${FG_META} ${actionWord}${ANSI_RESET}${runtimeSuffix}`
+    } else if (browserVisitEvent) {
+      const chip = this.colorChipForDna(browserVisitEvent.dna)
+      const browserIcon = "◉"
+      const minActionWidth = 8
+      const baseWithoutName = visibleLength(chip) + 1 + visibleLength(browserIcon) + 1
+      let nameBudget = Math.max(1, leftMaxWidth - baseWithoutName - 1 - minActionWidth)
+      let displayName = this.formatNameWithShortTitle(
+        browserVisitEvent.name,
+        browserVisitEvent.dna,
+        nameBudget,
+      )
+      const actionBudget = Math.max(
+        0,
+        leftMaxWidth
+          - visibleLength(chip)
+          - 1
+          - visibleLength(displayName)
+          - 1
+          - visibleLength(browserIcon)
+          - 1,
+      )
+      const actionText = truncatePlain(browserVisitEvent.actionText, actionBudget)
+      headerLeft = `${chip} ${displayName} ${FG_META}${browserIcon} ${actionText}${ANSI_RESET}`
     }
 
-    const headerGap = Math.max(1, contentWidth - visibleLength(headerLeft) - dateTimeText.length)
-    const header = `${headerLeft}${" ".repeat(headerGap)}${FG_META}${dateTimeText}${ANSI_RESET}`
+    const header = padAnsi(headerLeft, contentWidth)
 
-    const bodyLines = presenceEvent
+    const bodyLines = (presenceEvent || browserVisitEvent)
       ? []
       : this.renderMarkdownBody(this.decodeMentionsForDisplay(message.text || ""), contentWidth)
     const prependLines = options.prependLines ?? []
     const detailLines = details.map((d) => truncatePlain(d, contentWidth))
-    const shouldAddBodyGap = !presenceEvent
+    const shouldAddBodyGap = !(presenceEvent || browserVisitEvent)
       && (message.kind === "dm" || message.kind === "chat")
       && (prependLines.length > 0 || bodyLines.length > 0)
     const content = shouldAddBodyGap
@@ -3935,9 +4173,7 @@ class WorkspaceTui {
 
   private renderComposerLines(width: number, body: string, isPlaceholder: boolean): string[] {
     const cursor = this.shouldShowComposerCursor()
-      ? this.cursorBlinkVisible
-        ? `${FG_CURSOR_BLOCK}█${FG_INPUT}`
-        : " "
+      ? `${FG_CURSOR_BLOCK}█${FG_INPUT}`
       : ""
     const cursorIndex = !isPlaceholder ? this.draftCursorIndex : undefined
 
@@ -4279,9 +4515,10 @@ class WorkspaceTui {
     // Overwrite in-place: move to home, write each line with clear-to-EOL.
     // This avoids the full screen clear that causes flicker.
     const frame = lines.slice(0, height)
+    const paintWidth = Math.max(1, width - 1)
     const buf: string[] = ["\x1b[H"] // cursor home
     for (let i = 0; i < frame.length; i++) {
-      buf.push(frame[i]!)
+      buf.push(truncateAnsi(frame[i]!, paintWidth))
       buf.push("\x1b[K") // clear rest of line
       if (i < frame.length - 1) {
         buf.push("\n")
