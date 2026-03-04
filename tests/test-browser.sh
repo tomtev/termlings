@@ -19,7 +19,7 @@ echo "CLI: $TERMLINGS_BIN"
 cleanup() {
   echo ""
   echo "[CLEANUP] Stopping all browsers and killing processes..."
-  pkill -9 pinchtab 2>/dev/null || true
+  pkill -9 agent-browser 2>/dev/null || true
   sleep 1
   echo "[CLEANUP] Done"
 }
@@ -174,7 +174,7 @@ profile2=$(grep -o '"profileName":"[^"]*"' "$PROJECT2/.termlings/browser/process
 if [ "$profile1" != "$profile2" ]; then
   echo "✅ PASS: Projects use different profiles"
 else
-  echo "⚠️  INFO: Profile names same (profiles managed by PinchTab)"
+  echo "⚠️  INFO: Profile names same (platform may normalize profile naming)"
 fi
 
 # ============================================================================

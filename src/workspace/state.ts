@@ -36,11 +36,18 @@ export interface WorkspaceMessage {
   ts: number
 }
 
+export type AvatarSizeMode = "large" | "small" | "tiny"
+
+export interface WorkspaceSettings {
+  avatarSize?: AvatarSizeMode
+}
+
 interface WorkspaceMeta {
   version: number
   projectName: string
   createdAt: number
   updatedAt: number
+  settings?: WorkspaceSettings
 }
 
 const WORKSPACE_VERSION = 1
@@ -86,6 +93,80 @@ function parseJsonLines<T>(filePath: string): T[] {
 
 function writeWorkspaceMeta(root: string, meta: WorkspaceMeta): void {
   writeFileSync(workspaceMetaPath(root), JSON.stringify(meta, null, 2) + "\n")
+}
+
+function isValidAvatarSize(value: unknown): value is AvatarSizeMode {
+  return value === "large" || value === "small" || value === "tiny"
+}
+
+function sanitizeWorkspaceSettings(raw: unknown): WorkspaceSettings {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
+  const input = raw as Record<string, unknown>
+  const out: WorkspaceSettings = {}
+  if (isValidAvatarSize(input.avatarSize)) {
+    out.avatarSize = input.avatarSize
+  }
+  return out
+}
+
+function ensureWorkspaceMeta(root: string): WorkspaceMeta {
+  const now = Date.now()
+  const path = workspaceMetaPath(root)
+  if (!existsSync(path)) {
+    return {
+      version: WORKSPACE_VERSION,
+      projectName: basename(root),
+      createdAt: now,
+      updatedAt: now,
+      settings: {},
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>
+    const createdAt = typeof parsed.createdAt === "number" ? parsed.createdAt : now
+    const updatedAt = typeof parsed.updatedAt === "number" ? parsed.updatedAt : now
+    const projectName =
+      typeof parsed.projectName === "string" && parsed.projectName.trim().length > 0
+        ? parsed.projectName
+        : basename(root)
+    const version = typeof parsed.version === "number" ? parsed.version : WORKSPACE_VERSION
+    const settings = sanitizeWorkspaceSettings(parsed.settings)
+    return { version, projectName, createdAt, updatedAt, settings }
+  } catch {
+    return {
+      version: WORKSPACE_VERSION,
+      projectName: basename(root),
+      createdAt: now,
+      updatedAt: now,
+      settings: {},
+    }
+  }
+}
+
+export function readWorkspaceSettings(root = process.cwd()): WorkspaceSettings {
+  ensureWorkspaceDirs(root)
+  const meta = ensureWorkspaceMeta(root)
+  return sanitizeWorkspaceSettings(meta.settings)
+}
+
+export function updateWorkspaceSettings(
+  patch: Partial<WorkspaceSettings>,
+  root = process.cwd(),
+): WorkspaceSettings {
+  ensureWorkspaceDirs(root)
+  const now = Date.now()
+  const meta = ensureWorkspaceMeta(root)
+  const merged = sanitizeWorkspaceSettings({
+    ...meta.settings,
+    ...patch,
+  })
+  writeWorkspaceMeta(root, {
+    ...meta,
+    updatedAt: now,
+    settings: merged,
+  })
+  return merged
 }
 
 function touchWorkspace(root: string): void {

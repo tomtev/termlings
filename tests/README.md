@@ -25,7 +25,7 @@ Test scripts for the Termlings project.
 
 | Test | Purpose |
 |------|---------|
-| `test-browser.sh` | Browser automation with PinchTab |
+| `test-browser.sh` | Browser automation service coverage |
 | `test-query-patterns.sh` | Query patterns for token-efficient automation |
 | `avatar.test.ts` | Avatar rendering system |
 

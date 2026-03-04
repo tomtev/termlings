@@ -11,9 +11,11 @@ import {
   appendWorkspaceMessage,
   ensureWorkspaceDirs,
   listSessions,
+  readWorkspaceSettings,
   readSession,
   readWorkspaceMessages,
   removeSession,
+  updateWorkspaceSettings,
   upsertSession,
   type WorkspaceMessage,
   type WorkspaceSession,
@@ -258,6 +260,7 @@ class WorkspaceTui {
     }
 
     ensureWorkspaceDirs(this.root)
+    this.loadWorkspaceSettings()
     upsertSession(
       this.identity.sessionId,
       {
@@ -1207,6 +1210,15 @@ class WorkspaceTui {
     ]
   }
 
+  private loadWorkspaceSettings(): void {
+    try {
+      const settings = readWorkspaceSettings(this.root)
+      if (settings.avatarSize === "large" || settings.avatarSize === "small" || settings.avatarSize === "tiny") {
+        this.avatarSizeMode = settings.avatarSize
+      }
+    } catch {}
+  }
+
   private moveSettingsSelection(delta: number): void {
     if (this.view !== "settings") return
     const items = this.settingsItems()
@@ -1230,6 +1242,9 @@ class WorkspaceTui {
       const currentIndex = order.indexOf(this.avatarSizeMode)
       const nextIndex = (currentIndex + 1) % order.length
       this.avatarSizeMode = order[nextIndex] ?? "small"
+      try {
+        updateWorkspaceSettings({ avatarSize: this.avatarSizeMode }, this.root)
+      } catch {}
       this.statusMessage = `Avatar size set to ${this.avatarSizeMode}.`
     }
   }
