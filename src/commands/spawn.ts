@@ -611,7 +611,7 @@ NOTES:
       for (const item of dangerousLaunches) {
         console.log(`  - ${item.slug}: ${formatCommandPreview(item.command)}`)
       }
-      const proceed = await confirm("Continue with spawn-all?", false)
+      const proceed = await confirm("Continue with spawn-all?", true)
       if (!proceed) {
         console.log("Cancelled.")
         return

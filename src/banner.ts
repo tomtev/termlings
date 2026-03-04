@@ -230,6 +230,7 @@ export async function printPostInitTeamWave(agents: TeamWaveAgent[]): Promise<vo
   console.log("");
   console.log(`${muted}Setup complete. Run \`termlings\` to start your workspace.${reset}`);
   console.log(`${muted}Run \`termlings spawn\` in another terminal to launch agents into your workspace.${reset}`);
+  console.log(`${muted}Or run \`termlings --auto-spawn\` to launch workspace + all agents in one command (requires tmux).${reset}`);
   console.log("");
 }
 

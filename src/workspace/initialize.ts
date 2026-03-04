@@ -53,8 +53,9 @@ function askWithDefaultRaw(
     const render = () => {
       output.write(`\r\x1b[2K${prefix}`)
       if (value.length === 0) {
-        // Show muted placeholder while the input is empty.
-        output.write(`\x1b[s${ANSI_MUTED}${defaultValue}${ANSI_RESET}\x1b[u`)
+        // Show muted placeholder while empty; keep cursor after placeholder
+        // so the first character is not hidden by inverse-cursor rendering.
+        output.write(`${ANSI_MUTED}${defaultValue}${ANSI_RESET}`)
         return
       }
       output.write(value)
@@ -225,10 +226,10 @@ type GitIgnoreMode = "all" | "messages" | "none"
 
 function parseGitIgnoreMode(input: string): GitIgnoreMode {
   const value = input.trim().toLowerCase()
-  if (!value || value === "2" || value === "messages" || value === "ignore messages") return "messages"
-  if (value === "1" || value === "all" || value === "ignore all") return "all"
+  if (!value || value === "1" || value === "all" || value === "ignore all") return "all"
+  if (value === "2" || value === "messages" || value === "ignore messages") return "messages"
   if (value === "3" || value === "none" || value === "no" || value === "no ignore") return "none"
-  return "messages"
+  return "all"
 }
 
 async function setupGitIgnore(
@@ -240,14 +241,14 @@ async function setupGitIgnore(
     console.log("")
     console.log("Git ignore for .termlings:")
     console.log(`${ANSI_MUTED}Choose how much workspace data git should ignore.${ANSI_RESET}`)
-    console.log("  1. Ignore all")
-    console.log("     Ignore all .termlings files (except .termlings/.gitignore)")
-    console.log("  2. Ignore messages (recommended)")
-    console.log("     Ignore only message history under .termlings/store/messages/")
+    console.log("  1. Ignore all (recommended)")
+    console.log(`     ${ANSI_MUTED}Ignore all .termlings files (except .termlings/.gitignore)${ANSI_RESET}`)
+    console.log("  2. Ignore messages")
+    console.log(`     ${ANSI_MUTED}Ignore only message history under .termlings/store/messages/${ANSI_RESET}`)
     console.log("  3. No ignore")
-    console.log("     Keep .termlings files fully visible to git")
+    console.log(`     ${ANSI_MUTED}Keep .termlings files fully visible to git${ANSI_RESET}`)
 
-    const mode = parseGitIgnoreMode(await askWithDefault(input, output, "Git ignore option", "2"))
+    const mode = parseGitIgnoreMode(await askWithDefault(input, output, "Git ignore option", "1"))
     const gitignorePath = join(projectRoot, ".termlings", ".gitignore")
 
     if (mode === "all") {
@@ -525,9 +526,10 @@ export async function ensureWorkspaceInitialized(
   let rlClosed = false
 
   try {
+    const mutedYes = supportsAnsi(rlOutput) ? `${ANSI_MUTED}Y${ANSI_RESET}` : "Y"
     const setupPrompt = workspaceExists
-      ? "Start setup wizard for this existing workspace? [Y/n] "
-      : "Create a new Termlings workspace in this folder? [Y/n] "
+      ? `Start setup wizard for this existing workspace? [${mutedYes}/n] `
+      : `Create a new Termlings workspace in this folder? [${mutedYes}/n] `
     const projectLabel = basename(projectRoot) || projectRoot
 
     console.log(`${ANSI_MUTED}It will create a ${projectLabel}/.termlings folder.${ANSI_RESET}`)
