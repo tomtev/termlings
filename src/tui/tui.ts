@@ -349,14 +349,16 @@ class WorkspaceTui {
   }
 
   private renderTmuxStatusLeft(): string {
-    return `termlings · ${this.currentViewLabel()}`
+    const project = basename(this.root || process.cwd()) || "workspace"
+    const parts = [project, this.currentViewLabel()]
+    if (this.view === "messages") {
+      parts.push(this.threadLabel(this.selectedThreadId))
+    }
+    return parts.join(" / ")
   }
 
   private renderTmuxStatusRight(): string {
     if (this.view === "messages") {
-      if (this.selectedThreadId.startsWith("agent:")) {
-        return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓ | Ctrl-p peek`
-      }
       return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓`
     }
 
@@ -765,13 +767,6 @@ class WorkspaceTui {
         continue
       }
 
-      if (ch === "\u0010") {
-        if (this.view === "messages" && this.selectedThreadId.startsWith("agent:")) {
-          this.peekAgentWindow()
-        }
-        continue
-      }
-
       const hasActiveInputText =
         (this.view === "messages" && this.draft.length > 0)
         || (this.view === "requests" && this.requestInputMode)
@@ -831,37 +826,6 @@ class WorkspaceTui {
 
     this.syncMentionSelection()
     this.render()
-  }
-
-  private peekTargetSlug(): string | null {
-    const selected = this.selectedDmThread()
-    if (selected?.slug) return selected.slug
-
-    for (const agent of this.snapshot.agents) {
-      if (agent.online && agent.slug) return agent.slug
-    }
-
-    for (const agent of this.snapshot.agents) {
-      if (agent.slug) return agent.slug
-    }
-
-    return null
-  }
-
-  private peekAgentWindow(): void {
-    const slug = this.peekTargetSlug()
-    const args = slug ? ["peek", slug] : ["peek"]
-    const proc = spawnSync("termlings", args, {
-      cwd: this.root,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    })
-    if ((proc.status ?? 1) !== 0) {
-      const err = (proc.stderr || proc.stdout || "").trim()
-      this.statusMessage = err ? `Peek failed: ${err}` : "Peek failed."
-      return
-    }
-    this.statusMessage = slug ? `Switched to ${slug}. Run termlings control to return.` : "Switched to agent window."
   }
 
   private unwrapBracketedPaste(input: string): string | null {
@@ -1403,7 +1367,7 @@ class WorkspaceTui {
 
     const selectedDmThread = this.selectedDmThread()
     if (selectedDmThread && !selectedDmThread.online) {
-      this.statusMessage = `${selectedDmThread.label} is offline. Team terminals launch automatically; press Ctrl-p to peek active terminals.`
+      this.statusMessage = `${selectedDmThread.label} is offline. Run \`termlings spawn\` in another terminal.`
       return
     }
 
@@ -1806,7 +1770,7 @@ class WorkspaceTui {
     }
 
     for (const session of sessions) {
-      const path = join(this.root, ".termlings", `${session.sessionId}.typing.json`)
+      const path = join(this.root, ".termlings", "store", "presence", `${session.sessionId}.typing.json`)
       if (!existsSync(path)) {
         out.set(session.sessionId, { typing: false, updatedAt: 0 })
         continue
@@ -1988,7 +1952,7 @@ class WorkspaceTui {
   }
 
   private threadLabel(threadId: string): string {
-    if (threadId === "activity") return "all-activity"
+    if (threadId === "activity") return "All activity"
     if (!threadId.startsWith("agent:")) return threadId
 
     const thread = this.snapshot.dmThreads.find((candidate) => candidate.id === threadId)
@@ -2856,7 +2820,7 @@ class WorkspaceTui {
       if (noAgentsOnline) {
         const bannerLines = [
           "Looks like no agent terminal is online yet.",
-          "Team terminals launch automatically. Press Ctrl-p to peek.",
+          "Run `termlings spawn` in another terminal.",
         ]
         const topPadding = Math.max(0, Math.floor((height - bannerLines.length) / 2))
         const bannerWidth = Math.max(1, width)
@@ -4056,9 +4020,6 @@ class WorkspaceTui {
 
   private renderFooterRightMeta(): string {
     if (this.view === "messages") {
-      if (this.selectedThreadId.startsWith("agent:")) {
-        return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓ | Ctrl-p peek`
-      }
       return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓`
     }
 
@@ -4119,7 +4080,6 @@ class WorkspaceTui {
   private renderImmediate(): void {
     if (!this.running) return
     this.lastRenderTime = Date.now()
-    this.syncTmuxStatusBar()
 
     const width = Math.max(this.stdout.columns || 120, 40)
     const height = Math.max(this.stdout.rows || 30, 18)
@@ -4241,7 +4201,7 @@ class WorkspaceTui {
         lines.push(grayBar("", width, promptBg))
       }
       if (showOfflineJoinHint && selectedDmThread) {
-        lines.push(offlineBar(` ${selectedDmThread.label} is offline. Team terminals auto-launch; press Ctrl-p to peek active terminals.`, width))
+        lines.push(offlineBar(` ${selectedDmThread.label} is offline. Run \`termlings spawn\` in another terminal.`, width))
       } else if (showComposer) {
         if (showTypingHint && selectedDmThread) {
           lines.push(`${BG_INPUT_PANEL}${FG_META}${fitPlain(` ${selectedDmThread.label} is typing...`, width)}${ANSI_RESET}`)
@@ -4264,9 +4224,7 @@ class WorkspaceTui {
       lines.push("")
     }
     if (height > 0) {
-      lines[height - 1] = this.isInsideTmuxSession()
-        ? " ".repeat(Math.max(0, width))
-        : this.renderFooterMetaBar(width)
+      lines[height - 1] = this.renderFooterMetaBar(width)
     }
 
     // Overwrite in-place: move to home, write each line with clear-to-EOL.

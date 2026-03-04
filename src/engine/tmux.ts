@@ -91,7 +91,7 @@ function colorSquareHexFromDna(dna?: string): string {
   }
 }
 
-function buildAgentTmuxBadge(root: string, agentSlug: string): string {
+function buildAgentTmuxTabLabel(root: string, agentSlug: string): string {
   const { name, title, dna } = readAgentBadgeMeta(root, agentSlug)
   const colorHex = colorSquareHexFromDna(dna)
   const safeName = escapeTmuxText(name || formatTitleCase(agentSlug) || agentSlug)
@@ -108,7 +108,7 @@ function refreshAgentWindowBadge(sessionName: string, root: string, windowIndex:
   if (!windowName.startsWith("agent:")) return
   const slug = windowName.slice("agent:".length).trim()
   if (!slug) return
-  const badge = buildAgentTmuxBadge(root, slug)
+  const badge = buildAgentTmuxTabLabel(root, slug)
   setWindowOption(sessionName, windowIndex, "@termlings_agent_badge", badge)
 }
 
@@ -141,7 +141,7 @@ function configureControlSession(sessionName: string, root: string): void {
   apply("set-option", "-t", sessionName, "status-interval", "0")
   apply("set-option", "-t", sessionName, "status-style", "bg=default,fg=default")
   apply("set-option", "-t", sessionName, "@termlings_control_left", " #[fg=colour141,bold]termlings#[fg=colour245] · Chat#[default] ")
-  apply("set-option", "-t", sessionName, "@termlings_control_right", "#[fg=colour245]Ctrl-p peek (DM only)#[default] ")
+  apply("set-option", "-t", sessionName, "@termlings_control_right", "")
   apply("set-option", "-t", sessionName, "status-left", "")
   apply("set-option", "-t", sessionName, "status-right", "")
   apply("set-option", "-t", sessionName, "status-left-length", "80")
@@ -284,6 +284,24 @@ export function openAgentWindow(
   extraArgs: string[] = [],
 ): { ok: boolean; created: boolean; error?: string } {
   const windowName = `agent:${agentSlug}`
+  const serializedArgs = extraArgs.map((arg) => shellQuote(arg)).join(" ")
+  const command =
+    `cd ${shellQuote(root)} && termlings spawn ${runtime} ${preset} --agent=${agentSlug} --inline`
+    + (serializedArgs ? ` ${serializedArgs}` : "")
+
+  if (!tmuxHasSession(sessionName)) {
+    const createdSession = runTmux(["new-session", "-d", "-s", sessionName, "-n", windowName, "-c", root, command])
+    if (!createdSession.ok) {
+      return { ok: false, created: false, error: createdSession.error || `Failed to create session ${sessionName}.` }
+    }
+
+    const refreshed = listTmuxWindows(sessionName).find((window) => window.name === windowName)
+    if (refreshed) {
+      refreshAgentWindowBadge(sessionName, root, refreshed.index, refreshed.name)
+    }
+    return { ok: true, created: true }
+  }
+
   const windows = listTmuxWindows(sessionName)
   const existing = windows.find((window) => window.name === windowName)
   if (existing) {
@@ -291,11 +309,6 @@ export function openAgentWindow(
     return { ok: true, created: false }
   }
 
-  const serializedArgs = extraArgs.map((arg) => shellQuote(arg)).join(" ")
-  const hint = "printf '\\n[Termlings] Back: Esc (or Ctrl-g).\\n\\n'"
-  const command =
-    `${hint}; cd ${shellQuote(root)} && termlings spawn ${runtime} ${preset} --agent=${agentSlug} --inline`
-    + (serializedArgs ? ` ${serializedArgs}` : "")
   const created = runTmux(["new-window", "-d", "-t", sessionName, "-n", windowName, "-c", root, command])
   if (!created.ok) {
     return { ok: false, created: false, error: created.error || `Failed to open window ${windowName}.` }
@@ -307,6 +320,53 @@ export function openAgentWindow(
   }
 
   return { ok: true, created: true }
+}
+
+export function killTmuxWindow(sessionName: string, target: string): { ok: boolean; error?: string } {
+  const result = runTmux(["kill-window", "-t", `${sessionName}:${target}`], false)
+  if (!result.ok) {
+    return { ok: false, error: result.error || `Failed to kill tmux window ${sessionName}:${target}.` }
+  }
+  return { ok: true }
+}
+
+export function configureAgentSession(sessionName: string, root: string): void {
+  const apply = (...args: string[]) => {
+    runTmux(args, false)
+  }
+  const windowStatusFormat =
+    "#[fg=colour250,bg=colour54] [#I] #{?@termlings_agent_badge,#{E:@termlings_agent_badge},#W} #[default]"
+  const windowStatusCurrentFormat =
+    "#[fg=colour255,bg=colour93,bold] [#I] #{?@termlings_agent_badge,#{E:@termlings_agent_badge},#W} #[default]"
+
+  // Clean up control-session specific format overrides/bindings first.
+  apply("set-option", "-u", "-t", sessionName, "status-format[0]")
+  apply("set-option", "-u", "-t", sessionName, "status-format[1]")
+  apply("unbind-key", "-T", "root", "-n", "Escape")
+  apply("unbind-key", "-T", "root", "-n", "C-g")
+
+  // Apply simplified agent window bar.
+  apply("set-option", "-t", sessionName, "status", "on")
+  apply("set-option", "-t", sessionName, "status-position", "bottom")
+  apply("set-option", "-t", sessionName, "status-style", "bg=colour54,fg=colour255")
+  apply("set-option", "-t", sessionName, "status-left", "")
+  apply("set-option", "-t", sessionName, "status-right", "")
+  apply("set-option", "-t", sessionName, "status-left-length", "0")
+  apply("set-option", "-t", sessionName, "status-right-length", "0")
+  apply("set-option", "-t", sessionName, "status-justify", "left")
+  apply("set-window-option", "-g", "-t", sessionName, "automatic-rename", "off")
+  apply("set-window-option", "-g", "-t", sessionName, "window-status-separator", " ")
+  apply("set-window-option", "-g", "-t", sessionName, "window-status-format", windowStatusFormat)
+  apply("set-window-option", "-g", "-t", sessionName, "window-status-current-format", windowStatusCurrentFormat)
+
+  for (const window of listTmuxWindows(sessionName)) {
+    const target = `${sessionName}:${window.index}`
+    apply("set-window-option", "-t", target, "automatic-rename", "off")
+    apply("set-window-option", "-t", target, "window-status-separator", " ")
+    apply("set-window-option", "-t", target, "window-status-format", windowStatusFormat)
+    apply("set-window-option", "-t", target, "window-status-current-format", windowStatusCurrentFormat)
+    refreshAgentWindowBadge(sessionName, root, window.index, window.name)
+  }
 }
 
 export function focusTmuxWindow(sessionName: string, target: string): { ok: boolean; error?: string } {

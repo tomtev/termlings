@@ -4,7 +4,7 @@ Termlings no longer uses Claude hooks for typing presence.
 
 Current model:
 - Terminal-first activity and busy detection from the launcher PTY.
-- Typing state written to `.termlings/<sessionId>.typing.json` with `source: "terminal"`.
+- Typing state written to `.termlings/store/presence/<sessionId>.typing.json` with `source: "terminal"`.
 
 ## Automatic cleanup
 

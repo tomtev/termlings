@@ -6,14 +6,17 @@
 import { existsSync, readFileSync } from "fs"
 import { join } from "path"
 import { discoverLocalAgents } from "../agents/discover.js"
+import { decodeDNA, getTraitColors } from "../index.js"
 import {
-  ensureControlSession,
+  configureAgentSession,
   focusTmuxWindow,
   isInsideTmux,
   isTmuxAvailable,
+  killTmuxWindow,
+  listTmuxWindows,
   openAgentWindow,
-  projectTmuxSessionName,
   tmuxHasSession,
+  projectTmuxSessionName,
 } from "../engine/tmux.js"
 
 interface Preset {
@@ -21,46 +24,141 @@ interface Preset {
   command: string
 }
 
-type SpawnConfig = Record<string, Record<string, Preset>>
+interface SpawnRoute {
+  runtime: string
+  preset: string
+}
+
+type RuntimePresets = Record<string, Record<string, Preset>>
+
+interface SpawnConfig {
+  default: SpawnRoute
+  agents: Record<string, SpawnRoute>
+  runtimes: RuntimePresets
+}
+
+interface AgentLaunchTarget {
+  slug: string
+  runtimeName: string
+  presetName: string
+}
 
 const DEFAULT_CONFIG: SpawnConfig = {
-  claude: {
-    default: {
-      description: "Launch with full autonomy",
-      command: "termlings claude --dangerously-skip-permissions",
+  default: {
+    runtime: "claude",
+    preset: "default",
+  },
+  agents: {
+    pm: { runtime: "claude", preset: "default" },
+    developer: { runtime: "claude", preset: "default" },
+    designer: { runtime: "claude", preset: "default" },
+    growth: { runtime: "claude", preset: "default" },
+    support: { runtime: "claude", preset: "default" },
+  },
+  runtimes: {
+    claude: {
+      default: {
+        description: "Launch with full autonomy",
+        command: "termlings claude --dangerously-skip-permissions",
+      },
+      auto: {
+        description: "Launch with full autonomy (skip all permission prompts)",
+        command: "termlings claude --dangerously-skip-permissions",
+      },
     },
-    auto: {
-      description: "Launch with full autonomy (skip all permission prompts)",
-      command: "termlings claude --dangerously-skip-permissions",
+    codex: {
+      default: {
+        description: "Launch with full autonomy",
+        command: "termlings codex --dangerously-bypass-approvals-and-sandbox",
+      },
+      auto: {
+        description: "Launch with full autonomy (bypass approvals and sandbox)",
+        command: "termlings codex --dangerously-bypass-approvals-and-sandbox",
+      },
     },
-    safe: {
-      description: "Launch in safe mode (default permissions)",
-      command: "termlings claude",
+    pi: {
+      default: {
+        description: "Launch with Pi default tool mode",
+        command: "termlings pi",
+      },
+      auto: {
+        description: "Launch with Pi default tool mode",
+        command: "termlings pi",
+      },
     },
   },
-  codex: {
-    default: {
-      description: "Launch with full autonomy",
-      command: "termlings codex --dangerously-bypass-approvals-and-sandbox",
-    },
-    auto: {
-      description: "Launch with full autonomy (bypass approvals and sandbox)",
-      command: "termlings codex --dangerously-bypass-approvals-and-sandbox",
-    },
-    safe: {
-      description: "Launch in safe mode (default permissions)",
-      command: "termlings codex",
-    },
-  },
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function parseRoute(raw: unknown): SpawnRoute | null {
+  if (!isObject(raw)) return null
+  const runtime = typeof raw.runtime === "string" ? raw.runtime.trim() : ""
+  const preset = typeof raw.preset === "string" ? raw.preset.trim() : ""
+  if (!runtime || !preset) return null
+  return { runtime, preset }
+}
+
+function parseRuntimes(raw: unknown): RuntimePresets | null {
+  if (!isObject(raw)) return null
+  const runtimes: RuntimePresets = {}
+  for (const [runtimeName, rawPresets] of Object.entries(raw)) {
+    if (!isObject(rawPresets)) return null
+    const presets: Record<string, Preset> = {}
+    for (const [presetName, rawPreset] of Object.entries(rawPresets)) {
+      if (!isObject(rawPreset)) return null
+      const description = typeof rawPreset.description === "string" ? rawPreset.description.trim() : ""
+      const command = typeof rawPreset.command === "string" ? rawPreset.command.trim() : ""
+      if (!description || !command) return null
+      presets[presetName] = { description, command }
+    }
+    if (Object.keys(presets).length === 0) return null
+    runtimes[runtimeName] = presets
+  }
+  if (Object.keys(runtimes).length === 0) return null
+  return runtimes
+}
+
+function parseSpawnConfig(raw: unknown): SpawnConfig | null {
+  if (!isObject(raw)) return null
+  const defaultRoute = parseRoute(raw.default)
+  const runtimes = parseRuntimes(raw.runtimes)
+  if (!defaultRoute || !runtimes) return null
+
+  const agents: Record<string, SpawnRoute> = {}
+  if (raw.agents !== undefined) {
+    if (!isObject(raw.agents)) return null
+    for (const [slug, rawRoute] of Object.entries(raw.agents)) {
+      const route = parseRoute(rawRoute)
+      if (!route) return null
+      agents[slug] = route
+    }
+  }
+
+  return {
+    default: defaultRoute,
+    agents,
+    runtimes,
+  }
 }
 
 function loadSpawnConfig(projectRoot = process.cwd()): SpawnConfig | null {
   const configPath = join(projectRoot, ".termlings", "spawn.json")
   if (!existsSync(configPath)) return null
   try {
-    return JSON.parse(readFileSync(configPath, "utf-8"))
+    const parsed = JSON.parse(readFileSync(configPath, "utf-8"))
+    const config = parseSpawnConfig(parsed)
+    if (!config) {
+      console.error("Invalid .termlings/spawn.json format.")
+      console.error("Expected: { default: {runtime,preset}, agents: {...}, runtimes: {...} }")
+      process.exit(1)
+    }
+    return config
   } catch {
-    return null
+    console.error("Failed to parse .termlings/spawn.json.")
+    process.exit(1)
   }
 }
 
@@ -159,43 +257,102 @@ async function routePresetCommand(command: string, options: { agentSlug?: string
   await launchAgent(runtimeAdapter, passthroughArgs, opts)
 }
 
+function resolvePreset(config: SpawnConfig, runtimeName: string, presetName: string): Preset | null {
+  const runtimePresets = config.runtimes[runtimeName]
+  if (!runtimePresets) return null
+  return runtimePresets[presetName] || null
+}
+
+function formatRoute(runtimeName: string, presetName: string): string {
+  return `${runtimeName}/${presetName}`
+}
+
+function buildPresetCommand(config: SpawnConfig, runtimeName: string, presetName: string, extraArgs: string[]): string | null {
+  const preset = resolvePreset(config, runtimeName, presetName)
+  if (!preset) return null
+  return extraArgs.length > 0 ? `${preset.command} ${extraArgs.join(" ")}` : preset.command
+}
+
+function formatCommandPreview(command: string): string {
+  const trimmed = command.trim()
+  if (!trimmed) return trimmed
+  const parts = trimmed.split(/\s+/)
+  if (parts[0] !== "termlings") return trimmed
+  return parts.slice(1).join(" ")
+}
+
+function ansiTrueColor(rgb: [number, number, number]): string {
+  return `\x1b[38;2;${rgb[0]};${rgb[1]};${rgb[2]}m`
+}
+
+function accentColorFromDna(dna?: string): string | undefined {
+  if (!dna) return undefined
+  try {
+    const traits = decodeDNA(dna)
+    const { faceRgb } = getTraitColors(traits, false)
+    return ansiTrueColor(faceRgb)
+  } catch {
+    return undefined
+  }
+}
+
+function resolveAgentRoute(config: SpawnConfig, slug: string): SpawnRoute {
+  return config.agents[slug] || config.default
+}
+
 function unique(items: string[]): string[] {
   return Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)))
 }
 
+function tmuxInstallHint(): string {
+  if (process.platform === "darwin") return "macOS: brew install tmux"
+  if (process.platform === "win32") return "Windows (WSL): sudo apt install tmux"
+  return "Linux: sudo apt install tmux"
+}
+
 async function spawnAgentWindows(
-  runtimeName: string,
-  presetName: string,
-  agentSlugs: string[],
+  targets: AgentLaunchTarget[],
   extraArgs: string[],
   quiet = false,
+  attach = true,
 ): Promise<void> {
   if (!isTmuxAvailable()) {
     console.error("tmux is required for batch spawn.")
-    console.error("Install tmux and run `termlings` to start the control workspace.")
+    console.error(`Tip: ${tmuxInstallHint()}`)
+    console.error("Install tmux and run `termlings spawn --all`.")
     process.exit(1)
   }
 
   const root = process.cwd()
-  const ensured = ensureControlSession(root)
-  if (!ensured.ok) {
-    console.error(ensured.error || "Failed to create Termlings tmux session.")
-    process.exit(1)
+  const sessionName = projectTmuxSessionName(root)
+
+  if (tmuxHasSession(sessionName)) {
+    configureAgentSession(sessionName, root)
   }
 
-  const sessionName = ensured.sessionName
   const created: string[] = []
   const existing: string[] = []
-  const failed: Array<{ slug: string; error: string }> = []
+  const failed: Array<{ slug: string; route: string; error: string }> = []
 
-  for (const slug of agentSlugs) {
-    const result = openAgentWindow(sessionName, root, runtimeName, presetName, slug, extraArgs)
+  for (const target of targets) {
+    const result = openAgentWindow(
+      sessionName,
+      root,
+      target.runtimeName,
+      target.presetName,
+      target.slug,
+      extraArgs,
+    )
     if (result.ok && result.created) {
-      created.push(slug)
+      created.push(`${target.slug} (${formatRoute(target.runtimeName, target.presetName)})`)
     } else if (result.ok) {
-      existing.push(slug)
+      existing.push(`${target.slug} (${formatRoute(target.runtimeName, target.presetName)})`)
     } else {
-      failed.push({ slug, error: result.error || "unknown error" })
+      failed.push({
+        slug: target.slug,
+        route: formatRoute(target.runtimeName, target.presetName),
+        error: result.error || "unknown error",
+      })
     }
   }
 
@@ -207,13 +364,30 @@ async function spawnAgentWindows(
   }
   if (failed.length > 0) {
     for (const item of failed) {
-      console.error(`Failed to launch ${item.slug}: ${item.error}`)
+      console.error(`Failed to launch ${item.slug} (${item.route}): ${item.error}`)
     }
     process.exit(1)
   }
 
-  if (!isInsideTmux() && tmuxHasSession(sessionName)) {
-    const focus = focusTmuxWindow(sessionName, "control")
+  const windowsAfterLaunch = listTmuxWindows(sessionName)
+  const hasAgentWindows = windowsAfterLaunch.some((window) => window.name.startsWith("agent:"))
+  const controlWindow = windowsAfterLaunch.find((window) => window.name === "control")
+  if (hasAgentWindows && controlWindow && windowsAfterLaunch.length > 1) {
+    const killed = killTmuxWindow(sessionName, String(controlWindow.index))
+    if (!killed.ok && !quiet) {
+      console.error(killed.error || "Failed to remove legacy control window.")
+    }
+  }
+
+  if (tmuxHasSession(sessionName)) {
+    configureAgentSession(sessionName, root)
+  }
+
+  if (attach && !isInsideTmux() && tmuxHasSession(sessionName)) {
+    const windows = listTmuxWindows(sessionName)
+    const firstAgentWindow = windows.find((window) => window.name.startsWith("agent:")) || windows[0]
+    const focusTarget = firstAgentWindow ? String(firstAgentWindow.index) : "0"
+    const focus = focusTmuxWindow(sessionName, focusTarget)
     if (!focus.ok) {
       console.error(focus.error || "Failed to attach tmux session.")
       process.exit(1)
@@ -231,111 +405,125 @@ export async function handleSpawn(
 Spawn - Launch agent runtimes
 
 USAGE:
-  termlings spawn                           Pick a preset interactively
+  termlings spawn                           Interactive: spawn all (tmux) or pick one agent
   termlings spawn <runtime>                 Run default preset for runtime
   termlings spawn <runtime> <preset>        Run a specific preset
-  termlings spawn --all [runtime] [preset]  Launch all agents in tmux windows
+  termlings spawn --all [runtime] [preset]  Spawn all agents (requires tmux)
+  termlings spawn --all --detached          Spawn all agents without attaching tmux
   termlings spawn --agent=<slug> [runtime] [preset]  Launch one specific agent
-  termlings spawn --inline ...              Run in current terminal (no tmux window)
+  termlings spawn --inline ...              Run one agent in current terminal
 
 EXAMPLES:
   termlings spawn --all
+  termlings spawn --all --detached
   termlings spawn --all claude auto
-  termlings spawn --agent=developer codex safe
+  termlings spawn --agent=developer codex default
   termlings spawn claude auto
 
 NOTES:
-  - Batch launch uses tmux windows named agent:<slug>.
-  - Run \`termlings peek <slug>\` to jump into an agent terminal.
-  - Run \`termlings control\` to return to the workspace window.
+  - Run this command in another terminal while \`termlings\` is open.
+  - Batch launch (\`--all\`) uses tmux windows named agent:<slug>.
+  - Agents run as normal PTY terminal sessions that you can inspect/interact with at any time.
+  - If runtime/preset is omitted for batch launch, \`.termlings/spawn.json\` \`default\` + \`agents.<slug>\` routing is used.
+  - Edit \`.termlings/spawn.json\` to change default runtime/preset and agent launch commands.
 `)
     return
   }
 
   const config = loadSpawnConfig() || DEFAULT_CONFIG
-  const runtimes = Object.keys(config)
-  const spawnAll = flags.has("all")
+  const runtimes = Object.keys(config.runtimes)
+  let spawnAll = flags.has("all")
   const quiet = flags.has("quiet")
+  const detached = flags.has("detached")
   const inline = flags.has("inline")
   const specificAgent = (opts.agent || "").trim()
-  const hasBatchTarget = spawnAll || specificAgent.length > 0
 
-  let runtimeName = positional[1]
-  let presetName = positional[2]
-
-  if (hasBatchTarget) {
-    runtimeName = runtimeName || "claude"
-    presetName = presetName || "default"
-  }
-
-  if (!runtimeName) {
-    const { renderBanner } = await import("../banner.js")
-    const { selectMenu } = await import("../interactive-menu.js")
-    const menuItems: { value: string; label: string; description: string }[] = []
-
-    for (const [runtime, presets] of Object.entries(config)) {
-      for (const [name, preset] of Object.entries(presets)) {
-        if (name === "default") continue
-        const isDefault = preset.command === presets.default?.command
-        const label = isDefault ? `${runtime} ${name} (default)` : `${runtime} ${name}`
-        menuItems.push({
-          value: preset.command,
-          label,
-          description: `${preset.description}\n\x1b[90m   ${preset.command}\x1b[0m`,
-        })
-      }
-    }
-
-    const selectedCommand = await selectMenu(menuItems, "Select a spawn preset:", {
-      header: renderBanner([]),
-      footer: "Tip: use `termlings` for control + peek, or run `termlings spawn --all`.",
-    })
-
-    await routePresetCommand(selectedCommand)
-    return
-  }
-
-  const runtimePresets = config[runtimeName]
-  if (!runtimePresets) {
-    console.error(`Unknown runtime: "${runtimeName}"`)
-    console.log(`Available: ${runtimes.join(", ")}`)
-    process.exit(1)
-  }
-
-  if (!presetName) {
-    const defaultPreset = runtimePresets.default
-    if (defaultPreset) {
-      await routePresetCommand(defaultPreset.command)
-      return
-    }
-
-    console.log(`${runtimeName}:\n`)
-    for (const [name, preset] of Object.entries(runtimePresets)) {
-      console.log(`  ${name.padEnd(16)} ${preset.description}`)
-    }
-    console.log(`\nRun: termlings spawn ${runtimeName} <preset>`)
-    return
-  }
-
-  const preset = runtimePresets[presetName]
-  if (!preset) {
-    console.error(`Unknown preset: "${presetName}"`)
-    console.log(`Available for ${runtimeName}:`)
-    for (const name of Object.keys(runtimePresets)) {
-      console.log(`  ${name}`)
-    }
-    process.exit(1)
-  }
+  let runtimeName = positional[1]?.trim()
+  let presetName = positional[2]?.trim()
 
   const extraArgs = positional.slice(3)
-  const fullCommand = extraArgs.length > 0 ? `${preset.command} ${extraArgs.join(" ")}` : preset.command
+  const localAgents = discoverLocalAgents()
+
+  if (!spawnAll && specificAgent.length === 0 && !runtimeName) {
+    if (localAgents.length === 0) {
+      console.error("No agents found in .termlings/agents.")
+      console.error("Run `termlings init` first.")
+      process.exit(1)
+    }
+
+    const { getTermlingsVersion, renderBanner } = await import("../banner.js")
+    const { selectMenu } = await import("../interactive-menu.js")
+    const reset = "\x1b[0m"
+    const bold = "\x1b[1m"
+    const muted = "\x1b[38;5;245m"
+    const purple = "\x1b[38;2;138;43;226m"
+    const header = renderBanner([
+      `${purple}${bold}termlings${reset} ${muted}v${getTermlingsVersion()}${reset}`,
+    ])
+    const menuItems: { value: string; label: string; description: string }[] = [
+      {
+        value: "__spawn_all__",
+        label: "Spawn all (requires tmux)",
+        description: "Launch all agents in tmux windows using configured routes.",
+      },
+    ]
+
+    for (const agent of localAgents) {
+      const route = resolveAgentRoute(config, agent.name)
+      const routePreset = resolvePreset(config, route.runtime, route.preset)
+      const displayName = (agent.soul?.name || agent.name).trim()
+      const role = (agent.soul?.title_short || agent.soul?.title || agent.soul?.role || "").trim()
+      const label = role ? `${displayName} (${role})` : displayName
+      const descriptionLead = routePreset?.description || "Launch this agent in current terminal."
+      const rawCommandPreview = buildPresetCommand(config, route.runtime, route.preset, []) || "(invalid command)"
+      const commandPreview = formatCommandPreview(rawCommandPreview)
+      menuItems.push({
+        value: `agent:${agent.name}`,
+        label,
+        description: `${descriptionLead}\n\x1b[90m   cmd: ${commandPreview}\x1b[0m`,
+        accentColor: accentColorFromDna(agent.soul?.dna),
+      })
+    }
+
+    const selected = await selectMenu(menuItems, "Spawn options:", {
+      header,
+      titleNote:
+        "Agents run as normal PTY terminal sessions you can inspect anytime.\n"
+        + "Edit `.termlings/spawn.json` to change defaults.",
+      footer: "Tip: keep `termlings` open in one terminal, then run spawn from another.",
+    })
+
+    if (selected === "__spawn_all__") {
+      spawnAll = true
+    } else if (selected.startsWith("agent:")) {
+      const slug = selected.slice("agent:".length)
+      const route = resolveAgentRoute(config, slug)
+      const command = buildPresetCommand(config, route.runtime, route.preset, extraArgs)
+      if (!command) {
+        console.error(`Invalid spawn route for ${slug}: ${formatRoute(route.runtime, route.preset)}`)
+        process.exit(1)
+      }
+      await routePresetCommand(command, { agentSlug: slug })
+      return
+    }
+  }
+
+  const hasBatchTarget = spawnAll || specificAgent.length > 0
 
   if (!hasBatchTarget) {
-    await routePresetCommand(fullCommand)
+    if (!presetName) {
+      presetName = "default"
+    }
+    const command = buildPresetCommand(config, runtimeName, presetName, extraArgs)
+    if (!command) {
+      console.error(`Unknown preset route: ${formatRoute(runtimeName, presetName)}`)
+      console.log(`Available runtimes: ${runtimes.join(", ")}`)
+      process.exit(1)
+    }
+    await routePresetCommand(command)
     return
   }
 
-  const localAgents = discoverLocalAgents()
   if (localAgents.length === 0) {
     console.error("No agents found in .termlings/agents.")
     console.error("Run `termlings init` first.")
@@ -354,14 +542,46 @@ NOTES:
     process.exit(1)
   }
 
+  const launchTargets: AgentLaunchTarget[] = []
+  for (const slug of agentSlugs) {
+    let selectedRuntime = runtimeName
+    let selectedPreset = presetName || "default"
+
+    if (!selectedRuntime) {
+      const route = resolveAgentRoute(config, slug)
+      selectedRuntime = route.runtime
+      selectedPreset = route.preset
+    }
+
+    if (!resolvePreset(config, selectedRuntime, selectedPreset)) {
+      console.error(
+        `Invalid spawn route for ${slug}: ${formatRoute(selectedRuntime, selectedPreset)}. ` +
+        "Check .termlings/spawn.json runtimes/default/agents.",
+      )
+      process.exit(1)
+    }
+
+    launchTargets.push({
+      slug,
+      runtimeName: selectedRuntime,
+      presetName: selectedPreset,
+    })
+  }
+
   if (inline) {
-    if (agentSlugs.length !== 1) {
+    if (launchTargets.length !== 1) {
       console.error("`--inline` requires exactly one agent (use --agent=<slug>).")
       process.exit(1)
     }
-    await routePresetCommand(fullCommand, { agentSlug: agentSlugs[0] })
+    const target = launchTargets[0]!
+    const command = buildPresetCommand(config, target.runtimeName, target.presetName, extraArgs)
+    if (!command) {
+      console.error(`Invalid preset route: ${formatRoute(target.runtimeName, target.presetName)}`)
+      process.exit(1)
+    }
+    await routePresetCommand(command, { agentSlug: target.slug })
     return
   }
 
-  await spawnAgentWindows(runtimeName, presetName, agentSlugs, extraArgs, quiet)
+  await spawnAgentWindows(launchTargets, extraArgs, quiet, !detached)
 }

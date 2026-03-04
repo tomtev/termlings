@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   unlinkSync,
   writeFileSync,
@@ -55,6 +56,10 @@ function sessionsDir(root: string): string {
 
 function storeDir(root: string): string {
   return join(termlingsDir(root), "store")
+}
+
+function presenceDir(root: string): string {
+  return join(storeDir(root), "presence")
 }
 
 function workspaceMetaPath(root: string): string {
@@ -115,7 +120,7 @@ function sessionFile(root: string, sessionId: string): string {
 }
 
 function typingFile(root: string, sessionId: string): string {
-  return join(termlingsDir(root), `${sessionId}.typing.json`)
+  return join(presenceDir(root), `${sessionId}.typing.json`)
 }
 
 function clearSessionTyping(sessionId: string, root: string, ts: number): void {
@@ -125,6 +130,31 @@ function clearSessionTyping(sessionId: string, root: string, ts: number): void {
       JSON.stringify({ typing: false, source: "terminal", updatedAt: ts }) + "\n",
     )
   } catch {}
+}
+
+function migrateLegacyTypingFiles(root: string): void {
+  const base = termlingsDir(root)
+  const targetDir = presenceDir(root)
+
+  let entries: string[] = []
+  try {
+    entries = readdirSync(base)
+  } catch {
+    return
+  }
+
+  for (const entry of entries) {
+    if (!entry.endsWith(".typing.json")) continue
+    const from = join(base, entry)
+    const to = join(targetDir, entry)
+    try {
+      if (!existsSync(to)) {
+        renameSync(from, to)
+      } else {
+        rmSync(from, { force: true })
+      }
+    } catch {}
+  }
 }
 
 function normalizeSession(raw: any, fallbackSessionId: string): WorkspaceSession | null {
@@ -148,7 +178,9 @@ export function ensureWorkspaceDirs(root = process.cwd()): void {
   mkdirSync(join(base, "humans"), { recursive: true })
   mkdirSync(sessionsDir(root), { recursive: true })
   mkdirSync(storeDir(root), { recursive: true })
+  mkdirSync(presenceDir(root), { recursive: true })
   mkdirSync(join(base, "browser"), { recursive: true })
+  migrateLegacyTypingFiles(root)
   msgStorage.initializeMessageDirs(root)
   touchWorkspace(root)
 }
@@ -169,6 +201,14 @@ export function clearWorkspaceRuntime(root = process.cwd()): void {
       } catch {}
     }
   }
+
+  try {
+    const presenceEntries = readdirSync(presenceDir(root))
+    for (const file of presenceEntries) {
+      if (!file.endsWith(".typing.json")) continue
+      rmSync(join(presenceDir(root), file), { force: true })
+    }
+  } catch {}
 
   try {
     const sessions = readdirSync(sessionsDir(root))

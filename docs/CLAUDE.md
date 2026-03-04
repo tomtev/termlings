@@ -105,7 +105,7 @@ If you get connection errors:
 ```bash
 # Remove stale presence/session files if needed
 rm -f .termlings/sessions/*.json
-rm -f .termlings/*.typing.json
+rm -f .termlings/store/presence/*.typing.json
 
 # Re-initialize if needed
 termlings init --force

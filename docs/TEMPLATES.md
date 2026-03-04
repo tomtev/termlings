@@ -47,3 +47,7 @@ Only the entries above are copied into `.termlings/`.
 
 - `#<ref>` is intended for branch/tag selection.
 - Git templates are cloned to a temporary directory and cleaned up after copy.
+- `spawn.json` should use:
+  - `default` (workspace runtime/preset)
+  - `agents` (per-agent runtime/preset overrides by slug)
+  - `runtimes` (preset command catalog)

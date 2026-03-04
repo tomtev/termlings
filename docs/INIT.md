@@ -10,6 +10,26 @@ termlings init
 
 This creates `.termlings/` directory with all necessary files and folders.
 
+## Start the Workspace
+
+After init, you have two launch patterns:
+
+### Single terminal (auto-spawn all, requires tmux)
+```bash
+termlings --spawn-all
+```
+
+This spawns all agents in detached tmux PTYs, then opens the workspace TUI.
+
+### Two terminals (manual spawn flow)
+```bash
+# terminal 1
+termlings
+
+# terminal 2
+termlings spawn
+```
+
 ## What Gets Created
 
 ```
@@ -18,6 +38,7 @@ This creates `.termlings/` directory with all necessary files and folders.
 ├── sessions/                     # Active agent sessions
 ├── store/
 │   ├── messages/                # Message history (channels/dms/system + index)
+│   ├── presence/                # Terminal typing/activity state
 │   ├── tasks/
 │   │   └── tasks.json           # Task definitions
 │   ├── calendar/
@@ -46,6 +67,7 @@ You'll be prompted to:
    - Ignore all
    - Ignore messages (recommended)
    - No ignore
+5. Pick default model runtime (Claude/Codex/Pi)
 
 ### Force re-run
 ```bash
@@ -81,7 +103,7 @@ To clear stale runtime presence without touching tasks/calendar/agents:
 
 ```bash
 rm -f .termlings/sessions/*.json
-rm -f .termlings/*.typing.json
+rm -f .termlings/store/presence/*.typing.json
 ```
 
 ## Troubleshooting
@@ -114,6 +136,7 @@ Make sure you're in the project root where you want the workspace.
 │   └── [sessionId].json  # Per-agent session state
 ├── store/
 │   ├── messages/         # Chat/DM/system history
+│   ├── presence/         # Session typing/activity state
 │   ├── tasks/
 │   │   └── tasks.json    # All tasks
 │   ├── calendar/

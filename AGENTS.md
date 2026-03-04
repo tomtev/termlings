@@ -183,7 +183,7 @@ When an operator/human messages an agent, the agent should:
 Typing presence is terminal-first.
 
 - Source of truth: launcher PTY activity + terminal busy detection.
-- State file: `.termlings/<sessionId>.typing.json` with `source: "terminal"`.
+- State file: `.termlings/store/presence/<sessionId>.typing.json` with `source: "terminal"`.
 - Auto-clear on inactivity is handled by the launcher.
 - Freshness and message-based stale clearing are enforced by local runtime + TUI.
 - Legacy Claude hooks are no longer used; startup cleans old hook registration if present.

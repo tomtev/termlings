@@ -36,7 +36,7 @@ DESCRIPTION:
   const sessionName = projectTmuxSessionName(process.cwd())
   if (!tmuxHasSession(sessionName)) {
     console.error("No Termlings tmux session found for this project.")
-    console.error("Run: termlings")
+    console.error("Run: termlings spawn --all")
     process.exit(1)
   }
 
@@ -44,7 +44,7 @@ DESCRIPTION:
   const agentWindows = windows.filter((window) => window.name.startsWith("agent:"))
   if (agentWindows.length === 0) {
     console.error("No agent windows found in tmux session.")
-    console.error("Open termlings control and wait for team terminals to auto-launch.")
+    console.error("Run `termlings spawn --all` first.")
     process.exit(1)
   }
 

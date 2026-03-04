@@ -19,7 +19,9 @@ import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
+  unlinkSync,
   writeFileSync,
 } from "fs"
 import { join } from "path"
@@ -108,6 +110,86 @@ function getMessageFilePath(
   return getSystemPath(root)
 }
 
+function rebuildIndex(root: string): void {
+  const index: MessageIndex = { channels: [], dms: [], updatedAt: Date.now() }
+
+  try {
+    for (const entry of readdirSync(getChannelsDir(root))) {
+      if (!entry.endsWith(".jsonl")) continue
+      const channel = entry.slice(0, -".jsonl".length)
+      const messages = getChannelMessages(channel, root)
+      if (messages.length <= 0) continue
+      index.channels.push({
+        name: channel,
+        count: messages.length,
+        lastTs: Math.max(...messages.map((msg) => msg.ts || 0)),
+      })
+    }
+  } catch {}
+
+  try {
+    for (const entry of readdirSync(getDmsDir(root))) {
+      if (!entry.endsWith(".jsonl")) continue
+      const target = entry.slice(0, -".jsonl".length)
+      const messages = getDmMessages(target, root)
+      if (messages.length <= 0) continue
+      index.dms.push({
+        target,
+        count: messages.length,
+        lastTs: Math.max(...messages.map((msg) => msg.ts || 0)),
+      })
+    }
+  } catch {}
+
+  index.channels.sort((a, b) => a.name.localeCompare(b.name))
+  index.dms.sort((a, b) => a.target.localeCompare(b.target))
+  saveIndex(root, index)
+}
+
+function migrateLegacySessionSystemDmThreads(root: string): void {
+  ensureMessageDirs(root)
+  const dms = getDmsDir(root)
+  const systemPath = getSystemPath(root)
+  let changed = false
+
+  let entries: string[] = []
+  try {
+    entries = readdirSync(dms)
+  } catch {
+    return
+  }
+
+  for (const entry of entries) {
+    if (!entry.endsWith(".jsonl")) continue
+    const target = entry.slice(0, -".jsonl".length)
+    if (!/^tl-[0-9a-f]{8}$/i.test(target)) continue
+
+    const path = join(dms, entry)
+    const messages = parseJsonLines<WorkspaceMessage>(path)
+    if (messages.length <= 0) continue
+    const allSystem = messages.every((message) => message.kind === "system")
+    if (!allSystem) continue
+
+    for (const message of messages) {
+      const migrated: WorkspaceMessage = {
+        ...message,
+        kind: "system",
+        target: undefined,
+      }
+      appendFileSync(systemPath, JSON.stringify(migrated) + "\n")
+    }
+
+    try {
+      unlinkSync(path)
+      changed = true
+    } catch {}
+  }
+
+  if (changed) {
+    rebuildIndex(root)
+  }
+}
+
 function ensureMessageDirs(root: string): void {
   mkdirSync(getStorageDir(root), { recursive: true })
   mkdirSync(getChannelsDir(root), { recursive: true })
@@ -172,6 +254,7 @@ function updateIndex(
 
 export function initializeMessageDirs(root: string): void {
   ensureMessageDirs(root)
+  migrateLegacySessionSystemDmThreads(root)
 }
 
 export function appendMessage(
@@ -180,6 +263,9 @@ export function appendMessage(
 ): WorkspaceMessage {
   ensureMessageDirs(root)
 
+  const normalizedChannel = message.kind === "chat" ? message.channel : undefined
+  const normalizedTarget = message.kind === "dm" ? message.target : undefined
+
   const record: WorkspaceMessage = {
     id: message.id ?? `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
     ts: message.ts ?? Date.now(),
@@ -187,17 +273,17 @@ export function appendMessage(
     from: message.from,
     fromName: message.fromName,
     fromDna: message.fromDna,
-    target: message.target,
+    target: normalizedTarget,
     targetName: message.targetName,
     targetDna: message.targetDna,
     text: message.text,
-    channel: message.channel,
+    channel: normalizedChannel,
   }
 
-  const filePath = getMessageFilePath(root, message.channel, message.target)
+  const filePath = getMessageFilePath(root, normalizedChannel, normalizedTarget)
   appendFileSync(filePath, JSON.stringify(record) + "\n")
 
-  updateIndex(root, message.channel, message.target, record.ts)
+  updateIndex(root, normalizedChannel, normalizedTarget, record.ts)
 
   return record
 }

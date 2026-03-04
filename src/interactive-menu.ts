@@ -25,6 +25,7 @@ export interface MenuItem {
   label: string;
   value: string;
   description?: string;
+  accentColor?: string;
 }
 
 /**
@@ -33,7 +34,7 @@ export interface MenuItem {
 export async function selectMenu(
   items: MenuItem[],
   title?: string,
-  options?: { input?: Readable; output?: Writable; footer?: string; header?: string }
+  options?: { input?: Readable; output?: Writable; footer?: string; header?: string; titleNote?: string }
 ): Promise<string> {
   const input = options?.input || process.stdin;
   const output = options?.output || process.stdout;
@@ -57,6 +58,20 @@ export async function selectMenu(
         const safeTitle = ` ${title} `;
         const ruleWidth = Math.max(0, width - visibleLength(safeTitle) - 2);
         output.write(`\n${ANSI_TITLE}${ANSI_BOLD}${safeTitle}${ANSI_RESET}${ANSI_TITLE_RULE}${"-".repeat(ruleWidth)}${ANSI_RESET}\n`);
+        if (options?.titleNote) {
+          const lines = options.titleNote.split("\n");
+          for (const line of lines) {
+            if (line.length === 0) {
+              output.write("\n");
+              continue;
+            }
+            if (line.includes("\x1b[")) {
+              output.write(`${line}\n`);
+            } else {
+              output.write(`${ANSI_FOOTER}${line}${ANSI_RESET}\n`);
+            }
+          }
+        }
       } else {
         output.write("\n");
       }
@@ -66,8 +81,11 @@ export async function selectMenu(
         const isSelected = i === selectedIndex;
         const prefix = isSelected ? "> " : "  ";
         const labelColor = isSelected ? ANSI_ITEM_SELECTED : ANSI_ITEM;
-
-        output.write(`${labelColor}${prefix}${item.label}${ANSI_RESET}\n`);
+        output.write(`${labelColor}${prefix}`);
+        if (item.accentColor) {
+          output.write(`${item.accentColor}■${labelColor} `);
+        }
+        output.write(`${item.label}${ANSI_RESET}\n`);
 
         if (item.description) {
           const desc = item.description.split("\n");

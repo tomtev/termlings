@@ -1,6 +1,6 @@
 import type { AgentAdapter } from "./types.js"
 import { randomBytes } from "crypto"
-import { readFileSync, existsSync, unlinkSync, writeFileSync } from "fs"
+import { mkdirSync, readFileSync, existsSync, unlinkSync, writeFileSync } from "fs"
 import { resolve as resolvePath, dirname as dirName, join as joinPath } from "path"
 import { fileURLToPath } from "url"
 import { readMessages, getIpcDir } from "../engine/ipc.js"
@@ -275,7 +275,11 @@ export async function launchAgent(
     TERMLINGS_CONTEXT_PROFILE: contextProfile,
     TERMLINGS_SIM_MODE: contextProfile === "sim" ? "1" : "0",
   }
-  const typingPath = joinPath(ipcDir, `${sessionId}.typing.json`)
+  const typingDir = joinPath(ipcDir, "store", "presence")
+  try {
+    mkdirSync(typingDir, { recursive: true })
+  } catch {}
+  const typingPath = joinPath(typingDir, `${sessionId}.typing.json`)
   let typingIdleTimer: ReturnType<typeof setTimeout> | null = null
   let typingActive = false
   let lastTypingWriteAt = 0
@@ -370,7 +374,6 @@ export async function launchAgent(
     from: "system",
     fromName: "Workspace",
     text: `${agentName} joined`,
-    target: sessionId,
   })
   const heartbeatTimer = setInterval(() => {
     try {
@@ -539,7 +542,6 @@ export async function launchAgent(
       from: "system",
       fromName: "Workspace",
       text: `${agentName} left`,
-      target: sessionId,
     })
   }
 

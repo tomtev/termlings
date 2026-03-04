@@ -6,7 +6,8 @@ Termlings runs in a shared workspace (`.termlings/`) in your project folders whe
 
 Our vision is to make building and running companies with AI agents feel like a video game, while still producing the best possible websites, apps and services.
 
-Run `termlings` in your project folder to open the TUI and manage your team. Spawn agents by launching your preferred runtime session (Claude Code or Codex) with `termlings spawn` in another terminal. Termling agents can run on different agent CLIs so you can mix Claude Code, Codex, and local open-source models in your agent team.
+Run `termlings` in your project folder to open the TUI and manage your team.  
+Use `termlings --spawn-all` for a single-terminal startup (spawns all agents in detached tmux PTYs, then opens the TUI), or run `termlings` + `termlings spawn` in separate terminals.
 
 Every agent gets access to these tools (via termlings CLI):
 
@@ -34,21 +35,31 @@ bun add -g termlings@latest
 # 1) Initialize workspace files
 termlings init
 
-# 2) Launch an agent session (in another terminal)
+# 2A) One-terminal startup (requires tmux)
+termlings --spawn-all
+
+# 2B) Or: keep workspace and spawning separate
+termlings
+# in another terminal:
 termlings spawn
 ```
 
 ## IMPORTANT!
-For high autonomy, use the `auto` preset in `termlings spawn` for your chosen runtime. Use dangerous flags with caution.
+Default spawn presets run in dangerous/autonomous mode for supported runtimes.
 
 ## How it works
 Termlings adds an agent coordination layer in `.termlings/` on top of your existing coding-agent runtime.
 
-1. `termlings spawn` launches an agent using a preset from `.termlings/spawn.json`.
+1. `termlings spawn` launches an agent using `.termlings/spawn.json` routing:
+   - `default` sets workspace-wide runtime/preset
+   - `agents.<slug>` can override runtime/preset per agent
+   - `runtimes` defines runtime preset commands
+   - `termlings --spawn-all` is a convenience wrapper around batch spawn (`--all --detached`) before opening the workspace TUI
 2. Termlings injects workspace + role context into the runtime session.
 3. The runtime starts with that context:
    - Claude Code (`termlings claude`) via `--append-system-prompt "<termlings context>"`
    - Codex CLI (`termlings codex`) via `-i "<termlings context>"`
+   - Pi (`termlings pi`) via `--append-system-prompt "<termlings context>"`
 4. Agents coordinate through `termlings` commands (`message`, `task`, `calendar`, `request`, etc.), while shared state in `.termlings/store/*` keeps TUI + CLI in sync across terminals.
 
 Each Termling agent gets role-specific context derived from its `SOUL.md` plus shared workspace context.
@@ -65,6 +76,7 @@ The built-in terminal UI is like an AI-native Slack: chat with your agents, trac
 | Command | What it does | Docs |
 | --- | --- | --- |
 | `termlings` | Start the workspace TUI | [docs/INIT.md](docs/INIT.md) |
+| `termlings --spawn-all` | Spawn all agents (detached tmux PTYs) + open workspace TUI | [docs/INIT.md](docs/INIT.md) |
 | `termlings spawn` | Pick an agent + launch preset | [AGENTS.md](AGENTS.md) |
 | `termlings create` | Create a new agent in .termlings/agents | [AGENTS.md](AGENTS.md) |
 | `termlings init` | Initialize `.termlings/` in current project | [docs/INIT.md](docs/INIT.md) |
@@ -110,6 +122,8 @@ You should not run these commands since they mostly work inside a agent session.
       dms/*.jsonl
       system.jsonl
       index.json
+    presence/
+      tl-*.typing.json
     tasks/tasks.json
     calendar/calendar.json
     requests/requests.jsonl
@@ -125,6 +139,7 @@ What each file/folder is for:
 - `.termlings/brand/brand.json` - default brand profile.
 - `.termlings/brand/profiles/<id>.json` - additional named brand profiles.
 - `.termlings/store/messages/` - append-only channel/DM/system history.
+- `.termlings/store/presence/` - session typing/activity state.
 - `.termlings/store/tasks/tasks.json` - task list and task state.
 - `.termlings/store/calendar/calendar.json` - events and recurrence.
 - `.termlings/store/requests/requests.jsonl` - operator request log.

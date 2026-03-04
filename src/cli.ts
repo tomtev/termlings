@@ -8,10 +8,10 @@ import { launchWorkspaceTui } from "./tui/tui.js";
 import { getUpdateNotice } from "./update-check.js";
 import { runSimCommand } from "./sim/index.js";
 
-function isTruthyEnv(value?: string): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+function tmuxInstallHint(): string {
+  if (process.platform === "darwin") return "macOS: brew install tmux";
+  if (process.platform === "win32") return "Windows (WSL): sudo apt install tmux";
+  return "Linux: sudo apt install tmux";
 }
 
 const args = process.argv.slice(2);
@@ -123,6 +123,7 @@ try {
 
 Workspace:
   termlings                Start the terminal workspace UI
+  termlings --spawn-all    Start workspace UI and spawn all agents in detached PTYs
   termlings init           Initialize .termlings in this project
   termlings --server       Run secure HTTP server mode
 
@@ -158,9 +159,11 @@ Avatar & Creation:
   termlings create         Create new agent
 
 Spawn:
-  termlings spawn --all                Launch all agents in tmux windows
-  termlings spawn --agent=<slug> ...   Launch one agent in a tmux window
-  termlings spawn ... --inline         Launch in current terminal
+  termlings spawn                      Interactive spawn picker (run in another terminal)
+  termlings spawn --all                Spawn all agents (requires tmux)
+  termlings spawn --all --detached     Spawn all agents without attaching tmux
+  termlings spawn --agent=<slug> ...   Spawn one agent
+  termlings spawn ... --inline         Run one agent in current terminal
 
 Upgrade:
   npm install -g termlings@latest
@@ -178,17 +181,7 @@ Sim (optional):
     }
 
     if (!positional[0]) {
-      if (!process.env.TMUX && !flags.has("inside-tmux")) {
-        const { attachControlSession } = await import("./engine/tmux.js");
-        const attached = attachControlSession(process.cwd());
-        if (!attached.ok) {
-          console.error(attached.error || "Failed to start tmux control session.");
-          process.exit(1);
-        }
-        process.exit(0);
-      }
-
-      const allowedTopLevelFlags = new Set(["help", "h", "server", "sim", "inside-tmux"]);
+      const allowedTopLevelFlags = new Set(["help", "h", "server", "sim", "inside-tmux", "spawn-all"]);
       const unsupportedFlags = Array.from(flags).filter((flag) => !allowedTopLevelFlags.has(flag));
       if (unsupportedFlags.length > 0) {
         console.error(`Unknown option(s): ${unsupportedFlags.map((flag) => `--${flag}`).join(", ")}`);
@@ -213,17 +206,22 @@ Sim (optional):
         process.exit(0);
       }
 
-      if (flags.has("inside-tmux") && isTruthyEnv(process.env.TERMLINGS_CONTROL_PANEL)) {
-        try {
-          const { handleSpawn } = await import("./commands/spawn.js");
-          await handleSpawn(new Set(["all", "quiet"]), ["spawn"], {});
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error);
-          console.error(`Warning: failed to auto-launch team terminals: ${msg}`);
+      let tuiOptions: { startupBanner?: string } = {};
+      if (flags.has("spawn-all")) {
+        const { isTmuxAvailable } = await import("./engine/tmux.js");
+        if (!isTmuxAvailable()) {
+          console.error("`termlings --spawn-all` requires tmux.");
+          console.error(`Install tmux first. ${tmuxInstallHint()}`);
+          process.exit(1);
         }
+        const { handleSpawn } = await import("./commands/spawn.js");
+        await handleSpawn(new Set(["all", "detached", "quiet"]), ["spawn"], {});
+        tuiOptions = {
+          startupBanner: "Spawned all agents in tmux PTYs.",
+        };
       }
 
-      await launchWorkspaceTui(process.cwd(), {});
+      await launchWorkspaceTui(process.cwd(), tuiOptions);
       process.exit(0);
     }
 

@@ -33,6 +33,10 @@ function readVersion(): string {
   }
 }
 
+export function getTermlingsVersion(): string {
+  return readVersion()
+}
+
 /**
  * Render the 👾 logo with text lines beside it.
  * Logo is ~5 lines tall; text lines are vertically centered next to it.
@@ -206,8 +210,8 @@ export async function printPostInitTeamWave(agents: TeamWaveAgent[]): Promise<vo
   if (agents.length === 0) return;
 
   const waveAgents = agents.slice(0, 8);
-  const frames = [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 0];
-  const frameDelayMs = 140;
+  const frames = [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 0];
+  const frameDelayMs = 150;
 
   const muted = "\x1b[38;5;245m";
   const reset = "\x1b[0m";
@@ -224,7 +228,8 @@ export async function printPostInitTeamWave(agents: TeamWaveAgent[]): Promise<vo
     await sleep(frameDelayMs);
   }
   console.log("");
-  console.log(`${muted}Now run \`termlings\` to start workspace (team terminals auto-launch). Use \`p\` to peek terminals.${reset}`);
+  console.log(`${muted}Setup complete. Run \`termlings\` to start your workspace.${reset}`);
+  console.log(`${muted}Run \`termlings spawn\` in another terminal to launch agents into your workspace.${reset}`);
   console.log("");
 }
 
