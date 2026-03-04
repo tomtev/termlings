@@ -38,9 +38,11 @@ export async function handleBrowser(flags: Set<string>, positional: string[], op
   const {
     initializeBrowserDirs,
     getOrCreateProfileReference,
+    getBrowserConfig,
     startBrowser,
     stopBrowser,
     isBrowserRunning,
+    isAgentBrowserAvailable,
     logBrowserActivity,
     readProcessState,
   } = await import("../engine/browser.js");
@@ -57,25 +59,30 @@ SETUP:
   termlings browser init              Initialize profile (creates .termlings/browser/)
 
 SERVER CONTROL:
-  termlings browser start [--headed|--headless] Launch browser instance
-  termlings browser stop              Stop browser gracefully
+  termlings browser start [--headed|--headless] Launch Chrome with CDP
+  termlings browser stop              Stop Chrome browser process
   termlings browser status            Show running status & uptime
 
+MODE GUIDE:
+  Headed (default): login flows, approvals, CAPTCHA/manual intervention
+  Headless: CI, scraping, repeatable extraction without human takeover
+  Note: both modes use CDP; headless only removes the visible window
+
 NAVIGATION:
-  termlings browser navigate <url> [--tab <id>] Go to URL
-  termlings browser snapshot [--tab <id>] Get structured page snapshot (JSON)
-  termlings browser screenshot [--tab <id>] Capture page (returns base64)
-  termlings browser extract [--tab <id>] Get visible page text
+  termlings browser navigate <url> [--tab <index>] Go to URL
+  termlings browser snapshot [--tab <index>] Get structured page snapshot (JSON)
+  termlings browser screenshot [--tab <index>] Capture page (returns base64)
+  termlings browser extract [--tab <index>] Get visible page text
   termlings browser tabs list         List open tabs
   termlings browser overview          Show browser + tabs overview
 
 INTERACTION:
-  termlings browser type <text> [--tab <id>] Type into focused element
-  termlings browser click <selector> [--tab <id>] Click element by CSS selector
-  termlings browser cookies list [--tab <id>] List all cookies
+  termlings browser type <text> [--tab <index>] Type into focused element
+  termlings browser click <selector> [--tab <index>] Click element by CSS selector
+  termlings browser cookies list [--tab <index>] List all cookies
 
 HUMAN-IN-LOOP:
-  termlings browser check-login [--tab <id>] Exit 1 if login required
+  termlings browser check-login [--tab <index>] Exit 1 if login required
   termlings browser request-help <msg> Notify operator via DM
 
 QUERY PATTERNS (reusable automation):
@@ -88,10 +95,10 @@ EXAMPLES:
   termlings browser start --headed
   termlings browser start --headless
   termlings browser navigate "https://example.com"
-  termlings browser navigate "https://example.com" --tab <tab-id>
+  termlings browser navigate "https://example.com" --tab 1
   termlings browser snapshot --compact --interactive --depth 2
-  termlings browser snapshot --tab <tab-id>
-  termlings browser screenshot --tab <tab-id> --out /tmp/page.png
+  termlings browser snapshot --tab 1
+  termlings browser screenshot --tab 1 --out /tmp/page.png
   termlings browser type "hello world"
   termlings browser click "button.submit"
   termlings browser extract | jq '.text'
@@ -99,12 +106,11 @@ EXAMPLES:
 ENVIRONMENT:
   TERMLINGS_AGENT_NAME               Your name (auto-logged)
   TERMLINGS_AGENT_DNA                Your stable ID (auto-logged)
-  BRIDGE_HEADLESS=true               Force background/headless mode
 
 PROFILES:
-  Per-project profiles auto-created in ~/.pinchtab/profiles/
-  Activity logged to .termlings/browser/history.jsonl
-  Dashboard: http://localhost:9867/dashboard
+  Per-project profiles auto-created in ~/.termlings/chrome-profiles/
+  Activity logged to .termlings/browser/history/all.jsonl and .termlings/browser/history/agent/<agent>.jsonl
+  Runtime adapter: agent-browser --native --cdp
 `);
     return;
   }
@@ -113,8 +119,12 @@ PROFILES:
   if (subcommand === "init") {
     try {
       await initializeBrowserDirs();
-      console.log("✓ Browser initialized. Profile directory created.");
-      console.log("Install PinchTab: npm install -g pinchtab");
+      const profileRef = getOrCreateProfileReference();
+      console.log("✓ Browser initialized. Workspace profile prepared.");
+      console.log(`Profile: ${profileRef.location}`);
+      if (!isAgentBrowserAvailable()) {
+        console.log("Install runtime: npm install -g agent-browser && agent-browser install");
+      }
       return;
     } catch (e) {
       console.error(`Error initializing browser: ${e}`);
@@ -124,6 +134,12 @@ PROFILES:
 
   if (subcommand === "start") {
     try {
+      if (!isAgentBrowserAvailable()) {
+        console.error("agent-browser CLI is required. Install with:");
+        console.error("  npm install -g agent-browser && agent-browser install");
+        process.exit(1);
+      }
+
       const headlessMode = resolveHeadlessMode(flags, opts);
       const wasRunning = await isBrowserRunning();
       if (wasRunning) {
@@ -139,13 +155,13 @@ PROFILES:
           ? undefined
           : { headless: headlessMode }
       );
-      const envHeadless = (process.env.BRIDGE_HEADLESS ?? "false").toLowerCase() !== "false";
-      const effectiveHeadless = headlessMode ?? envHeadless;
+      const effectiveHeadless = headlessMode === true;
       const profileRef = getOrCreateProfileReference();
       console.log(`✓ Browser started (PID ${pid}, port ${port})`);
       console.log(`Mode: ${effectiveHeadless ? "headless" : "headed"}`);
       console.log(`Profile: ${profileRef.location}`);
-      console.log(`Dashboard: http://127.0.0.1:${port}/dashboard`);
+      console.log(`CDP endpoint: http://127.0.0.1:${port}`);
+      console.log(`Runtime: agent-browser --native --cdp ${port}`);
       return;
     } catch (e) {
       console.error(`Error starting browser: ${e}`);
@@ -174,9 +190,11 @@ PROFILES:
     try {
       const running = await isBrowserRunning();
       const state = readProcessState();
+      const config = getBrowserConfig();
 
       if (!running) {
         console.log("Browser: stopped");
+        console.log(`  Profile: ${config.profilePath}`);
         return;
       }
 
@@ -188,6 +206,10 @@ PROFILES:
       if (state?.url) {
         console.log(`  URL: ${state.url}`);
       }
+      if (state?.profilePath || config.profilePath) {
+        console.log(`  Profile: ${state?.profilePath || config.profilePath}`);
+      }
+      console.log(`  Runtime: agent-browser --native --cdp ${state?.port}`);
 
       // Show active agents
       const { readAgentBrowserStates } = await import("../engine/browser.js");
@@ -227,8 +249,13 @@ PROFILES:
     console.error("Browser not running. Use: termlings browser start");
     process.exit(1);
   }
+  if (!isAgentBrowserAvailable()) {
+    console.error("agent-browser CLI is required. Install with:");
+    console.error("  npm install -g agent-browser && agent-browser install");
+    process.exit(1);
+  }
 
-  const client = new BrowserClient(state.port);
+  const client = new BrowserClient(state.cdpWsUrl || state.port);
   const tabId = opts.tab ?? opts["tab-id"] ?? opts.tabId;
 
   try {
@@ -353,7 +380,7 @@ PROFILES:
     if (subcommand === "navigate") {
       const url = positional[2];
       if (!url) {
-        console.error("Usage: termlings browser navigate <url> [--tab <id>]");
+        console.error("Usage: termlings browser navigate <url> [--tab <index>]");
         process.exit(1);
       }
       await client.navigate(url, { tabId });
@@ -389,7 +416,7 @@ PROFILES:
     if (subcommand === "type") {
       const text = positional.slice(2).join(" ");
       if (!text) {
-        console.error("Usage: termlings browser type <text> [--tab <id>]");
+        console.error("Usage: termlings browser type <text> [--tab <index>]");
         process.exit(1);
       }
       await client.typeText(text, { tabId });
@@ -401,7 +428,7 @@ PROFILES:
     if (subcommand === "click") {
       const selector = positional[2];
       if (!selector) {
-        console.error("Usage: termlings browser click <selector> [--tab <id>]");
+        console.error("Usage: termlings browser click <selector> [--tab <index>]");
         process.exit(1);
       }
       await client.clickSelector(selector, { tabId });
@@ -425,7 +452,7 @@ PROFILES:
         console.log(JSON.stringify(cookies, null, 2));
         return;
       }
-      console.error("Usage: termlings browser cookies list [--tab <id>]");
+      console.error("Usage: termlings browser cookies list [--tab <index>]");
       process.exit(1);
     }
 

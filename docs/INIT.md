@@ -16,10 +16,10 @@ After init, you have two launch patterns:
 
 ### Single terminal (auto-spawn all, requires tmux)
 ```bash
-termlings --spawn-all
+termlings --auto-spawn
 ```
 
-This spawns all agents in detached tmux PTYs, then opens the workspace TUI.
+This starts the control panel inside tmux and spawns all agent windows in the same tmux session. When the control panel exits, that tmux session is torn down.
 
 ### Two terminals (manual spawn flow)
 ```bash
@@ -48,7 +48,10 @@ termlings spawn
 └── browser/                      # Browser automation runtime state
     ├── config.json              # Browser settings (created on browser init/start)
     ├── process.json             # Running process info (when browser is started)
-    ├── history.jsonl            # Browser action log
+    ├── history/
+    │   ├── all.jsonl            # Browser action log (global stream)
+    │   └── agent/
+    │       └── [agent].jsonl    # Browser action log (per agent)
     └── profile.json             # Profile reference for this project
 ```
 
@@ -149,7 +152,9 @@ Make sure you're in the project root where you want the workspace.
 └── browser/
     ├── config.json       # Browser config
     ├── process.json      # Running process state
-    ├── history.jsonl     # Browser automation log
+    ├── history/
+    │   ├── all.jsonl     # Browser automation log (global)
+    │   └── agent/*.jsonl # Browser automation log (per agent)
     └── profile.json      # Profile reference
 ```
 

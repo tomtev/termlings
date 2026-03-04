@@ -1,11 +1,21 @@
 /**
- * HTTP client for PinchTab browser server
- *
- * PinchTab 0.7.x uses root endpoints and supports tab targeting via
- * `tabId` query/body fields (not /tabs/{id}/... routes).
+ * CLI wrapper client for agent-browser (native + CDP)
  */
 
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+} from "fs"
+import { spawnSync } from "child_process"
+import { tmpdir } from "os"
+import { join } from "path"
 import type { Cookie, HealthCheckResponse } from "./browser-types.js"
+import { getTermlingsDir } from "./ipc.js"
 
 export interface BrowserTab {
   id: string
@@ -18,35 +28,44 @@ export interface BrowserTab {
   focused?: boolean
 }
 
+interface AgentBrowserEnvelope {
+  success?: boolean
+  data?: unknown
+  error?: string | null
+}
+
+const LOCK_STALE_MS = 30_000
+const LOCK_WAIT_TIMEOUT_MS = 20_000
+
 export class BrowserClient {
-  private baseUrl: string
-  private timeout: number
-  private agentContext: {
-    sessionId?: string
-    agentName?: string
-    agentDna?: string
+  private readonly cdpTarget: string
+  private readonly timeout: number
+
+  constructor(cdpTarget: number | string, timeout: number = 30_000) {
+    this.cdpTarget = String(cdpTarget)
+    this.timeout = timeout
   }
 
-  constructor(port: number, timeout: number = 30000) {
-    this.baseUrl = `http://127.0.0.1:${port}`
-    this.timeout = timeout
-    this.agentContext = {
-      sessionId: process.env.TERMLINGS_SESSION_ID,
-      agentName: process.env.TERMLINGS_AGENT_NAME,
-      agentDna: process.env.TERMLINGS_AGENT_DNA,
+  /**
+   * Health check - verify CDP endpoint is reachable
+   */
+  async healthCheck(): Promise<HealthCheckResponse> {
+    const versionUrl = this.getCdpVersionUrl()
+    const response = await fetch(versionUrl, {
+      signal: AbortSignal.timeout(Math.min(this.timeout, 3000)),
+    })
+    if (!response.ok) {
+      throw new Error(`CDP health check failed: ${response.status} ${response.statusText}`)
+    }
+    const version = (await response.json()) as Record<string, unknown>
+    return {
+      status: "ok",
+      version: typeof version.Browser === "string" ? version.Browser : undefined,
     }
   }
 
   /**
-   * Health check - verify server is running
-   */
-  async healthCheck(): Promise<HealthCheckResponse> {
-    const response = await this.fetch("/health", { method: "GET" })
-    return (await response.json()) as HealthCheckResponse
-  }
-
-  /**
-   * Navigate to a URL (active tab by default, or specific tabId)
+   * Navigate to a URL (active tab by default, or specific tab index)
    */
   async navigate(
     url: string,
@@ -57,15 +76,8 @@ export class BrowserClient {
       blockAds?: boolean
     } = {}
   ): Promise<void> {
-    const tabId = await this.resolveTabId(options.tabId)
-    const payload: Record<string, unknown> = { url, tabId }
-    if (typeof options.timeout === "number") payload.timeout = options.timeout
-    if (typeof options.blockImages === "boolean") payload.blockImages = options.blockImages
-    if (typeof options.blockAds === "boolean") payload.blockAds = options.blockAds
-
-    await this.fetch("/navigate", {
-      method: "POST",
-      body: JSON.stringify(payload),
+    await this.withSelectedTab(options.tabId, async () => {
+      this.runAgentBrowser(["open", url], options.timeout)
     })
   }
 
@@ -80,29 +92,26 @@ export class BrowserClient {
       format?: "jpeg" | "png"
     } = {}
   ): Promise<string> {
-    const tabId = await this.resolveTabId(options.tabId)
-    const query = this.buildQuery({
-      tabId,
-      quality: options.quality,
-      fullPage: options.fullPage,
-      format: options.format,
+    return await this.withSelectedTab(options.tabId, async () => {
+      const ext = options.format === "jpeg" ? "jpg" : "png"
+      const outputPath = join(
+        tmpdir(),
+        `termlings-browser-${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`,
+      )
+
+      try {
+        const args = ["screenshot", ...(options.fullPage ? ["--full"] : []), outputPath]
+        this.runAgentBrowser(args)
+        const bytes = readFileSync(outputPath)
+        return Buffer.from(bytes).toString("base64")
+      } finally {
+        try {
+          unlinkSync(outputPath)
+        } catch {
+          // ignore
+        }
+      }
     })
-
-    const response = await this.fetch(`/screenshot${query}`, {
-      method: "GET",
-      headers: {
-        Accept: "image/png,image/jpeg,application/json",
-      },
-    })
-
-    const contentType = (response.headers.get("content-type") || "").toLowerCase()
-    if (contentType.includes("application/json")) {
-      const data = (await response.json()) as { base64?: string; data?: string }
-      return data.base64 || data.data || ""
-    }
-
-    const bytes = new Uint8Array(await response.arrayBuffer())
-    return Buffer.from(bytes).toString("base64")
   }
 
   /**
@@ -112,22 +121,19 @@ export class BrowserClient {
     text: string,
     options: { tabId?: string; selector?: string; ref?: string } = {}
   ): Promise<void> {
-    const tabId = await this.resolveTabId(options.tabId)
-    const payload: Record<string, unknown> = {
-      kind: "humanType",
-      text,
-      tabId,
-    }
+    await this.withSelectedTab(options.tabId, async () => {
+      if (options.ref && options.ref.trim().length > 0) {
+        const ref = options.ref.startsWith("@") ? options.ref : `@${options.ref}`
+        this.runAgentBrowser(["type", ref, text])
+        return
+      }
 
-    if (options.ref) {
-      payload.ref = options.ref
-    } else {
-      payload.selector = options.selector || ":focus"
-    }
+      if (options.selector && options.selector.trim().length > 0) {
+        this.runAgentBrowser(["type", options.selector, text])
+        return
+      }
 
-    await this.fetch("/action", {
-      method: "POST",
-      body: JSON.stringify(payload),
+      this.runAgentBrowser(["keyboard", "type", text])
     })
   }
 
@@ -135,10 +141,8 @@ export class BrowserClient {
    * Click an element by CSS selector in the chosen tab
    */
   async clickSelector(selector: string, options: { tabId?: string } = {}): Promise<void> {
-    const tabId = await this.resolveTabId(options.tabId)
-    await this.fetch("/action", {
-      method: "POST",
-      body: JSON.stringify({ kind: "click", selector, tabId }),
+    await this.withSelectedTab(options.tabId, async () => {
+      this.runAgentBrowser(["click", selector])
     })
   }
 
@@ -146,12 +150,15 @@ export class BrowserClient {
    * Extract visible text from page
    */
   async extractText(options: { tabId?: string; raw?: boolean } = {}): Promise<string> {
-    const tabId = await this.resolveTabId(options.tabId)
-    const query = this.buildQuery({ tabId, raw: options.raw })
-    const response = await this.fetch(`/text${query}`, { method: "GET" })
-    const data = (await response.json()) as { text?: string } | string
-    if (typeof data === "string") return data
-    return data.text || ""
+    return await this.withSelectedTab(options.tabId, async () => {
+      const data = this.runAgentBrowser(["get", "text", "body"])
+      if (typeof data === "string") return data
+      if (data && typeof data === "object") {
+        const record = data as Record<string, unknown>
+        if (typeof record.text === "string") return record.text
+      }
+      return ""
+    })
   }
 
   /**
@@ -165,30 +172,28 @@ export class BrowserClient {
     selector?: string
     tabId?: string
   } = {}): Promise<unknown> {
-    const tabId = await this.resolveTabId(options.tabId)
-    const query = this.buildQuery({
-      tabId,
-      compact: options.compact,
-      interactive: options.interactive,
-      depth: options.depth,
-      maxTokens: options.maxTokens,
-      selector: options.selector,
+    return await this.withSelectedTab(options.tabId, async () => {
+      const args = ["snapshot"]
+      if (options.interactive) args.push("-i")
+      if (options.compact) args.push("-c")
+      if (typeof options.depth === "number") args.push("-d", String(options.depth))
+      if (options.selector) args.push("-s", options.selector)
+      return this.runAgentBrowser(args)
     })
-
-    const response = await this.fetch(`/snapshot${query}`, { method: "GET" })
-    return await response.json()
   }
 
   /**
    * Get cookies for current page
    */
   async getCookies(options: { tabId?: string } = {}): Promise<Cookie[]> {
-    const tabId = await this.resolveTabId(options.tabId)
-    const query = this.buildQuery({ tabId })
-    const response = await this.fetch(`/cookies${query}`, { method: "GET" })
-    const data = (await response.json()) as { cookies?: Cookie[] } | Cookie[]
-    if (Array.isArray(data)) return data
-    return data.cookies || []
+    return await this.withSelectedTab(options.tabId, async () => {
+      const data = this.runAgentBrowser(["cookies"])
+      if (data && typeof data === "object") {
+        const record = data as Record<string, unknown>
+        if (Array.isArray(record.cookies)) return record.cookies as Cookie[]
+      }
+      return []
+    })
   }
 
   /**
@@ -199,195 +204,275 @@ export class BrowserClient {
     _args?: unknown[],
     options: { tabId?: string } = {}
   ): Promise<unknown> {
-    const tabId = await this.resolveTabId(options.tabId)
-    const response = await this.fetch("/evaluate", {
-      method: "POST",
-      body: JSON.stringify({ expression: script, tabId }),
+    return await this.withSelectedTab(options.tabId, async () => {
+      const data = this.runAgentBrowser(["eval", script])
+      if (data && typeof data === "object") {
+        const record = data as Record<string, unknown>
+        if ("result" in record) return record.result
+      }
+      return data
     })
-
-    const data = (await response.json()) as { result?: unknown } | unknown
-    if (data && typeof data === "object" && "result" in (data as Record<string, unknown>)) {
-      return (data as { result?: unknown }).result
-    }
-    return data
   }
 
   /**
-   * Wait for selector by polling evaluate() (PinchTab has no /wait route in 0.7.x)
+   * Wait for selector
    */
   async waitForSelector(
     selector: string,
-    timeout: number = 5000,
+    _timeout: number = 5000,
     options: { tabId?: string } = {}
   ): Promise<void> {
-    const selectorLiteral = JSON.stringify(selector)
-    const startedAt = Date.now()
-
-    while (Date.now() - startedAt < timeout) {
-      const found = await this.executeScript(
-        `Boolean(document.querySelector(${selectorLiteral}))`,
-        undefined,
-        { tabId: options.tabId }
-      )
-
-      if (found === true) return
-      await new Promise((resolve) => setTimeout(resolve, 100))
-    }
-
-    throw new Error(`Timeout waiting for selector: ${selector}`)
+    await this.withSelectedTab(options.tabId, async () => {
+      this.runAgentBrowser(["wait", selector])
+    })
   }
 
   /**
    * Get list of open tabs
    */
   async getTabs(): Promise<BrowserTab[]> {
-    const response = await this.fetch("/tabs", { method: "GET" })
-    const data = (await response.json()) as { tabs?: BrowserTab[] } | BrowserTab[]
-    if (Array.isArray(data)) return data
-    return data.tabs || []
+    return await this.withBrowserLock(async () => {
+      const data = this.runAgentBrowser(["tab"])
+      const record = (data && typeof data === "object" ? data as Record<string, unknown> : {})
+      const active = typeof record.active === "number" ? record.active : undefined
+      const tabsRaw = Array.isArray(record.tabs) ? record.tabs as Array<Record<string, unknown>> : []
+
+      return tabsRaw.map((tab, index) => {
+        const tabIndex = typeof tab.index === "number" ? tab.index : index
+        const isActive = typeof tab.active === "boolean" ? tab.active : active === tabIndex
+        return {
+          id: String(tabIndex),
+          title: typeof tab.title === "string" ? tab.title : undefined,
+          url: typeof tab.url === "string" ? tab.url : undefined,
+          active: isActive,
+          current: isActive,
+          selected: isActive,
+          focused: isActive,
+        }
+      })
+    })
   }
 
-  /**
-   * Create tab (legacy PinchTab 0.7.x)
-   */
   async createTab(url?: string): Promise<string> {
-    const payload: Record<string, unknown> = { action: "new" }
-    if (url) payload.url = url
-
-    const response = await this.fetch("/tab", {
-      method: "POST",
-      body: JSON.stringify(payload),
+    return await this.withBrowserLock(async () => {
+      const args = ["tab", "new", ...(url ? [url] : [])]
+      const data = this.runAgentBrowser(args)
+      if (data && typeof data === "object") {
+        const record = data as Record<string, unknown>
+        if (typeof record.index === "number") {
+          return String(record.index)
+        }
+      }
+      const tabs = await this.getTabs()
+      if (tabs.length === 0) return ""
+      return tabs[tabs.length - 1]!.id
     })
-
-    const data = (await response.json()) as { tabId?: string; id?: string }
-    return data.tabId || data.id || ""
   }
 
-  /**
-   * Close tab by id (legacy PinchTab 0.7.x)
-   */
   async closeTab(tabId: string): Promise<void> {
-    await this.fetch("/tab", {
-      method: "POST",
-      body: JSON.stringify({ action: "close", tabId }),
+    await this.withBrowserLock(async () => {
+      const index = this.normalizeTabId(tabId)
+      this.runAgentBrowser(["tab", "close", String(index)])
     })
   }
 
-  async lockTab(tabId: string, owner: string, ttl: number = 3600): Promise<void> {
-    await this.fetch("/tab/lock", {
-      method: "POST",
-      body: JSON.stringify({ tabId, owner, timeoutMs: ttl * 1000 }),
-    })
+  async lockTab(_tabId: string, _owner: string, _ttl: number = 3600): Promise<void> {
+    // No-op: termlings serializes browser commands via a local lock file.
   }
 
-  async unlockTab(tabId: string, owner?: string): Promise<void> {
-    const resolvedOwner = owner || this.agentContext.agentName || this.agentContext.sessionId || "termlings"
-    await this.fetch("/tab/unlock", {
-      method: "POST",
-      body: JSON.stringify({ tabId, owner: resolvedOwner }),
-    })
+  async unlockTab(_tabId: string, _owner?: string): Promise<void> {
+    // No-op: termlings serializes browser commands via a local lock file.
   }
 
   async typeIntoRef(tabId: string, ref: string, text: string): Promise<void> {
-    await this.fetch("/action", {
-      method: "POST",
-      body: JSON.stringify({ kind: "type", tabId, ref, text }),
+    await this.withSelectedTab(tabId, async () => {
+      const target = ref.startsWith("@") ? ref : `@${ref}`
+      this.runAgentBrowser(["type", target, text])
     })
   }
 
-  async pressKey(tabId: string, key: string, ref?: string): Promise<void> {
-    const payload: Record<string, unknown> = { kind: "press", tabId, key }
-    if (ref) payload.ref = ref
-    await this.fetch("/action", {
-      method: "POST",
-      body: JSON.stringify(payload),
+  async pressKey(tabId: string, key: string, _ref?: string): Promise<void> {
+    await this.withSelectedTab(tabId, async () => {
+      this.runAgentBrowser(["press", key])
     })
   }
 
   async clickRef(tabId: string, ref: string): Promise<void> {
-    await this.fetch("/action", {
-      method: "POST",
-      body: JSON.stringify({ kind: "click", tabId, ref }),
+    await this.withSelectedTab(tabId, async () => {
+      const target = ref.startsWith("@") ? ref : `@${ref}`
+      this.runAgentBrowser(["click", target])
     })
   }
 
-  private async resolveTabId(explicitTabId?: string): Promise<string> {
-    if (explicitTabId && explicitTabId.trim().length > 0) {
-      return explicitTabId.trim()
+  private normalizeTabId(tabId: string): number {
+    const trimmed = String(tabId || "").trim()
+    if (!/^\d+$/.test(trimmed)) {
+      throw new Error(`Invalid tab index: ${tabId}`)
     }
-
-    const tabs = await this.getTabs()
-    if (tabs.length === 0) {
-      throw new Error("No tabs found. Open one first (for example: termlings browser navigate \"https://example.com\").")
-    }
-
-    const active = tabs.find((tab) => tab.active || tab.current || tab.selected || tab.focused)
-    return active?.id || tabs[0]!.id
+    return Number.parseInt(trimmed, 10)
   }
 
-  private buildQuery(params: Record<string, unknown>): string {
-    const query = new URLSearchParams()
-
-    for (const [key, rawValue] of Object.entries(params)) {
-      if (rawValue === undefined || rawValue === null) continue
-      if (typeof rawValue === "boolean") {
-        if (rawValue) query.set(key, "true")
-        continue
+  private async withSelectedTab<T>(tabId: string | undefined, run: () => Promise<T>): Promise<T> {
+    return await this.withBrowserLock(async () => {
+      if (typeof tabId === "string" && tabId.trim().length > 0) {
+        const index = this.normalizeTabId(tabId)
+        this.runAgentBrowser(["tab", String(index)])
       }
-      query.set(key, String(rawValue))
-    }
-
-    const value = query.toString()
-    return value.length > 0 ? `?${value}` : ""
+      return await run()
+    })
   }
 
-  /**
-   * Internal fetch wrapper with timeout + context headers
-   */
-  private async fetch(path: string, options: RequestInit = {}): Promise<Response> {
-    const url = `${this.baseUrl}${path}`
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout)
+  private lockFilePath(): string {
+    return join(getTermlingsDir(), "browser", ".agent-browser.lock")
+  }
 
-    const headers = new Headers(options.headers)
-    if (options.body !== undefined && !headers.has("Content-Type")) {
-      headers.set("Content-Type", "application/json")
-    }
+  private async withBrowserLock<T>(fn: () => Promise<T>): Promise<T> {
+    const lockPath = this.lockFilePath()
+    mkdirSync(join(getTermlingsDir(), "browser"), { recursive: true })
 
-    if (this.agentContext.sessionId) {
-      headers.set("X-Termlings-Session-Id", this.agentContext.sessionId)
-    }
-    if (this.agentContext.agentName) {
-      headers.set("X-Termlings-Agent-Name", this.agentContext.agentName)
-    }
-    if (this.agentContext.agentDna) {
-      headers.set("X-Termlings-Agent-Dna", this.agentContext.agentDna)
+    const startedAt = Date.now()
+    let lockFd: number | null = null
+
+    while (lockFd === null) {
+      try {
+        lockFd = openSync(lockPath, "wx")
+        break
+      } catch (error) {
+        const maybeErr = error as NodeJS.ErrnoException
+        if (maybeErr.code !== "EEXIST") {
+          throw error
+        }
+
+        try {
+          const mtime = statSync(lockPath).mtimeMs
+          if (Date.now() - mtime > LOCK_STALE_MS) {
+            unlinkSync(lockPath)
+            continue
+          }
+        } catch {
+          // ignore races
+        }
+
+        if (Date.now() - startedAt > LOCK_WAIT_TIMEOUT_MS) {
+          throw new Error("Timed out waiting for browser lock. Another browser command may be stuck.")
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 60))
+      }
     }
 
     try {
-      const response = await fetch(url, {
-        ...options,
-        signal: controller.signal,
-        headers,
-      })
-
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(`Browser API error: ${response.status} ${response.statusText}\n${text}`)
-      }
-
-      return response
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.name === "AbortError") {
-          throw new Error(`Browser API timeout after ${this.timeout}ms`)
-        }
-        throw error
-      }
-
-      throw new Error(`Browser API error: ${error}`)
+      return await fn()
     } finally {
-      clearTimeout(timeoutId)
+      try {
+        if (lockFd !== null) closeSync(lockFd)
+      } catch {
+        // ignore
+      }
+      try {
+        if (existsSync(lockPath)) unlinkSync(lockPath)
+      } catch {
+        // ignore
+      }
     }
+  }
+
+  private runAgentBrowser(commandArgs: string[], timeoutOverride?: number): unknown {
+    const timeout = typeof timeoutOverride === "number" && timeoutOverride > 0
+      ? timeoutOverride
+      : this.timeout
+
+    const args = [
+      "--native",
+      "--json",
+      "--cdp",
+      this.cdpTarget,
+      ...commandArgs,
+    ]
+
+    const proc = spawnSync("agent-browser", args, {
+      encoding: "utf8",
+      timeout,
+      maxBuffer: 50 * 1024 * 1024,
+      env: {
+        ...process.env,
+        AGENT_BROWSER_DEFAULT_TIMEOUT: String(Math.max(1_000, Math.min(25_000, timeout))),
+      },
+    })
+
+    if (proc.error) {
+      const code = (proc.error as NodeJS.ErrnoException).code
+      if (code === "ENOENT") {
+        throw new Error("agent-browser CLI not found. Install with: npm install -g agent-browser && agent-browser install")
+      }
+      if (code === "ETIMEDOUT") {
+        throw new Error(`agent-browser command timed out after ${timeout}ms`)
+      }
+      throw proc.error
+    }
+
+    const rawOutput = `${proc.stdout || ""}`.trim()
+    const envelope = this.parseEnvelope(rawOutput)
+
+    if ((proc.status ?? 1) !== 0) {
+      if (envelope && envelope.error) {
+        throw new Error(String(envelope.error))
+      }
+      if (rawOutput.length > 0) {
+        throw new Error(rawOutput)
+      }
+      throw new Error(`agent-browser exited with status ${proc.status}`)
+    }
+
+    if (!envelope) return rawOutput
+    if (envelope.success === false) {
+      throw new Error(envelope.error || "agent-browser command failed")
+    }
+    return envelope.data
+  }
+
+  private parseEnvelope(raw: string): AgentBrowserEnvelope | null {
+    if (!raw) return null
+
+    try {
+      return JSON.parse(raw) as AgentBrowserEnvelope
+    } catch {
+      // Some commands may emit extra lines; try last JSON line.
+    }
+
+    const lines = raw.split(/\r?\n/)
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i]!.trim()
+      if (!line.startsWith("{")) continue
+      try {
+        return JSON.parse(line) as AgentBrowserEnvelope
+      } catch {
+        // keep scanning upwards
+      }
+    }
+
+    return null
+  }
+
+  private getCdpVersionUrl(): string {
+    const trimmed = this.cdpTarget.trim()
+
+    if (/^\\d+$/.test(trimmed)) {
+      return `http://127.0.0.1:${trimmed}/json/version`
+    }
+
+    if (trimmed.startsWith("ws://") || trimmed.startsWith("wss://")) {
+      const url = new URL(trimmed)
+      const protocol = url.protocol === "wss:" ? "https:" : "http:"
+      return `${protocol}//${url.host}/json/version`
+    }
+
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      const url = new URL(trimmed)
+      return `${url.protocol}//${url.host}/json/version`
+    }
+
+    // Fallback: assume host:port
+    return `http://${trimmed}/json/version`
   }
 }

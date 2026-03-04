@@ -97,6 +97,16 @@ function printBunPreflight(): void {
   }
 }
 
+function printBrowserRuntimePreflight(): void {
+  if (hasCommand("agent-browser", ["--version"])) {
+    return;
+  }
+
+  console.log("! agent-browser not found. Browser automation requires it.");
+  console.log("  Install: npm install -g agent-browser");
+  console.log("  Then run: agent-browser install");
+}
+
 async function maybeAutoExtractShadcnBrand(root = process.cwd()): Promise<void> {
   const { existsSync } = await import("fs");
   const { join } = await import("path");
@@ -201,6 +211,7 @@ NEXT STEPS:
   try {
     printSetupWizardBanner(forceSetup);
     printBunPreflight();
+    printBrowserRuntimePreflight();
 
     const { ensureWorkspaceInitialized } = await import("../workspace/initialize.js");
     const ready = await ensureWorkspaceInitialized(forceSetup, process.cwd(), opts.template);

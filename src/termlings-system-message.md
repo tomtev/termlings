@@ -145,21 +145,26 @@ termlings skills install https://github.com/org/repo --yes
 - CLI reference: `https://skills.sh/docs/cli`
 - Source formats: `https://skills.sh/docs/cli/sources`
 
-**Browser (PinchTab root endpoints + tab targeting):**
+**Browser (agent-browser native + Chrome CDP):**
 ```bash
-termlings browser tabs list                         # discover tab IDs
-termlings browser navigate "https://example.com" --tab <tab-id>
-termlings browser snapshot --tab <tab-id>
-termlings browser screenshot --tab <tab-id> --out /tmp/page.png
-termlings browser extract --tab <tab-id>
-termlings browser type "hello" --tab <tab-id>
-termlings browser click "button.submit" --tab <tab-id>
+termlings browser start                            # headed by default (human-in-the-loop)
+termlings browser start --headless                # scraping/CI mode
+termlings browser status                           # current CDP endpoint + profile
+termlings browser tabs list                         # discover tab indexes
+termlings browser navigate "https://example.com" --tab <index>
+termlings browser snapshot --tab <index>
+termlings browser screenshot --tab <index> --out /tmp/page.png
+termlings browser extract --tab <index>
+termlings browser type "hello" --tab <index>
+termlings browser click "button.submit" --tab <index>
 ```
 
 **Important browser policy:**
-- Termlings browser automation uses PinchTab root endpoints (`/navigate`, `/snapshot`, `/screenshot`, `/text`, `/action`) with optional `tabId`.
-- `/tabs` is used for tab discovery and state; pass `--tab <tab-id>` when reproducibility matters.
-- For reproducible runs, resolve a tab ID first (`termlings browser tabs list`) and pass `--tab <tab-id>`.
+- Termlings wraps `agent-browser --native --cdp <target>` under the hood (`<target>` is the active CDP endpoint).
+- Defaults are optimized for human-in-the-loop operations: headed browser + workspace-scoped persistent profile.
+- For scraping/CI operations, start headless: `termlings browser start --headless`.
+- Headless mode still uses CDP for control; it only removes the visible browser window.
+- Use `termlings browser tabs list` and `--tab <index>` to reduce cross-agent tab collisions.
 
 ## Messaging Targets
 

@@ -319,7 +319,8 @@ Agents can share a persistent browser for web interaction and human-in-loop work
 ```bash
 # Initialize browser (one-time per project)
 termlings browser init
-npm install -g pinchtab    # Install PinchTab binary
+npm install -g agent-browser
+agent-browser install
 
 # Start shared browser
 termlings browser start
@@ -340,7 +341,7 @@ termlings browser request-help "I need to log in manually"
 **Features:**
 - Shared project-specific browser profile (per-project isolation)
 - Persistent cookies/auth across all agent interactions
-- Activity logging to `.termlings/browser/history.jsonl`
+- Activity logging to `.termlings/browser/history/all.jsonl` and `.termlings/browser/history/agent/*.jsonl`
 - Reusable automation patterns for token efficiency
 - Human operator can interact with same browser
 

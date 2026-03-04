@@ -1,5 +1,5 @@
 /**
- * PinchTab browser server lifecycle management
+ * Browser runtime lifecycle management (agent-browser + Chrome CDP)
  */
 
 import {
@@ -8,12 +8,13 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
-  writeFileSync,
-  symlinkSync,
+  statSync,
   unlinkSync,
-  lstatSync,
+  writeFileSync,
 } from "fs"
-import { join } from "path"
+import { spawnSync } from "child_process"
+import { createHash } from "crypto"
+import { basename, join } from "path"
 import { getTermlingsDir } from "./ipc.js"
 import type { BrowserConfig, ProcessState, ActivityLogEntry, ProfileReference, AgentBrowserState } from "./browser-types.js"
 
@@ -32,13 +33,34 @@ export function getProfileReferencePath(): string {
 }
 
 /**
- * Get the actual browser profile directory (~/.pinchtab/profiles/<profile-name>)
- * Each project's profile is stored in PinchTab's default profile location
+ * Get project root directory
+ */
+function getProjectRootDir(): string {
+  return join(getTermlingsDir(), "..")
+}
+
+/**
+ * Get project-specific profile name.
+ * Includes a short hash to avoid collisions between same-named folders.
+ */
+function getProjectProfileName(): string {
+  const projectDir = getProjectRootDir()
+  const projectName = basename(projectDir) || "project"
+  const safeName = projectName
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "project"
+  const hash = createHash("sha1").update(projectDir).digest("hex").slice(0, 10)
+  return `${safeName}-${hash}`
+}
+
+/**
+ * Get the actual browser profile directory (~/.termlings/chrome-profiles/<project-profile>)
  */
 export function getBrowserProfileDir(): string {
   const profileName = getProjectProfileName()
-  const pinchtabDir = join(process.env.HOME || "/tmp", ".pinchtab", "profiles", profileName)
-  return pinchtabDir
+  return join(process.env.HOME || "/tmp", ".termlings", "chrome-profiles", profileName)
 }
 
 /**
@@ -46,29 +68,34 @@ export function getBrowserProfileDir(): string {
  */
 export function getOrCreateProfileReference(): ProfileReference {
   const refPath = getProfileReferencePath()
-  const profileName = getProjectProfileName()
-  const projectDir = join(getTermlingsDir(), "..")
-  const projectName = projectDir.split("/").pop() || "project"
-
-  if (existsSync(refPath)) {
-    try {
-      const content = readFileSync(refPath, "utf8")
-      return JSON.parse(content)
-    } catch {
-      // Fall through to create new
-    }
-  }
-
-  // Create new reference
-  const ref: ProfileReference = {
-    name: profileName,
+  const projectDir = getProjectRootDir()
+  const projectName = basename(projectDir) || "project"
+  const next: ProfileReference = {
+    name: getProjectProfileName(),
     location: getBrowserProfileDir(),
     projectName,
     createdAt: Date.now(),
   }
 
-  writeFileSync(refPath, JSON.stringify(ref, null, 2) + "\n")
-  return ref
+  if (existsSync(refPath)) {
+    try {
+      const existing = JSON.parse(readFileSync(refPath, "utf8")) as Partial<ProfileReference>
+      const merged: ProfileReference = {
+        name: next.name,
+        location: next.location,
+        projectName: next.projectName,
+        createdAt: typeof existing.createdAt === "number" ? existing.createdAt : next.createdAt,
+        lastUsed: typeof existing.lastUsed === "number" ? existing.lastUsed : undefined,
+      }
+      writeFileSync(refPath, JSON.stringify(merged, null, 2) + "\n")
+      return merged
+    } catch {
+      // Fall through to write new file below.
+    }
+  }
+
+  writeFileSync(refPath, JSON.stringify(next, null, 2) + "\n")
+  return next
 }
 
 /**
@@ -95,19 +122,48 @@ export function getProcessStatePath(): string {
 }
 
 /**
- * Get the browser activity history file path
+ * Get browser history directory (.termlings/browser/history)
  */
-export function getActivityHistoryPath(): string {
-  return join(getTermlingsBrowserDir(), "history.jsonl")
+export function getActivityHistoryDir(): string {
+  return join(getTermlingsBrowserDir(), "history")
 }
 
 /**
- * Default browser configuration
+ * Get browser per-agent history directory (.termlings/browser/history/agent)
+ */
+export function getAgentActivityHistoryDir(): string {
+  return join(getActivityHistoryDir(), "agent")
+}
+
+/**
+ * Get the browser activity history file path (global stream)
+ */
+export function getActivityHistoryPath(): string {
+  return join(getActivityHistoryDir(), "all.jsonl")
+}
+
+function sanitizeHistoryKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "unknown"
+}
+
+/**
+ * Get the browser activity history file path for one agent.
+ */
+export function getAgentActivityHistoryPath(agentKey: string): string {
+  return join(getAgentActivityHistoryDir(), `${sanitizeHistoryKey(agentKey)}.jsonl`)
+}
+
+/**
+ * Default browser configuration.
  * Runtime start mode defaults to headed for human-in-loop visibility.
  */
 export const DEFAULT_BROWSER_CONFIG: BrowserConfig = {
-  port: 8222,
-  binaryPath: "pinchtab",
+  port: 9222,
+  binaryPath: "google-chrome",
   autoStart: false,
   profilePath: getBrowserProfileDir(),
   timeout: 30000,
@@ -121,12 +177,19 @@ export function getBrowserConfig(): BrowserConfig {
   if (existsSync(configPath)) {
     try {
       const content = readFileSync(configPath, "utf8")
-      return JSON.parse(content)
+      const parsed = JSON.parse(content) as Partial<BrowserConfig>
+      return {
+        ...DEFAULT_BROWSER_CONFIG,
+        ...parsed,
+        profilePath: parsed.profilePath && parsed.profilePath.trim().length > 0
+          ? parsed.profilePath
+          : getBrowserProfileDir(),
+      }
     } catch {
-      return DEFAULT_BROWSER_CONFIG
+      return { ...DEFAULT_BROWSER_CONFIG, profilePath: getBrowserProfileDir() }
     }
   }
-  return DEFAULT_BROWSER_CONFIG
+  return { ...DEFAULT_BROWSER_CONFIG, profilePath: getBrowserProfileDir() }
 }
 
 /**
@@ -134,7 +197,13 @@ export function getBrowserConfig(): BrowserConfig {
  */
 export function updateBrowserConfig(config: Partial<BrowserConfig>): BrowserConfig {
   const current = getBrowserConfig()
-  const updated = { ...current, ...config }
+  const updated = {
+    ...current,
+    ...config,
+    profilePath: config.profilePath && config.profilePath.trim().length > 0
+      ? config.profilePath
+      : current.profilePath,
+  }
   writeFileSync(getBrowserConfigPath(), JSON.stringify(updated, null, 2) + "\n")
   return updated
 }
@@ -148,7 +217,7 @@ export function readProcessState(): ProcessState | null {
 
   try {
     const content = readFileSync(path, "utf8")
-    return JSON.parse(content)
+    return JSON.parse(content) as ProcessState
   } catch {
     return null
   }
@@ -162,12 +231,39 @@ export function updateProcessState(state: ProcessState): void {
 }
 
 /**
+ * Check whether agent-browser is available on PATH.
+ */
+export function isAgentBrowserAvailable(): boolean {
+  const proc = spawnSync("agent-browser", ["--version"], { stdio: "ignore" })
+  return (proc.status ?? 1) === 0
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function fetchCdpVersion(port: number, timeoutMs: number = 2000): Promise<Record<string, unknown>> {
+  const response = await fetch(`http://127.0.0.1:${port}/json/version`, {
+    signal: AbortSignal.timeout(timeoutMs),
+  })
+  if (!response.ok) {
+    throw new Error(`CDP endpoint returned ${response.status}`)
+  }
+  return (await response.json()) as Record<string, unknown>
+}
+
+/**
  * Find an available port (starting from basePort)
  */
-async function findAvailablePort(basePort: number = 8222): Promise<number> {
+async function findAvailablePort(basePort: number = 9222): Promise<number> {
   const net = await import("net")
 
-  for (let port = basePort; port < basePort + 10; port++) {
+  for (let port = basePort; port < basePort + 20; port++) {
     const server = net.createServer()
 
     try {
@@ -184,90 +280,74 @@ async function findAvailablePort(basePort: number = 8222): Promise<number> {
     }
   }
 
-  throw new Error(`Could not find available port in range ${basePort}-${basePort + 9}`)
+  throw new Error(`Could not find available port in range ${basePort}-${basePort + 19}`)
+}
+
+function commandExists(command: string): boolean {
+  const proc = spawnSync(command, ["--version"], { stdio: "ignore" })
+  return (proc.status ?? 1) === 0
+}
+
+function resolveChromeBinary(preferredBinaryPath?: string): string {
+  const preferred = (preferredBinaryPath || "").trim()
+  if (preferred.length > 0 && preferred !== "google-chrome") {
+    if (preferred.includes("/") || preferred.includes("\\")) {
+      if (existsSync(preferred)) return preferred
+    } else if (commandExists(preferred)) {
+      return preferred
+    }
+  }
+
+  const candidates: string[] = []
+
+  if (process.platform === "darwin") {
+    candidates.push(
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      "/Applications/Chromium.app/Contents/MacOS/Chromium",
+      "google-chrome",
+      "chromium",
+      "chrome",
+    )
+  } else if (process.platform === "win32") {
+    candidates.push(
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+      "chrome",
+      "msedge",
+    )
+  } else {
+    candidates.push(
+      "google-chrome",
+      "google-chrome-stable",
+      "chromium-browser",
+      "chromium",
+      "chrome",
+    )
+  }
+
+  for (const candidate of candidates) {
+    if (candidate.includes("/") || candidate.includes("\\")) {
+      if (existsSync(candidate)) return candidate
+      continue
+    }
+    if (commandExists(candidate)) return candidate
+  }
+
+  throw new Error(
+    "No Chrome/Chromium binary found. Install Google Chrome (or Chromium) and/or set .termlings/browser/config.json -> binaryPath."
+  )
 }
 
 /**
- * Check if PinchTab binary is available
+ * Check if browser binary is available
  */
 export function checkBinaryAvailable(binaryPath: string): boolean {
-  // Try to find the binary in PATH
   try {
-    // In a real implementation, we'd check if the binary exists
-    // For now, we'll just return true and let the spawn fail gracefully
-    return true
+    const resolved = resolveChromeBinary(binaryPath)
+    return resolved.length > 0
   } catch {
     return false
   }
-}
-
-/**
- * Get project-specific profile name
- * Each project gets its own isolated profile for separate cookies, auth, and history
- */
-function getProjectProfileName(): string {
-  // Get the parent directory of .termlings (the actual project directory)
-  const termligsDir = getTermlingsDir()
-  const projectDir = join(termligsDir, "..")
-  const projectName = projectDir.split("/").pop() || "project"
-  return `project-${projectName}`
-}
-
-/**
- * Get current agent name from environment
- */
-function getAgentName(): string {
-  return process.env.TERMLINGS_AGENT_NAME || "anonymous"
-}
-
-/**
- * Create profile in PinchTab orchestrator via API
- * The orchestrator listens on http://localhost:9867 by default
- * This is non-blocking - if it fails, the browser still works locally
- */
-export async function createProfileInOrchestrator(): Promise<void> {
-  const profileName = getProjectProfileName()
-  const projectDir = join(getTermlingsDir(), "..")
-  const projectName = projectDir.split("/").pop() || "project"
-
-  try {
-    // Try to reach the orchestrator on port 9867
-    const response = await Promise.race([
-      fetch("http://localhost:9867/profiles/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: profileName,
-          useWhen: `Profile for ${projectName} project`,
-        }),
-      }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 3000)
-      ),
-    ]) as Response
-
-    if (response.ok) {
-      // Profile created successfully - silent success
-      return
-    }
-  } catch {
-    // Orchestrator not running or not accessible
-    // This is expected if the orchestrator hasn't been started yet
-    // The browser instance will still work locally
-    // User can manually start orchestrator and create profiles via dashboard
-  }
-}
-
-/**
- * Get or create a tab locked to the current agent
- * Note: Tab locking requires PinchTab's /tabs endpoints
- * Currently kept simple to avoid hangs - full implementation pending
- */
-export async function getOrCreateAgentTab(client: any): Promise<string> {
-  const agentName = getAgentName()
-  // TODO: Implement proper tab locking when PinchTab API is stable
-  // For now, return empty string - agent context is logged in activity.jsonl
-  return ""
 }
 
 /**
@@ -276,144 +356,151 @@ export async function getOrCreateAgentTab(client: any): Promise<string> {
 export async function initializeBrowserDirs(): Promise<void> {
   const baseDir = getTermlingsBrowserDir()
   mkdirSync(baseDir, { recursive: true })
+  mkdirSync(getActivityHistoryDir(), { recursive: true })
+  mkdirSync(getAgentActivityHistoryDir(), { recursive: true })
 
-  // Create config if it doesn't exist
+  const current = getBrowserConfig()
+  mkdirSync(current.profilePath, { recursive: true })
+
   if (!existsSync(getBrowserConfigPath())) {
     updateBrowserConfig({})
   }
 
-  // Create or update profile reference
   getOrCreateProfileReference()
-
-  // Create profile in orchestrator if not already there
-  await createProfileInOrchestrator()
 }
 
 /**
- * Start the PinchTab browser server (orchestrator)
- * The orchestrator manages instances and profiles via REST API
+ * Start headed Chrome with CDP enabled for this workspace.
  */
 export async function startBrowser(options: { headless?: boolean } = {}): Promise<{ pid: number; port: number }> {
-  // Ensure directories exist
   await initializeBrowserDirs()
 
   const config = getBrowserConfig()
 
-  // Check if already running
   const existing = readProcessState()
   if (existing && existing.status === "running" && existing.pid !== null) {
-    // Verify it's actually running with a health check
-    try {
-      const response = await fetch(`http://127.0.0.1:${existing.port}/health`, {
-        signal: AbortSignal.timeout(2000),
-      })
-      if (response.ok) {
+    const alive = isProcessAlive(existing.pid)
+    if (alive) {
+      try {
+        const cdpInfo = await fetchCdpVersion(existing.port, 1500)
+        updateProcessState({
+          ...existing,
+          cdpWsUrl: typeof cdpInfo.webSocketDebuggerUrl === "string"
+            ? cdpInfo.webSocketDebuggerUrl
+            : existing.cdpWsUrl,
+          mode: "cdp",
+          profilePath: existing.profilePath || config.profilePath,
+        })
         return { pid: existing.pid, port: existing.port }
+      } catch {
+        // stale endpoint; restart below
       }
-    } catch {
-      // Process is stale, will restart below
     }
   }
 
-  // Find an available port before spawning PinchTab
-  const spawn = (await import("bun")).spawn
-  const headless = options.headless === undefined
-    ? (process.env.BRIDGE_HEADLESS ?? "false")
-    : (options.headless ? "true" : "false")
-  const basePort = config.port
-  const availablePort = await findAvailablePort(basePort)
-  const profileName = getProjectProfileName() // Per-project profile with separate state
+  if (!isAgentBrowserAvailable()) {
+    throw new Error("agent-browser CLI is required. Install with: npm install -g agent-browser && agent-browser install")
+  }
 
-  const proc = spawn([config.binaryPath], {
+  const spawn = (await import("bun")).spawn
+  const availablePort = await findAvailablePort(config.port)
+  const profilePath = config.profilePath && config.profilePath.trim().length > 0
+    ? config.profilePath
+    : getBrowserProfileDir()
+  mkdirSync(profilePath, { recursive: true })
+
+  const binary = resolveChromeBinary(config.binaryPath)
+  const headless = options.headless === true
+  const launchArgs = [
+    `--remote-debugging-port=${availablePort}`,
+    `--user-data-dir=${profilePath}`,
+    "--profile-directory=Default",
+    "--no-first-run",
+    "--disable-search-engine-choice-screen",
+    "--no-default-browser-check",
+    ...(headless ? ["--headless=new", "--disable-gpu", "--hide-scrollbars"] : []),
+    "about:blank",
+  ]
+
+  const proc = spawn([binary, ...launchArgs], {
     detached: true,
-    env: {
-      ...process.env,
-      BRIDGE_HEADLESS: headless,
-      BRIDGE_MODE: process.env.BRIDGE_MODE ?? "dashboard",
-      BRIDGE_PORT: String(availablePort),
-      BRIDGE_PROFILE: profileName,
-      BRIDGE_USER_DATA_DIR: getTermlingsBrowserDir(),
-    },
     stdin: "ignore",
     stdout: "ignore",
     stderr: "ignore",
+    env: {
+      ...process.env,
+    },
   })
   proc.unref()
 
   const pid = proc.pid
 
-  // Wait for orchestrator to start
-  await new Promise((resolve) => setTimeout(resolve, 1500))
-
-  // Verify orchestrator is running on the port we told it to use
-  let serverReady = false
-  for (let i = 0; i < 10; i++) {
+  let cdpInfo: Record<string, unknown> | null = null
+  for (let i = 0; i < 30; i++) {
     try {
-      const response = await fetch(`http://127.0.0.1:${availablePort}/health`, {
-        signal: AbortSignal.timeout(1000),
-      })
-      if (response.ok) {
-        serverReady = true
-        break
-      }
+      cdpInfo = await fetchCdpVersion(availablePort, 1000)
+      break
     } catch {
-      // Server not ready yet, try again
       await new Promise((resolve) => setTimeout(resolve, 200))
     }
   }
 
-  if (!serverReady) {
-    throw new Error(
-      `Browser server failed to start on port ${availablePort}. Is PinchTab installed? Install with: npm install -g pinchtab`
-    )
+  if (!cdpInfo) {
+    throw new Error(`Chrome CDP did not become ready on port ${availablePort}.`)
   }
 
-  // Update process state with URL for easy access
   updateProcessState({
     pid,
     port: availablePort,
     status: "running",
     startedAt: Date.now(),
     url: `http://127.0.0.1:${availablePort}`,
+    cdpWsUrl: typeof cdpInfo.webSocketDebuggerUrl === "string" ? cdpInfo.webSocketDebuggerUrl : undefined,
+    profilePath,
+    mode: "cdp",
   })
 
-  // Update profile reference with last used timestamp
   updateProfileReference()
 
   return { pid, port: availablePort }
 }
 
 /**
- * Stop the PinchTab browser server
+ * Stop Chrome CDP browser process
  */
 export async function stopBrowser(): Promise<void> {
   const state = readProcessState()
   if (!state || !state.pid) return
 
-  try {
-    // Try graceful shutdown via HTTP first
-    try {
-      await fetch(`http://127.0.0.1:${state.port}/exit`, {
-        method: "POST",
-        signal: AbortSignal.timeout(2000),
-      })
-    } catch {
-      // Fallback to process kill
-      process.kill(state.pid, "SIGTERM")
-    }
+  const pid = state.pid
 
-    // Wait for process to exit
-    await new Promise((resolve) => setTimeout(resolve, 500))
+  try {
+    process.kill(pid, "SIGTERM")
   } catch {
-    // Ignore errors during shutdown
+    // ignore
   }
 
-  // Update process state
+  const startedWait = Date.now()
+  while (Date.now() - startedWait < 3000) {
+    if (!isProcessAlive(pid)) break
+    await new Promise((resolve) => setTimeout(resolve, 120))
+  }
+
+  if (isProcessAlive(pid)) {
+    try {
+      process.kill(pid, "SIGKILL")
+    } catch {
+      // ignore
+    }
+  }
+
   updateProcessState({
     pid: null,
     port: state.port,
     status: "stopped",
     startedAt: null,
+    profilePath: state.profilePath,
+    mode: "cdp",
   })
 }
 
@@ -423,12 +510,11 @@ export async function stopBrowser(): Promise<void> {
 export async function isBrowserRunning(): Promise<boolean> {
   const state = readProcessState()
   if (!state || state.status !== "running" || !state.pid) return false
+  if (!isProcessAlive(state.pid)) return false
 
   try {
-    const response = await fetch(`http://127.0.0.1:${state.port}/health`, {
-      signal: AbortSignal.timeout(2000),
-    })
-    return response.ok
+    await fetchCdpVersion(state.port, 1500)
+    return true
   } catch {
     return false
   }
@@ -456,7 +542,6 @@ export function updateAgentBrowserState(command: string, args: unknown[] = []): 
     return
   }
 
-  // Extract URL from navigate commands
   let url: string | undefined
   if (command === "navigate" && args[0] && typeof args[0] === "string") {
     url = args[0]
@@ -471,7 +556,6 @@ export function updateAgentBrowserState(command: string, args: unknown[] = []): 
     lastActionAt: Date.now(),
   }
 
-  // Try to resolve agent slug from discovered agents
   try {
     const agentsDir = join(getTermlingsDir(), "agents")
     if (existsSync(agentsDir)) {
@@ -492,16 +576,15 @@ export function updateAgentBrowserState(command: string, args: unknown[] = []): 
     // Ignore slug resolution errors
   }
 
-  // If this isn't a navigate, preserve the existing URL
   if (!url) {
     try {
       const existingPath = join(dir, `${sessionId}.json`)
       if (existsSync(existingPath)) {
-        const existing: AgentBrowserState = JSON.parse(readFileSync(existingPath, "utf-8"))
+        const existing = JSON.parse(readFileSync(existingPath, "utf-8")) as AgentBrowserState
         state.url = existing.url
       }
     } catch {
-      // Ignore
+      // ignore
     }
   }
 
@@ -528,7 +611,7 @@ export function readAgentBrowserStates(stalenessMs: number = 300_000): AgentBrow
     for (const file of files) {
       try {
         const content = readFileSync(join(dir, file), "utf-8")
-        const state: AgentBrowserState = JSON.parse(content)
+        const state = JSON.parse(content) as AgentBrowserState
         if (now - state.lastActionAt < stalenessMs) {
           results.push(state)
         }
@@ -552,10 +635,18 @@ export function logBrowserActivity(
   result: "success" | "error" | "timeout" = "success",
   error?: string
 ): void {
+  try {
+    mkdirSync(getActivityHistoryDir(), { recursive: true })
+    mkdirSync(getAgentActivityHistoryDir(), { recursive: true })
+  } catch {
+    // Ignore; append calls below will handle failures.
+  }
+
   const entry: ActivityLogEntry = {
     ts: Date.now(),
     sessionId: process.env.TERMLINGS_SESSION_ID,
     agentName: process.env.TERMLINGS_AGENT_NAME,
+    agentSlug: process.env.TERMLINGS_AGENT_SLUG,
     agentDna: process.env.TERMLINGS_AGENT_DNA,
     command,
     args,
@@ -569,7 +660,16 @@ export function logBrowserActivity(
     // Ignore logging errors
   }
 
-  // Also update per-agent browser state
+  const agentKey = process.env.TERMLINGS_AGENT_SLUG?.trim()
+    || entry.sessionId?.trim()
+    || entry.agentName?.trim()
+    || "unknown"
+  try {
+    appendFileSync(getAgentActivityHistoryPath(agentKey), JSON.stringify(entry) + "\n")
+  } catch {
+    // Ignore logging errors
+  }
+
   if (result === "success") {
     updateAgentBrowserState(command, args)
   }
@@ -582,26 +682,23 @@ export function logBrowserActivity(
 export async function requestOperatorIntervention(message: string): Promise<void> {
   const agentName = process.env.TERMLINGS_AGENT_NAME || "Agent"
 
-  // Log the request
   logBrowserActivity("request-help", [message], "success")
 
-  // Send message to operator via termlings message
   const formattedMessage = `🔔 **Browser needs your help** (${agentName})\n\n${message}\n\nRun: \`termlings browser\` commands to interact`
 
   const { spawn } = await import("bun")
 
   try {
-    const proc = spawn(["termlings", "message", "human:default", formattedMessage], {
+    spawn(["termlings", "message", "human:default", formattedMessage], {
       cwd: process.cwd(),
       stdio: ["ignore", "ignore", "ignore"],
     })
 
-    // Wait briefly for the send to complete
     await new Promise((resolve) => setTimeout(resolve, 500))
 
     console.log(`✓ Operator notified: ${message}`)
-    console.log(`\nWaiting for operator to interact with browser...`)
-    console.log(`Operator can run: termlings browser tabs list (then use --tab with navigate/screenshot/type/click/extract)`)
+    console.log("\nWaiting for operator to interact with browser...")
+    console.log("Operator can run: termlings browser tabs list (then use --tab with navigate/screenshot/type/click/extract)")
   } catch (e) {
     console.error(`Could not notify operator: ${e}`)
   }

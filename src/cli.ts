@@ -123,7 +123,7 @@ try {
 
 Workspace:
   termlings                Start the terminal workspace UI
-  termlings --spawn-all    Start workspace UI and spawn all agents in detached PTYs
+  termlings --auto-spawn   Start tmux control panel and spawn all agents behind it
   termlings init           Initialize .termlings in this project
   termlings --server       Run secure HTTP server mode
 
@@ -181,7 +181,7 @@ Sim (optional):
     }
 
     if (!positional[0]) {
-      const allowedTopLevelFlags = new Set(["help", "h", "server", "sim", "inside-tmux", "spawn-all"]);
+      const allowedTopLevelFlags = new Set(["help", "h", "server", "sim", "inside-tmux", "auto-spawn"]);
       const unsupportedFlags = Array.from(flags).filter((flag) => !allowedTopLevelFlags.has(flag));
       if (unsupportedFlags.length > 0) {
         console.error(`Unknown option(s): ${unsupportedFlags.map((flag) => `--${flag}`).join(", ")}`);
@@ -206,22 +206,24 @@ Sim (optional):
         process.exit(0);
       }
 
-      let tuiOptions: { startupBanner?: string } = {};
-      if (flags.has("spawn-all")) {
-        const { isTmuxAvailable } = await import("./engine/tmux.js");
+      if (flags.has("auto-spawn")) {
+        const { attachControlSession, isTmuxAvailable } = await import("./engine/tmux.js");
         if (!isTmuxAvailable()) {
-          console.error("`termlings --spawn-all` requires tmux.");
+          console.error("`termlings --auto-spawn` requires tmux.");
           console.error(`Install tmux first. ${tmuxInstallHint()}`);
           process.exit(1);
         }
         const { handleSpawn } = await import("./commands/spawn.js");
         await handleSpawn(new Set(["all", "detached", "quiet"]), ["spawn"], {});
-        tuiOptions = {
-          startupBanner: "Spawned all agents in tmux PTYs.",
-        };
+        const attached = attachControlSession(process.cwd());
+        if (!attached.ok) {
+          console.error(attached.error || "Failed to attach tmux control session.");
+          process.exit(1);
+        }
+        process.exit(0);
       }
 
-      await launchWorkspaceTui(process.cwd(), tuiOptions);
+      await launchWorkspaceTui(process.cwd());
       process.exit(0);
     }
 

@@ -22,6 +22,10 @@ export interface TmuxWindow {
   active: boolean
 }
 
+function sortWindowsByIndexAscending(windows: TmuxWindow[]): TmuxWindow[] {
+  return [...windows].sort((a, b) => a.index - b.index)
+}
+
 function normalizeSegment(value: string): string {
   const normalized = value
     .toLowerCase()
@@ -136,27 +140,8 @@ function configureControlSession(sessionName: string, root: string): void {
     runTmux(args, false)
   }
 
-  apply("set-option", "-t", sessionName, "status", "on")
-  apply("set-option", "-t", sessionName, "status-position", "bottom")
-  apply("set-option", "-t", sessionName, "status-interval", "0")
-  apply("set-option", "-t", sessionName, "status-style", "bg=default,fg=default")
-  apply("set-option", "-t", sessionName, "@termlings_control_left", " #[fg=colour141,bold]termlings#[fg=colour245] · Chat#[default] ")
-  apply("set-option", "-t", sessionName, "@termlings_control_right", "")
-  apply("set-option", "-t", sessionName, "status-left", "")
-  apply("set-option", "-t", sessionName, "status-right", "")
-  apply("set-option", "-t", sessionName, "status-left-length", "80")
-  apply("set-option", "-t", sessionName, "status-right-length", "80")
-  // Use a custom status format so tmux does not render the window list in the middle.
-  apply(
-    "set-option",
-    "-t",
-    sessionName,
-    "status-format[0]",
-    "#[align=left]#{?#{==:#{window_name},control},#{@termlings_control_left}, #[fg=colour248]ESC Back to#[default] · #{@termlings_agent_badge} }#[align=right]#{?#{==:#{window_name},control},#{@termlings_control_right}, }",
-  )
-  apply("set-window-option", "-t", sessionName, "window-status-format", "")
-  apply("set-window-option", "-t", sessionName, "window-status-current-format", "")
-  apply("set-window-option", "-t", sessionName, "window-status-separator", "")
+  // Hide tmux status/footer entirely for auto-spawn control sessions.
+  apply("set-option", "-t", sessionName, "status", "off")
   apply("set-window-option", "-t", sessionName, "automatic-rename", "off")
   const escBackScript =
     "current=$(tmux display-message -p '#{window_name}'); " +
@@ -249,6 +234,22 @@ export function ensureControlSession(root = process.cwd()): { ok: boolean; sessi
     }
   }
 
+  const refreshedWindows = sortWindowsByIndexAscending(listTmuxWindows(sessionName))
+  const firstWindow = refreshedWindows[0]
+  const controlWindow = refreshedWindows.find((window) => window.name === "control")
+  if (firstWindow && controlWindow && firstWindow.index !== controlWindow.index) {
+    runTmux(
+      [
+        "swap-window",
+        "-s",
+        `${sessionName}:${controlWindow.index}`,
+        "-t",
+        `${sessionName}:${firstWindow.index}`,
+      ],
+      false,
+    )
+  }
+
   configureControlSession(sessionName, root)
 
   return { ok: true, sessionName }
@@ -258,21 +259,23 @@ export function attachControlSession(root = process.cwd()): { ok: boolean; error
   const ensured = ensureControlSession(root)
   if (!ensured.ok) return { ok: false, error: ensured.error }
 
-  const args = [
-    "new-session",
-    "-A",
-    "-s",
-    ensured.sessionName,
-    "-c",
-    root,
-    `TERMLINGS_CONTROL_PANEL=1 TERMLINGS_TMUX_SESSION=${ensured.sessionName} termlings --inside-tmux`,
-  ]
-  const result = runTmux(args, true)
-  if (!result.ok) {
-    return { ok: false, error: result.error || "Failed to attach tmux control session." }
+  const focusedByName = focusTmuxWindow(ensured.sessionName, "control")
+  if (focusedByName.ok) {
+    return { ok: true }
   }
 
-  return { ok: true }
+  const focusedByIndex = focusTmuxWindow(ensured.sessionName, "0")
+  if (focusedByIndex.ok) {
+    return { ok: true }
+  }
+
+  return {
+    ok: false,
+    error:
+      focusedByName.error
+      || focusedByIndex.error
+      || "Failed to attach tmux control session.",
+  }
 }
 
 export function openAgentWindow(

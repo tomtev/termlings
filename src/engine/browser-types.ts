@@ -1,5 +1,5 @@
 /**
- * PinchTab browser service types and interfaces
+ * Browser service types and interfaces
  */
 
 export interface BrowserConfig {
@@ -16,12 +16,16 @@ export interface ProcessState {
   status: "running" | "stopped"
   startedAt: number | null
   url?: string
+  cdpWsUrl?: string
+  profilePath?: string
+  mode?: "cdp"
 }
 
 export interface ActivityLogEntry {
   ts: number
   sessionId?: string
   agentName?: string
+  agentSlug?: string
   agentDna?: string
   command: string
   args: unknown[]

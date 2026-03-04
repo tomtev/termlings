@@ -1,429 +1,198 @@
 # Browser Service
 
-The browser service provides agents and operators with a shared persistent web browser for automation and human-in-loop workflows.
+Termlings browser automation now uses **agent-browser** in **native mode** over a shared **Chrome CDP** session.
 
-## Overview
+## Defaults (Human-in-the-loop)
 
-- **Per-project isolation**: Each project has its own dedicated browser instance with isolated profile
-- **Agent attribution**: Browser commands include agent/session identity and are logged locally
-- **Persistent state**: Cookies, login state, and history persist across restarts
-- **Tab targeting**: Use explicit tab IDs (`--tab`) for deterministic multi-agent runs
-- **Activity logging**: All interactions recorded with agent identity in audit trail
-- **Human-in-loop**: Agents can request operator help for tasks like login
+Default values are optimized for human-in-the-loop operations:
 
-## Setup
+- Headed browser window by default (`termlings browser start`)
+- Workspace-scoped persistent profile (one profile per project)
+- Shared browser instance for all agents (coordination via tabs)
+- Operator takeover is always possible in the visible browser
 
-### Initialize
+This default is ideal for login-heavy workflows, approvals, and assisted browsing.
+
+## Headed vs Headless (Simple Rule)
+
+- Use **headed** (default) for human-in-the-loop work: logins, MFA, approvals, and manual intervention.
+- Use **headless** for non-interactive work: CI pipelines, scraping, and repeatable extraction jobs.
+- **Both modes still use CDP** for automation/control. Headless only means no visible browser window.
+
+## Runtime Model
+
+Under the hood, Termlings wraps:
+
+```bash
+agent-browser --native --cdp <target>
+```
+
+`<target>` is the active CDP endpoint (port or websocket URL).  
+`termlings browser start` launches Chrome/Chromium with CDP enabled and a project-scoped profile.
+
+## Install
+
+```bash
+npm install -g agent-browser
+agent-browser install
+```
+
+Also ensure Chrome/Chromium is installed on your machine.
+
+## Quick Start
+
+### Initialize browser workspace state
 
 ```bash
 termlings browser init
 ```
 
-Creates `.termlings/browser/` directory and configuration.
+Creates `.termlings/browser/` metadata and ensures a workspace profile exists.
 
-### Install PinchTab
-
-PinchTab is required to run the browser service:
-
-```bash
-npm install -g pinchtab
-```
-
-See: https://pinchtab.com/docs/headless-vs-headed/
-
-### Start Browser
+### Start browser (headed, default)
 
 ```bash
 termlings browser start
 ```
 
-Starts PinchTab server in **headed mode** (visible UI) by default for human-in-loop workflows.
+Example output:
 
-```
-✓ Browser started (PID 6866, port 9867)
-Profile: ~/.pinchtab/profiles/project-<project-name>
-```
-
-Use headed mode explicitly:
-```bash
-termlings browser start --headed
+```text
+✓ Browser started (PID 12345, port 9222)
+Mode: headed
+Profile: ~/.termlings/chrome-profiles/<workspace-profile>
+CDP endpoint: http://127.0.0.1:9222
+Runtime: agent-browser --native --cdp 9222
 ```
 
-You can force headless mode explicitly:
-```bash
-termlings browser start --headless
-```
-
-Legacy env-var control still works:
-```bash
-BRIDGE_HEADLESS=true termlings browser start
-```
-
-**Recommendation:** Use headed mode for operator oversight and intervention. Switch to headless for CI/background jobs:
-- Running on a Linux system or CI environment
-- Using a remote/containerized setup
-- Running on a separate machine
-
-### Stop Browser
-
-```bash
-termlings browser stop
-```
-
-Gracefully shuts down the browser server.
-
-### Check Status
+### Status
 
 ```bash
 termlings browser status
 ```
 
-Shows running status, port, PID, and uptime:
-
-```
-Browser: running
-  Port: 9867
-  PID: 6866
-  Uptime: 5s
-```
-
-## Agent Commands
-
-### Navigate
+### Stop
 
 ```bash
+termlings browser stop
+```
+
+## Headless / Scraping Mode
+
+For scraping, CI, or non-interactive runs:
+
+```bash
+termlings browser start --headless
+```
+
+Recommended workflow for batch extraction:
+
+```bash
+termlings browser start --headless
 termlings browser navigate "https://example.com"
-termlings browser navigate "https://example.com" --tab <tab-id>
-```
-
-Navigate to a URL in the active tab (or explicit `--tab`).
-
-### Screenshot
-
-```bash
-termlings browser screenshot
-termlings browser screenshot --tab <tab-id> --out /tmp/page.png
-```
-
-Takes a screenshot of the active tab (or explicit `--tab`) and returns base64 by default.
-
-```
-/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABt...
-```
-
-### Snapshot
-
-```bash
-termlings browser snapshot
-termlings browser snapshot --tab <tab-id>
-termlings browser snapshot --compact --interactive --depth 2
-```
-
-`snapshot` calls PinchTab's root `/snapshot` endpoint and passes `tabId` when you use `--tab`.
-Use `--tab <tab-id>` for deterministic multi-agent runs.
-
-### Extract Text
-
-```bash
+termlings browser snapshot --compact --interactive --depth 3
 termlings browser extract
-termlings browser extract --tab <tab-id>
 ```
 
-Gets all visible text from the active tab (or explicit `--tab`):
+Use `--headless` when you prioritize throughput and deterministic automation over live human oversight.
 
-```
-Example Domain
-This domain is for use in documentation examples...
-```
-
-### Type
+## Core Commands
 
 ```bash
-termlings browser type "hello world"
-termlings browser type "hello world" --tab <tab-id>
+termlings browser tabs list
+termlings browser navigate "https://example.com" [--tab <index>]
+termlings browser snapshot [--tab <index>] [--compact] [--interactive] [--depth <n>]
+termlings browser screenshot [--tab <index>] [--out /tmp/page.png]
+termlings browser extract [--tab <index>]
+termlings browser type "text" [--tab <index>]
+termlings browser click "button.submit" [--tab <index>]
+termlings browser cookies list [--tab <index>]
+termlings browser check-login [--tab <index>]
+termlings browser request-help "Need manual login"
 ```
 
-Types text into the focused element (input field, textarea, etc.).
+## Tabs and Shared Access
 
-### Click
+All agents share one browser process per workspace.
 
-```bash
-termlings browser click "button.submit"
-termlings browser click "button.submit" --tab <tab-id>
-```
+- `termlings browser tabs list` returns tab indexes
+- Use `--tab <index>` when you want deterministic behavior
+- Coordinate tab ownership in tasks/DMs to avoid collisions
 
-Clicks an element by CSS selector.
+## Human-in-loop Login Flow
 
-### List Cookies
-
-```bash
-termlings browser cookies list
-termlings browser cookies list --tab <tab-id>
-```
-
-Returns all cookies as JSON:
-
-```json
-[
-  {
-    "name": "session_id",
-    "value": "abc123...",
-    "domain": "example.com",
-    "path": "/",
-    "secure": true,
-    "httpOnly": true
-  }
-]
-```
-
-## Agent Integration
-
-### Automatic Agent Tracking
-
-When an agent runs browser commands, it automatically:
-
-1. **Attaches identity headers** - Session ID, agent name, and DNA are sent with browser API requests
-2. **Writes local audit logs** - Actions are appended to `.termlings/browser/history.jsonl`
-3. **Updates per-agent state** - Last action and URL are tracked in `.termlings/browser/agents/*.json`
-
-Access the PinchTab dashboard to see agent activity:
-
-```bash
-# After starting the browser, open dashboard in your browser
-http://127.0.0.1:{port}/dashboard
-```
-
-### Multi-Agent Concurrent Access
-
-Multiple agents can work on the same browser instance safely:
-
-```bash
-# Agent Alice starts work
-export TERMLINGS_AGENT_NAME="Alice"
-export TERMLINGS_AGENT_DNA="0a3f201"
-termlings browser navigate "https://example.com"
-termlings browser extract --tab <tab-id>
-
-# Meanwhile, Agent Bob works concurrently on different tab
-export TERMLINGS_AGENT_NAME="Bob"
-export TERMLINGS_AGENT_DNA="1b4e312"
-termlings browser navigate "https://other-site.com"
-termlings browser screenshot --tab <tab-id>
-```
-
-Use `termlings browser tabs list` and pass `--tab <tab-id>` to avoid agents stepping on each other in the active tab.
-
-## Human-in-Loop Workflows
-
-### Check Login Status
-
-```bash
-termlings browser check-login
-termlings browser check-login --tab <tab-id>
-```
-
-Detects if the current page requires login by looking for common login indicators (login forms, auth fields, etc.).
-
-**Exit codes:**
-- `0` - No login required
-- `1` - Login required
-
-**Usage in shell scripts:**
-
-```bash
-TAB_ID=$(termlings browser tabs list | awk '/^   id:/{print $2; exit}')
-if termlings browser check-login --tab "$TAB_ID"; then
-  echo "Login required"
-  termlings browser request-help "Please log in to example.com"
-  exit 0
-fi
-
-echo "Already logged in, continuing..."
-termlings browser extract --tab "$TAB_ID"
-```
-
-### Request Operator Help
-
-```bash
-termlings browser request-help "Please log in to example.com"
-```
-
-Sends a notification to the operator via `termlings message`. The operator receives a DM with the request:
-
-```
-🔔 **Browser needs your help** (AgentName)
-
-Please log in to example.com
-
-Run: `termlings browser` commands to interact
-```
-
-**The operator can then:**
-
-```bash
-termlings browser screenshot              # See current page
-termlings browser navigate "https://..."  # Navigate if needed
-termlings browser type "credentials"      # Type credentials
-termlings browser click "button.login"    # Click login button
-termlings browser screenshot              # Verify success
-```
-
-**The agent continues:** After the operator completes the task, the agent can continue using the shared profile:
-
-```bash
-termlings browser extract --tab <tab-id>  # Now sees authenticated content
-```
-
-## Activity Logging
-
-All browser interactions are logged to `.termlings/browser/history.jsonl` with:
-
-- **Timestamp**: When the action occurred
-- **Session ID**: Agent session identifier
-- **Agent name**: Display name of the agent
-- **Command**: The action performed
-- **Arguments**: Parameters passed
-- **Result**: success, error, or timeout
-- **Error message**: If applicable
-
-Example log entries showing agent identity:
-
-```json
-{"ts":1772393205403,"sessionId":"tl-abc123","agentName":"Alice","agentDna":"0a3f201","command":"navigate","args":["https://example.com"],"result":"success"}
-{"ts":1772393208276,"sessionId":"tl-def456","agentName":"Bob","agentDna":"1b4e312","command":"screenshot","args":[],"result":"success"}
-{"ts":1772393208300,"sessionId":"tl-abc123","agentName":"Alice","agentDna":"0a3f201","command":"extract","args":[],"result":"success"}
-```
-
-Combined with PinchTab's dashboard activity feed, you get complete visibility into which agent performed each action.
+1. Agent navigates to target site.
+2. Agent detects auth gate (`termlings browser check-login`).
+3. Agent requests intervention (`termlings browser request-help "..."`).
+4. Operator completes login in the headed browser window.
+5. Agent resumes using the same profile/session.
 
 ## Configuration
 
-Browser configuration is stored in `.termlings/browser/config.json`:
+Browser config is stored at `.termlings/browser/config.json`.
+
+Example:
 
 ```json
 {
-  "port": 8222,
-  "binaryPath": "pinchtab",
+  "port": 9222,
+  "binaryPath": "google-chrome",
   "autoStart": false,
-  "profilePath": "/Users/you/.pinchtab/profiles/project-<project-name>",
+  "profilePath": "/Users/you/.termlings/chrome-profiles/myproj-abc123def0",
   "timeout": 30000
 }
 ```
 
-- **port**: Preferred port (PinchTab auto-detects if unavailable)
-- **binaryPath**: Path to PinchTab binary
-- **autoStart**: Auto-start on first use (not currently used)
-- **profilePath**: Chrome profile directory
-- **timeout**: Request timeout in milliseconds
+Notes:
 
-## Shared Profile
+- `port`: preferred CDP port (auto-increments if occupied)
+- `binaryPath`: Chrome/Chromium binary (override if auto-detect fails)
+- `profilePath`: workspace profile path (persisted auth/cookies)
+- `timeout`: command timeout for wrapped browser operations
 
-All agents and operators in the same project share one project-scoped profile at `~/.pinchtab/profiles/project-<project-name>/` (managed by PinchTab). This enables:
+## Workspace Files
 
-- **Persistent authentication**: Log in once, all agents can access authenticated content
-- **Shared cookies**: Session cookies and tracking persist across agent transitions and restarts
-- **Browsing history**: History and bookmarks shared across the team
-- **Human-in-loop**: Operators can take over mid-task with full context
-- **Profile preservation**: Cookies and data are never destroyed between runs
-
-## Headed Mode
-
-The browser runs in **headed mode by default** (visible UI). This allows:
-
-- **Operator visibility**: Operators can see exactly what's happening
-- **Quick intervention**: Operators can take over when needed
-- **Debugging**: Visual inspection helps troubleshoot issues
-- **Security**: Less chance of unexpected behavior going unnoticed
-
-You can still run headless mode when needed:
-
-```bash
-termlings browser start --headless
+```text
+.termlings/browser/
+  config.json
+  process.json
+  profile.json
+  history/
+    all.jsonl
+    agent/*.jsonl
+  agents/*.json
 ```
 
-See: https://pinchtab.com/docs/headless-vs-headed/
-
-## Example Workflow
-
-```bash
-#!/bin/bash
-# agent-web-scraper.sh
-
-export TERMLINGS_AGENT_NAME="DataScraper"
-export TERMLINGS_SESSION_ID="tl-$(date +%s)"
-
-# Start browser
-termlings browser start
-
-# Navigate to target site
-termlings browser navigate "https://data-portal.example.com"
-TAB_ID=$(termlings browser tabs list | awk '/^   id:/{print $2; exit}')
-
-# Check if login is needed
-if termlings browser check-login --tab "$TAB_ID"; then
-  # Notify operator
-  termlings browser request-help \
-    "Data portal requires authentication. Please log in."
-  exit 0
-fi
-
-# Extract data from authenticated page
-data=$(termlings browser extract --tab "$TAB_ID")
-echo "Extracted data:"
-echo "$data"
-
-# Stop browser
-termlings browser stop
-```
+- `history/all.jsonl`: global browser audit log
+- `history/agent/*.jsonl`: per-agent browser action logs
+- `agents/*.json`: last browser action per active agent
 
 ## Troubleshooting
 
-### "Browser not running"
-
-Start the browser:
+### `agent-browser` not found
 
 ```bash
-termlings browser start
+npm install -g agent-browser
+agent-browser install
 ```
 
-### PinchTab not found
+### Browser start fails
 
-Install PinchTab:
+Set explicit Chrome path in `.termlings/browser/config.json`:
 
-```bash
-npm install -g pinchtab
+```json
+{ "binaryPath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" }
 ```
 
-### Port conflicts
+### Port already in use
 
-PinchTab auto-detects an available port if the preferred port is in use. Check actual port:
+Termlings auto-selects the next available port near the configured one.
+Check actual port with:
 
 ```bash
 termlings browser status
 ```
 
-### No screenshot returned
+### Login blocked on strict providers
 
-Some websites block screenshots. The command may return empty. Try extracting text instead:
-
-```bash
-termlings browser extract
-termlings browser extract --tab <tab-id>
-```
-
-## API Reference
-
-| Command | Usage | Requires Server |
-|---------|-------|-----------------|
-| `init` | Setup directories | No |
-| `start` | Start server | No |
-| `stop` | Stop server | No |
-| `status` | Show status | No |
-| `navigate` | Go to URL (active tab or `--tab`) | Yes |
-| `screenshot` | Capture page (active tab or `--tab`) | Yes |
-| `type` | Input text (active tab or `--tab`) | Yes |
-| `click` | Click element (active tab or `--tab`) | Yes |
-| `extract` | Get page text (active tab or `--tab`) | Yes |
-| `cookies` | List cookies (active tab or `--tab`) | Yes |
-| `check-login` | Detect login (active tab or `--tab`) | Yes |
-| `request-help` | Notify operator | No |
+Use headed mode (default) and complete login manually in the visible browser, then continue automation.

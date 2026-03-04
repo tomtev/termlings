@@ -81,6 +81,7 @@ import {
 const TYPING_STALE_MS = 12_000
 const TYPING_MESSAGE_SUPPRESS_MS = 2_000
 const MENTION_WAVE_MS = AVATAR_ANIM_MS * 2
+const UI_ANIMATION_TICK_MS = 250
 const BRACKETED_PASTE_START = "\u001b[200~"
 const BRACKETED_PASTE_END = "\u001b[201~"
 const PASTE_COMPACT_MIN_CHARS = 700
@@ -183,6 +184,8 @@ class WorkspaceTui {
   private settingsSelectionIndex = 0
 
   private avatarSizeMode: "large" | "small" | "tiny" = "small"
+  private avatarVisibleAgentCount = 0
+  private avatarTotalAgentCount = 0
   private renderScheduled = false
   private lastRenderTime = 0
   private lastTmuxStatusLeft = ""
@@ -297,7 +300,7 @@ class WorkspaceTui {
         this.cursorBlinkVisible = true
       }
       this.render()
-    }, AVATAR_ANIM_MS)
+    }, UI_ANIMATION_TICK_MS)
 
     await new Promise(() => {})
   }
@@ -1333,8 +1336,9 @@ class WorkspaceTui {
         let deliveredCount = 0
         let storedCount = 0
         for (const targetId of parsedDm.targetIds) {
-          const delivered = await this.sendDm(targetId, textWithMentions)
-          if (delivered) deliveredCount += 1
+          const outcome = await this.sendDm(targetId, textWithMentions)
+          this.applyOptimisticMessage(outcome.record)
+          if (outcome.delivered) deliveredCount += 1
           else storedCount += 1
         }
         if (parsedDm.audience === "single") {
@@ -1351,7 +1355,7 @@ class WorkspaceTui {
         this.draftCursorIndex = 0
         this.mentionSelectionIndex = 0
         this.messageScrollOffset = 0
-        await this.reloadSnapshot()
+        void this.reloadSnapshot().then(() => this.render())
       } catch (error) {
         this.statusMessage = error instanceof Error ? error.message : "Failed to send message."
       } finally {
@@ -1376,20 +1380,28 @@ class WorkspaceTui {
     try {
       const expandedText = this.expandDraftPlaceholdersForSend(text)
       const textWithMentions = this.encodeMentionsForTransport(expandedText)
-      const delivered = await this.sendDm(this.selectedThreadId, textWithMentions)
+      const outcome = await this.sendDm(this.selectedThreadId, textWithMentions)
+      this.applyOptimisticMessage(outcome.record)
       this.draft = ""
       this.draftCursorIndex = 0
       this.mentionSelectionIndex = 0
       this.messageScrollOffset = 0
-      this.statusMessage = delivered
+      this.statusMessage = outcome.delivered
         ? `Sent to ${this.threadLabel(this.selectedThreadId)}.`
         : `Stored for ${this.threadLabel(this.selectedThreadId)} (offline).`
-      await this.reloadSnapshot()
+      void this.reloadSnapshot().then(() => this.render())
     } catch (error) {
       this.statusMessage = error instanceof Error ? error.message : "Failed to send message."
     } finally {
       this.sending = false
     }
+  }
+
+  private applyOptimisticMessage(message: WorkspaceMessage): void {
+    const next = [...this.snapshot.messages, message]
+    next.sort((a, b) => a.ts - b.ts)
+    this.snapshot.messages = next.slice(-1000)
+    this.previousMessageIds.add(message.id)
   }
 
   private parseAllActivityDm(text: string): {
@@ -1519,7 +1531,7 @@ class WorkspaceTui {
     )
   }
 
-  private async sendDm(target: string, text: string): Promise<boolean> {
+  private async sendDm(target: string, text: string): Promise<{ delivered: boolean; record: WorkspaceMessage }> {
     const rawTarget = target
     const resolvedTarget = rawTarget === "owner" || rawTarget === "operator" ? "human:default" : rawTarget
 
@@ -1587,7 +1599,7 @@ class WorkspaceTui {
       ])
     }
 
-    appendWorkspaceMessage(
+    const record = appendWorkspaceMessage(
       {
         kind: "dm",
         from: fromId,
@@ -1601,7 +1613,7 @@ class WorkspaceTui {
       this.root,
     )
 
-    return delivered
+    return { delivered, record }
   }
 
   private async reloadSnapshot(): Promise<void> {
@@ -2395,6 +2407,7 @@ class WorkspaceTui {
         insertText: `@${preferred}`,
         subtitle,
         online: thread.online,
+        sort_order: thread.sort_order,
       } satisfies MentionCandidate
     })
 
@@ -2407,14 +2420,20 @@ class WorkspaceTui {
       insertText: `@${this.mentionTokenFromLabel(ownerLabel, "Owner")}`,
       subtitle: "Owner",
       online: true,
+      sort_order: Number.MAX_SAFE_INTEGER,
     })
 
-    candidates.sort((a, b) => {
+    const visibleCandidates = candidates.filter((candidate) => candidate.online || candidate.id.startsWith("human:"))
+
+    visibleCandidates.sort((a, b) => {
+      const aOrder = a.sort_order ?? 0
+      const bOrder = b.sort_order ?? 0
+      if (aOrder !== bOrder) return aOrder - bOrder
       if (a.online !== b.online) return a.online ? -1 : 1
       return a.label.localeCompare(b.label)
     })
 
-    return candidates
+    return visibleCandidates
   }
 
   private getMentionCandidates(query: string): MentionCandidate[] {
@@ -2428,6 +2447,7 @@ class WorkspaceTui {
             insertText: "@everyone",
             subtitle: "All agents",
             online: true,
+            sort_order: -1,
           } satisfies MentionCandidate,
           ...this.allMentionCandidates().filter((candidate) => candidate.id.startsWith("agent:")),
         ]
@@ -2461,6 +2481,9 @@ class WorkspaceTui {
 
     scored.sort((a, b) => {
       if (a.score !== b.score) return a.score - b.score
+      const aOrder = a.candidate.sort_order ?? 0
+      const bOrder = b.candidate.sort_order ?? 0
+      if (aOrder !== bOrder) return aOrder - bOrder
       if (a.candidate.online !== b.candidate.online) return a.candidate.online ? -1 : 1
       return a.candidate.label.localeCompare(b.candidate.label)
     })
@@ -2750,21 +2773,27 @@ class WorkspaceTui {
     } else if (message.kind === "chat") {
       details.push(`#${message.channel || "workspace"}`)
     } else if (presenceEvent) {
-      // Presence system cards already show the actor in the body row.
-      // Keep the header clean (timestamp only) to avoid redundant "Workspace" labels.
-      headerLeft = ""
+      // Render presence events on one compact row:
+      // actor (+ muted short title) + action on the left, timestamp on the right.
+      const maxActionWidth = Math.max(0, leftMaxWidth - 4) // reserve: "<chip> " + at least 1 char name
+      const actionText = maxActionWidth > 0
+        ? truncatePlain(presenceEvent.action, maxActionWidth)
+        : ""
+      const reservedLeft = 2 + (actionText.length > 0 ? actionText.length + 1 : 0) // "<chip> " + optional "action"
+      const nameBudget = Math.max(1, leftMaxWidth - reservedLeft)
+      const displayName = this.formatNameWithShortTitle(
+        presenceEvent.name,
+        presenceEvent.dna,
+        nameBudget,
+      )
+      headerLeft = `${this.colorChipForDna(presenceEvent.dna)} ${displayName}${actionText ? `${FG_META} ${actionText}${ANSI_RESET}` : ""}`
     }
 
     const headerGap = Math.max(1, contentWidth - visibleLength(headerLeft) - dateTimeText.length)
     const header = `${headerLeft}${" ".repeat(headerGap)}${FG_META}${dateTimeText}${ANSI_RESET}`
 
     const bodyLines = presenceEvent
-      ? [
-          `${this.colorChipForDna(presenceEvent.dna)} ${truncatePlain(
-            `${presenceEvent.name} ${presenceEvent.action}`,
-            Math.max(1, contentWidth - 2),
-          )}`,
-        ]
+      ? []
       : this.renderMarkdownBody(this.decodeMentionsForDisplay(message.text || ""), contentWidth)
     const prependLines = options.prependLines ?? []
     const detailLines = details.map((d) => truncatePlain(d, contentWidth))
@@ -2835,7 +2864,27 @@ class WorkspaceTui {
           out.push(`${" ".repeat(leftPad)}${color}${text}${ANSI_RESET}${" ".repeat(rightPad)}`)
         }
       } else {
-        out.push("No messages yet.")
+        const bannerLines = this.selectedThreadId === "activity"
+          ? [
+              "No messages yet.",
+              'Start with @everyone or @agent below.',
+            ]
+          : [
+              "No messages yet.",
+              `Say hi to ${selectedDmThread?.label || "your teammate"} below.`,
+            ]
+        const topPadding = Math.max(0, Math.floor((height - bannerLines.length) / 2))
+        const bannerWidth = Math.max(1, width)
+        for (let row = 0; row < topPadding && out.length < height; row++) {
+          out.push("")
+        }
+        for (let index = 0; index < bannerLines.length && out.length < height; index++) {
+          const text = truncatePlain(bannerLines[index]!, bannerWidth)
+          const leftPad = Math.max(0, Math.floor((bannerWidth - text.length) / 2))
+          const rightPad = Math.max(0, bannerWidth - leftPad - text.length)
+          const color = index === 0 ? FG_META : FG_SUBTLE_HINT
+          out.push(`${" ".repeat(leftPad)}${color}${text}${ANSI_RESET}${" ".repeat(rightPad)}`)
+        }
       }
       if (typingFooter && out.length < height) {
         out.push(typingFooter)
@@ -3535,6 +3584,8 @@ class WorkspaceTui {
 
   private renderAvatarStrip(width: number): string[] {
     const agents = this.snapshot.agents
+    this.avatarVisibleAgentCount = 0
+    this.avatarTotalAgentCount = agents.length
     if (agents.length === 0) {
       return ["Agents: none"]
     }
@@ -3555,17 +3606,13 @@ class WorkspaceTui {
     const tinyAvatars = this.avatarSizeMode === "tiny"
 
     const skeletonColor = "\x1b[38;5;244m"
-    const anyTyping = agents.some((a) => a.online && a.typing)
-    const now = Date.now()
-    const anyTalking = Array.from(this.talkUntilByDna.values()).some((until) => until > now)
-    const logoAnimating = anyTyping || anyTalking
-    const logoAnimFrame = logoAnimating ? Math.floor(Date.now() / AVATAR_ANIM_MS) % 2 : 0
-    // Keep "All Activity" logo static in mouth/talk state to reduce visual noise.
+    // Keep "All Activity" logo always colored and static.
     const logoTalkFrame = 0
-    const logoWalkFrame = logoAnimating ? logoAnimFrame : 0
-    const logoBw = !this.selectedThreadId || this.selectedThreadId !== "activity"
+    const logoWalkFrame = 0
+    const logoBw = false
     const logoLines = renderTermlingsLogo(logoBw, logoTalkFrame, logoWalkFrame).split("\n")
     const allActivityBlock: AvatarBlock = {
+      kind: "activity",
       label: "All",
       displayLabel: "All",
       subtitle: "Activity",
@@ -3585,11 +3632,12 @@ class WorkspaceTui {
       selected: this.selectedThreadId === "activity",
     }
 
+    const now = Date.now()
     const agentBlocks: AvatarBlock[] = sortedAgents.map((agent) => {
       const waveFrame = this.waveFrameForAgent(agent)
-      const talkFrame = this.talkFrameForAgent(agent)
+      const talkFrame = 0
       const baseAvatarLines = renderTerminalSmall(agent.dna, 0, !agent.online, talkFrame, waveFrame).split("\n")
-      const largeFrame = (talkFrame > 0 || waveFrame > 0) ? Math.floor(Date.now() / AVATAR_ANIM_MS) % 2 : 0
+      const largeFrame = waveFrame > 0 ? Math.floor(Date.now() / AVATAR_ANIM_MS) % 2 : 0
       const lines = tinyAvatars
         ? [agent.online ? this.colorChipForDna(agent.dna) : `${FG_META}■${ANSI_RESET}`]
         : largeAvatars
@@ -3598,8 +3646,15 @@ class WorkspaceTui {
       const label = agent.name
       const displayLabel = label
       const baseSubtitle = (agent.title_short || agent.title) || (!agent.online ? "offline" : "")
-      const typing = agent.online && agent.typing
-      const subtitle = baseSubtitle
+      const speaking = agent.online
+        && (
+          agent.typing
+          || (this.talkUntilByDna.get(agent.dna) ?? 0) > now
+        )
+      const talkDots = speaking ? this.typingDots().padEnd(3, " ") : ""
+      const subtitle = speaking
+        ? `${baseSubtitle}${baseSubtitle.length > 0 ? " " : ""}${talkDots}`.trimEnd()
+        : baseSubtitle
       const selected = this.isAgentThreadSelected(agent)
       const blockWidth = Math.max(
         ...lines.map((line) => visibleLength(line)),
@@ -3608,10 +3663,11 @@ class WorkspaceTui {
         1,
       )
       return {
+        kind: "agent",
         label,
         displayLabel,
         subtitle,
-        typing,
+        typing: speaking,
         lines,
         width: blockWidth,
         selected,
@@ -3620,6 +3676,7 @@ class WorkspaceTui {
 
     // Large avatar mode: "All" header above + responsive grid + desk visual
     if (largeAvatars) {
+      this.avatarVisibleAgentCount = agentBlocks.length
       const lines: string[] = []
 
       // "All Activity" header above the grid
@@ -3688,11 +3745,9 @@ class WorkspaceTui {
           const block = row[i]!
           const subtitleText = fitPlain(truncatePlain(block.subtitle, block.width), block.width)
           const styled = block.subtitle.length > 0
-            ? block.typing
-              ? `${FG_META}${subtitleText}${ANSI_RESET}`
-              : block.selected
-                ? `${FG_SELECTED}${subtitleText}${ANSI_RESET}`
-                : `${FG_META}${subtitleText}${ANSI_RESET}`
+            ? block.selected
+              ? `${FG_SELECTED}${subtitleText}${ANSI_RESET}`
+              : `${FG_META}${subtitleText}${ANSI_RESET}`
             : " ".repeat(block.width)
           subtitleLine += padAnsi(styled, block.width)
           if (i < row.length - 1) subtitleLine += "  "
@@ -3711,6 +3766,7 @@ class WorkspaceTui {
     // Standard layout (small/tiny): single row with "All" inline
     const blocks: AvatarBlock[] = [allActivityBlock, ...agentBlocks]
     const shown = this.computeAvatarViewport(blocks, width)
+    this.avatarVisibleAgentCount = shown.filter((block) => block.kind === "agent").length
 
     const avatarHeight = Math.max(...shown.map((block) => block.lines.length), 1)
     const lines: string[] = []
@@ -3719,7 +3775,8 @@ class WorkspaceTui {
       let line = ""
       for (let index = 0; index < shown.length; index++) {
         const block = shown[index]!
-        const piece = block.lines[row] ?? ""
+        const offset = avatarHeight - block.lines.length
+        const piece = row >= offset ? (block.lines[row - offset] ?? "") : ""
         line += padAnsi(piece, block.width)
         if (index < shown.length - 1) {
           line += "  "
@@ -3745,11 +3802,9 @@ class WorkspaceTui {
       const block = shown[index]!
       const subtitleText = fitPlain(truncatePlain(block.subtitle, block.width), block.width)
       const styledSubtitle = block.subtitle.length > 0
-        ? block.typing
-          ? `${FG_META}${subtitleText}${ANSI_RESET}`
-          : block.selected
-            ? `${FG_SELECTED}${subtitleText}${ANSI_RESET}`
-            : `${FG_META}${subtitleText}${ANSI_RESET}`
+        ? block.selected
+          ? `${FG_SELECTED}${subtitleText}${ANSI_RESET}`
+          : `${FG_META}${subtitleText}${ANSI_RESET}`
         : " ".repeat(block.width)
       subtitles += padAnsi(styledSubtitle, block.width)
       if (index < shown.length - 1) {
@@ -3928,7 +3983,6 @@ class WorkspaceTui {
     return shown.map((candidate, offset) => {
       const absoluteIndex = windowStart + offset
       const active = absoluteIndex === selected
-      const status = candidate.online ? "online" : "offline"
       const subtitle = candidate.subtitle ? ` · ${candidate.subtitle}` : ""
       const tokenLooksLikeLabel =
         candidate.insertText.slice(1).toLowerCase() === candidate.label.toLowerCase().replace(/\s+/g, "")
@@ -3940,21 +3994,18 @@ class WorkspaceTui {
       const textWidth = Math.max(0, width - chipWidth)
       const prefixText = `   ${active ? "›" : " "} ${candidate.insertText}${labelPart}`
       const titleText = subtitle
-      const statusText = ` · ${status}`
 
       let remaining = textWidth
       const shownPrefix = truncatePlain(prefixText, remaining)
       remaining = Math.max(0, remaining - shownPrefix.length)
       const shownTitle = remaining > 0 ? truncatePlain(titleText, remaining) : ""
       remaining = Math.max(0, remaining - shownTitle.length)
-      const shownStatus = remaining > 0 ? truncatePlain(statusText, remaining) : ""
-      remaining = Math.max(0, remaining - shownStatus.length)
       const padding = " ".repeat(remaining)
 
       if (active) {
-        return `${BG_INPUT_PANEL}${FG_SELECTED}\x1b[1m${shownPrefix}\x1b[22m${chipChunk}${FG_SUBTLE_HINT}${shownTitle}${FG_META}${shownStatus}${padding}${ANSI_RESET}`
+        return `${BG_INPUT_PANEL}${FG_SELECTED}\x1b[1m${shownPrefix}\x1b[22m${chipChunk}${FG_SUBTLE_HINT}${shownTitle}${padding}${ANSI_RESET}`
       }
-      return `${BG_INPUT_PANEL}${FG_META}${shownPrefix}${chipChunk}${FG_SUBTLE_HINT}${shownTitle}${FG_META}${shownStatus}${padding}${ANSI_RESET}`
+      return `${BG_INPUT_PANEL}${FG_META}${shownPrefix}${chipChunk}${FG_SUBTLE_HINT}${shownTitle}${padding}${ANSI_RESET}`
     })
   }
 
@@ -4098,7 +4149,6 @@ class WorkspaceTui {
     const showRequestsNavigator = this.view === "requests"
     const showScrollToBottomHint = this.view === "messages" && this.messageScrollOffset > 0
     const showComposer = !showOfflineJoinHint && !showRequestsNavigator && this.view !== "settings"
-    const showTypingHint = showComposer && this.selectedThreadId.startsWith("agent:") && Boolean(selectedDmThread?.typing)
     const mentionSuggestionLines = showComposer ? this.renderMentionSuggestions(width) : []
     const [promptLine, isPlaceholder] = this.renderPrompt(width)
     const composerLines = showComposer ? this.renderComposerLines(width, promptLine, isPlaceholder) : []
@@ -4107,32 +4157,17 @@ class WorkspaceTui {
     const inputPadBottomRows = showPromptArea ? 1 : 0
     const inputMarginBottomRows = 0
     const promptContentRows = showPromptArea
-      ? (showComposer ? composerLines.length + mentionSuggestionLines.length + (showTypingHint ? 1 : 0) : 1)
+      ? (showComposer ? composerLines.length + mentionSuggestionLines.length : 1)
       : 0
     const promptBoxHeight = inputPadTopRows + promptContentRows + inputPadBottomRows + inputMarginBottomRows
     const minBodyBoxHeight = 8
+    const showAvatarCountHint = showAgents && this.avatarTotalAgentCount > 0
     if (showAgents) {
       while (
         headerLines.length + promptBoxHeight + (avatarContentLines.length + 2) + minBodyBoxHeight > height
         && avatarContentLines.length > 1
       ) {
         avatarContentLines = avatarContentLines.slice(0, -1)
-      }
-    }
-    const inlineArrowHint = `${FG_SUBTLE_HINT}←/→${ANSI_RESET}`
-    const inlineArrowHintLen = 3
-    let avatarHintPlacedInline = false
-    if (showAgents && avatarContentLines.length > 0) {
-      const avatarInnerWidth = Math.max(0, width - 4)
-      const candidateRows = Math.min(avatarContentLines.length, 3)
-      for (let row = 0; row < candidateRows; row++) {
-        const line = avatarContentLines[row] ?? ""
-        if (visibleLength(line) <= 0) continue
-        const needed = visibleLength(line) + 2 + inlineArrowHintLen
-        if (needed > avatarInnerWidth) continue
-        avatarContentLines[row] = `${line}  ${inlineArrowHint}`
-        avatarHintPlacedInline = true
-        break
       }
     }
 
@@ -4149,14 +4184,16 @@ class WorkspaceTui {
     lines.push(...headerLines)
 
     if (showAgents) {
-      if (avatarHintPlacedInline) {
+      if (!showAvatarCountHint) {
         lines.push(boxTop(width, ""))
       } else {
-        const arrowHint = `${FG_SUBTLE_HINT}←/→${ANSI_RESET}`
-        const arrowHintLen = 3 // visible length of "←/→"
+        const countHintText = `(${this.avatarVisibleAgentCount}/${this.avatarTotalAgentCount})`
+        const hintText = `←/→ ${countHintText}`
+        const hint = `${FG_SUBTLE_HINT}${hintText}${ANSI_RESET}`
+        const hintLen = hintText.length
         const innerWidth = Math.max(0, width - 2)
-        const dashLeft = Math.max(0, innerWidth - arrowHintLen - 2)
-        lines.push(`${FG_FRAME}${FRAME_TL}${FRAME_H.repeat(dashLeft)} ${ANSI_RESET}${arrowHint}${FG_FRAME} ${FRAME_TR}${ANSI_RESET}`)
+        const dashLeft = Math.max(0, innerWidth - hintLen - 2)
+        lines.push(`${FG_FRAME}${FRAME_TL}${FRAME_H.repeat(dashLeft)} ${ANSI_RESET}${hint}${FG_FRAME} ${FRAME_TR}${ANSI_RESET}`)
       }
       for (const avatarLine of avatarContentLines) {
         lines.push(boxAnsiLine(avatarLine, width))
@@ -4203,9 +4240,6 @@ class WorkspaceTui {
       if (showOfflineJoinHint && selectedDmThread) {
         lines.push(offlineBar(` ${selectedDmThread.label} is offline. Run \`termlings spawn\` in another terminal.`, width))
       } else if (showComposer) {
-        if (showTypingHint && selectedDmThread) {
-          lines.push(`${BG_INPUT_PANEL}${FG_META}${fitPlain(` ${selectedDmThread.label} is typing...`, width)}${ANSI_RESET}`)
-        }
         lines.push(...composerLines)
         lines.push(...mentionSuggestionLines)
       }

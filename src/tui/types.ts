@@ -45,6 +45,7 @@ export interface Snapshot {
 }
 
 export interface AvatarBlock {
+  kind: "activity" | "agent"
   label: string
   displayLabel: string
   subtitle: string
@@ -76,4 +77,5 @@ export interface MentionCandidate {
   insertText: string
   subtitle?: string
   online: boolean
+  sort_order?: number
 }

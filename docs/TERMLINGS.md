@@ -194,7 +194,7 @@ termlings task note task-123 "progress"  # Logged as your note
 
 **Activity logging:**
 All your actions are logged with your identity:
-- Browser: `.termlings/browser/history.jsonl`
+- Browser: `.termlings/browser/history/agent/<agent>.jsonl` (plus global `.termlings/browser/history/all.jsonl`)
 - Messages: `.termlings/store/messages.jsonl`
 - Tasks: `.termlings/store/tasks/tasks.json`
 

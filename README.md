@@ -7,7 +7,10 @@ Termlings runs in a shared workspace (`.termlings/`) in your project folders whe
 Our vision is to make building and running companies with AI agents feel like a video game, while still producing the best possible websites, apps and services.
 
 Run `termlings` in your project folder to open the TUI and manage your team.  
-Use `termlings --spawn-all` for a single-terminal startup (spawns all agents in detached tmux PTYs, then opens the TUI), or run `termlings` + `termlings spawn` in separate terminals.
+Use `termlings --auto-spawn` for a single-terminal startup (opens the control panel inside tmux, spawns all agent windows behind it, and tears down that tmux session when the control panel exits), or run `termlings` + `termlings spawn` in separate terminals.
+`--auto-spawn` uses tmux sessions behind the scenes to manage the control panel and agent terminals.
+Browser defaults are optimized for human-in-the-loop operations (headed + workspace profile + shared tabs).
+For scraping/CI workloads, run headless with `termlings browser start --headless` (still CDP-controlled, just no visible window).
 
 Every agent gets access to these tools (via termlings CLI):
 
@@ -18,7 +21,7 @@ Every agent gets access to these tools (via termlings CLI):
 - **Org chart** — see who's online, titles, and reporting lines
 - **Brief** — full workspace snapshot on session start
 - **Brand** — shared brand profile (colors, voice, logos, domains)
-- **Browser** — shared browser for web interaction and automation (powered by PinchTab)
+- **Browser** — shared browser for web interaction and automation (powered by [agent-browser.dev](https://agent-browser.dev) + Chrome CDP)
 - **Skills** — installable skill packs for extended capabilities (powered by skills.sh)
 
 ## Install
@@ -36,7 +39,7 @@ bun add -g termlings@latest
 termlings init
 
 # 2A) One-terminal startup (requires tmux)
-termlings --spawn-all
+termlings --auto-spawn
 
 # 2B) Or: keep workspace and spawning separate
 termlings
@@ -54,7 +57,7 @@ Termlings adds an agent coordination layer in `.termlings/` on top of your exist
    - `default` sets workspace-wide runtime/preset
    - `agents.<slug>` can override runtime/preset per agent
    - `runtimes` defines runtime preset commands
-   - `termlings --spawn-all` is a convenience wrapper around batch spawn (`--all --detached`) before opening the workspace TUI
+   - `termlings --auto-spawn` batch-spawns all agents, then opens the control panel as the front tmux window in the same session
 2. Termlings injects workspace + role context into the runtime session.
 3. The runtime starts with that context:
    - Claude Code (`termlings claude`) via `--append-system-prompt "<termlings context>"`
@@ -76,7 +79,7 @@ The built-in terminal UI is like an AI-native Slack: chat with your agents, trac
 | Command | What it does | Docs |
 | --- | --- | --- |
 | `termlings` | Start the workspace TUI | [docs/INIT.md](docs/INIT.md) |
-| `termlings --spawn-all` | Spawn all agents (detached tmux PTYs) + open workspace TUI | [docs/INIT.md](docs/INIT.md) |
+| `termlings --auto-spawn` | Open tmux control panel + spawn all agents behind it | [docs/INIT.md](docs/INIT.md) |
 | `termlings spawn` | Pick an agent + launch preset | [AGENTS.md](AGENTS.md) |
 | `termlings create` | Create a new agent in .termlings/agents | [AGENTS.md](AGENTS.md) |
 | `termlings init` | Initialize `.termlings/` in current project | [docs/INIT.md](docs/INIT.md) |
@@ -128,7 +131,12 @@ You should not run these commands since they mostly work inside a agent session.
     calendar/calendar.json
     requests/requests.jsonl
   browser/
-    history.jsonl
+    config.json
+    process.json
+    profile.json
+    history/
+      all.jsonl
+      agent/*.jsonl
 ```
 
 What each file/folder is for:
@@ -143,7 +151,11 @@ What each file/folder is for:
 - `.termlings/store/tasks/tasks.json` - task list and task state.
 - `.termlings/store/calendar/calendar.json` - events and recurrence.
 - `.termlings/store/requests/requests.jsonl` - operator request log.
-- `.termlings/browser/history.jsonl` - browser action history/audit trail.
+- `.termlings/browser/config.json` - browser runtime settings (CDP port, binary, profile path).
+- `.termlings/browser/process.json` - active browser process/CDP state.
+- `.termlings/browser/profile.json` - workspace profile metadata.
+- `.termlings/browser/history/all.jsonl` - global browser action stream.
+- `.termlings/browser/history/agent/*.jsonl` - per-agent browser action streams.
 
 ## Lifecycle & Internals
 

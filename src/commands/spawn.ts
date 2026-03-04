@@ -7,6 +7,7 @@ import { existsSync, readFileSync } from "fs"
 import { join } from "path"
 import { discoverLocalAgents } from "../agents/discover.js"
 import { decodeDNA, getTraitColors } from "../index.js"
+import { confirm } from "../interactive-menu.js"
 import {
   configureAgentSession,
   focusTmuxWindow,
@@ -42,6 +43,12 @@ interface AgentLaunchTarget {
   runtimeName: string
   presetName: string
 }
+
+const DANGEROUS_LAUNCH_FLAGS = [
+  "--dangerously-skip-permissions",
+  "--dangerously-bypass-approvals-and-sandbox",
+  "--dangerous-skip-confirmation",
+]
 
 const DEFAULT_CONFIG: SpawnConfig = {
   default: {
@@ -281,6 +288,26 @@ function formatCommandPreview(command: string): string {
   return parts.slice(1).join(" ")
 }
 
+function hasDangerousLaunchFlag(command: string): boolean {
+  const parts = commandParts(command)
+  return parts.some((part) => DANGEROUS_LAUNCH_FLAGS.some((flag) => part === flag || part.startsWith(`${flag}=`)))
+}
+
+function getDangerousLaunchCommands(
+  config: SpawnConfig,
+  launchTargets: AgentLaunchTarget[],
+  extraArgs: string[],
+): Array<{ slug: string; command: string }> {
+  const dangerous: Array<{ slug: string; command: string }> = []
+  for (const target of launchTargets) {
+    const command = buildPresetCommand(config, target.runtimeName, target.presetName, extraArgs)
+    if (!command) continue
+    if (!hasDangerousLaunchFlag(command)) continue
+    dangerous.push({ slug: target.slug, command })
+  }
+  return dangerous
+}
+
 function ansiTrueColor(rgb: [number, number, number]): string {
   return `\x1b[38;2;${rgb[0]};${rgb[1]};${rgb[2]}m`
 }
@@ -425,6 +452,8 @@ NOTES:
   - Batch launch (\`--all\`) uses tmux windows named agent:<slug>.
   - Agents run as normal PTY terminal sessions that you can inspect/interact with at any time.
   - If runtime/preset is omitted for batch launch, \`.termlings/spawn.json\` \`default\` + \`agents.<slug>\` routing is used.
+  - \`--all\` prompts for confirmation when dangerous launch flags are detected.
+  - Use \`--dangerous-skip-confirmation\` only for trusted automation.
   - Edit \`.termlings/spawn.json\` to change default runtime/preset and agent launch commands.
 `)
     return
@@ -566,6 +595,28 @@ NOTES:
       runtimeName: selectedRuntime,
       presetName: selectedPreset,
     })
+  }
+
+  if (spawnAll) {
+    const dangerousLaunches = getDangerousLaunchCommands(config, launchTargets, extraArgs)
+    if (dangerousLaunches.length > 0 && !flags.has("dangerous-skip-confirmation")) {
+      if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        console.error("Dangerous launch flags detected for `termlings spawn --all`.")
+        console.error("Refusing to continue in non-interactive mode.")
+        console.error("Use --dangerous-skip-confirmation only for trusted automation.")
+        process.exit(1)
+      }
+
+      console.log("Warning: --spawn-all will launch agents with dangerous runtime flags:")
+      for (const item of dangerousLaunches) {
+        console.log(`  - ${item.slug}: ${formatCommandPreview(item.command)}`)
+      }
+      const proceed = await confirm("Continue with spawn-all?", false)
+      if (!proceed) {
+        console.log("Cancelled.")
+        return
+      }
+    }
   }
 
   if (inline) {
