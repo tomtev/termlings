@@ -1,6 +1,6 @@
 // Workspace engine exports
 
-// Core types (used by objects.ts)
+// Core types
 export * from "./types.js"
 
 // IPC & Messaging
@@ -18,9 +18,7 @@ export * from "./browser-types.js"
 export * from "./browser.js"
 export * from "./browser-client.js"
 
-// Objects & Agent Discovery
-export * from "./objects.js"
-export * from "./object-loader.js"
+// Agent Discovery
 export * from "./agent-listing.js"
 
 // Utilities

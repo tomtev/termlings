@@ -15,6 +15,14 @@ export function parseJsonLines<T>(filePath: string): T[] {
 }
 
 export function readLastJsonLines<T>(filePath: string, limit: number): T[] {
+  return readLastMatchingJsonLines(filePath, limit)
+}
+
+export function readLastMatchingJsonLines<T>(
+  filePath: string,
+  limit: number,
+  match?: (entry: T) => boolean,
+): T[] {
   if (!existsSync(filePath)) return []
   if (!Number.isFinite(limit) || limit <= 0) return []
 
@@ -46,7 +54,9 @@ export function readLastJsonLines<T>(filePath: string, limit: number): T[] {
         const line = lines[index]?.trim()
         if (!line) continue
         try {
-          out.push(JSON.parse(line) as T)
+          const parsed = JSON.parse(line) as T
+          if (match && !match(parsed)) continue
+          out.push(parsed)
         } catch {
           // Ignore malformed lines in append-only logs.
         }
@@ -56,7 +66,10 @@ export function readLastJsonLines<T>(filePath: string, limit: number): T[] {
     const trailing = remainder.trim()
     if (out.length < limit && trailing) {
       try {
-        out.push(JSON.parse(trailing) as T)
+        const parsed = JSON.parse(trailing) as T
+        if (!match || match(parsed)) {
+          out.push(parsed)
+        }
       } catch {
         // Ignore malformed tail line.
       }

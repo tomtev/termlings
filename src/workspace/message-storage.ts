@@ -25,7 +25,7 @@ import {
   writeFileSync,
 } from "fs"
 import { join } from "path"
-import { parseJsonLines, readLastJsonLines } from "./jsonl.js"
+import { parseJsonLines, readLastJsonLines, readLastMatchingJsonLines } from "./jsonl.js"
 
 export interface WorkspaceMessage {
   id: string
@@ -289,12 +289,17 @@ export function getChannelMessages(
 export function getDmMessages(
   target: string,
   root: string,
-  opts: { limit?: number } = {},
+  opts: { limit?: number; match?: (message: WorkspaceMessage) => boolean } = {},
 ): WorkspaceMessage[] {
   const path = getDmPath(target, root)
-  return typeof opts.limit === "number"
-    ? readLastJsonLines<WorkspaceMessage>(path, opts.limit)
-    : parseJsonLines<WorkspaceMessage>(path)
+  if (typeof opts.limit === "number") {
+    return opts.match
+      ? readLastMatchingJsonLines<WorkspaceMessage>(path, opts.limit, opts.match)
+      : readLastJsonLines<WorkspaceMessage>(path, opts.limit)
+  }
+
+  const parsed = parseJsonLines<WorkspaceMessage>(path)
+  return opts.match ? parsed.filter(opts.match) : parsed
 }
 
 export function getSystemMessages(

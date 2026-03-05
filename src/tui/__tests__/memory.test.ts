@@ -4,6 +4,7 @@ import { join } from "path"
 import { tmpdir } from "os"
 
 import { WorkspaceTui } from "../tui.js"
+import { appendWorkspaceMessage } from "../../workspace/state.js"
 
 describe("workspace tui memory guards", () => {
   let root = ""
@@ -79,5 +80,100 @@ describe("workspace tui memory guards", () => {
 
     expect(tui.lastReadByThread.has("agent:keep")).toBe(true)
     expect(tui.lastReadByThread.has("agent:drop")).toBe(false)
+  })
+
+  it("keeps only a bounded activity window until older history is explicitly loaded", async () => {
+    for (let index = 0; index < 260; index += 1) {
+      appendWorkspaceMessage(
+        {
+          id: `msg-${index}`,
+          ts: index + 1,
+          kind: "chat",
+          channel: "workspace",
+          from: "human:default",
+          fromName: "Owner",
+          text: `message ${index}`,
+        },
+        root,
+      )
+    }
+
+    const tui = new WorkspaceTui(root) as any
+    await tui.reloadSnapshot()
+
+    expect(tui.messageWindow.threadId).toBe("activity")
+    expect(tui.messageWindow.messages).toHaveLength(120)
+    expect(tui.messageWindow.messages[0]?.id).toBe("msg-140")
+    expect(tui.messageWindow.hasOlder).toBe(true)
+
+    tui.messageScrollOffset = tui.messageScrollMax
+    await tui.handleInput("\u001b[5~")
+
+    expect(tui.messageWindow.messages).toHaveLength(240)
+    expect(tui.messageWindow.messages[0]?.id).toBe("msg-20")
+    expect(tui.messageWindow.hasOlder).toBe(true)
+
+    tui.loadOlderMessages()
+    expect(tui.messageWindow.messages).toHaveLength(260)
+    expect(tui.messageWindow.messages[0]?.id).toBe("msg-0")
+    expect(tui.messageWindow.hasOlder).toBe(false)
+  })
+
+  it("loads a DM thread directly from its own history instead of the global recent snapshot", () => {
+    const devDna = "abc1234"
+    const otherDna = "def5678"
+
+    appendWorkspaceMessage(
+      {
+        id: "dm-out",
+        ts: 1,
+        kind: "dm",
+        from: "human:default",
+        fromName: "Owner",
+        target: `agent:${devDna}`,
+        targetDna: devDna,
+        text: "outbound",
+      },
+      root,
+    )
+    appendWorkspaceMessage(
+      {
+        id: "dm-in",
+        ts: 2,
+        kind: "dm",
+        from: "tl-dev-1",
+        fromName: "Developer",
+        fromDna: devDna,
+        target: "human:default",
+        text: "inbound",
+      },
+      root,
+    )
+    appendWorkspaceMessage(
+      {
+        id: "dm-other",
+        ts: 3,
+        kind: "dm",
+        from: "tl-other-1",
+        fromName: "Other",
+        fromDna: otherDna,
+        target: "human:default",
+        text: "other",
+      },
+      root,
+    )
+
+    const tui = new WorkspaceTui(root) as any
+    tui.snapshot.dmThreads = [{
+      id: `agent:${devDna}`,
+      dna: devDna,
+      label: "Developer",
+      online: true,
+      typing: false,
+    }]
+
+    const loaded = tui.loadDmThreadWindow(`agent:${devDna}`, 10)
+    expect(loaded.messages.map((message: any) => message.id)).toEqual(["dm-out", "dm-in"])
+    expect(loaded.hasOlder).toBe(false)
   })
 })

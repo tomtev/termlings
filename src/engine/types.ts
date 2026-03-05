@@ -34,11 +34,6 @@ export interface ParsedMap {
   tileDefs: Record<string, TileDef>
 }
 
-export interface ObjectOverlay {
-  visual: Map<number, Cell>
-  walkable: Map<number, boolean>
-}
-
 /** Pack tile coordinates into a numeric key (supports maps up to 65536 wide) */
 export function tileKey(x: number, y: number): number {
   return (y << 16) | (x & 0xffff)

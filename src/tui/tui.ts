@@ -12,6 +12,7 @@ import { execSync } from "child_process"
 import {
   appendWorkspaceMessage,
   ensureWorkspaceDirs,
+  getDmMessages,
   listSessions,
   readWorkspaceSettings,
   readSession,
@@ -99,6 +100,9 @@ const FG_RUNTIME_CLAUDE = "\x1b[38;2;217;119;87m"
 const FG_RUNTIME_CODEX = "\x1b[38;2;148;163;184m"
 const BROWSER_ACTIVITY_MAX_MESSAGES = 200
 const BROWSER_ACTIVITY_CACHE_MULTIPLIER = 3
+const RECENT_ACTIVITY_SNAPSHOT_LIMIT = 300
+const MESSAGE_WINDOW_DEFAULT_LIMIT = 120
+const MESSAGE_WINDOW_LOAD_STEP = 120
 
 interface SessionTypingState {
   typing: boolean
@@ -119,6 +123,13 @@ interface BrowserActivityEntry {
 
 interface WorkspaceTuiOptions {
   startupBanner?: string
+}
+
+interface MessageWindowState {
+  threadId: string
+  messages: WorkspaceMessage[]
+  limit: number
+  hasOlder: boolean
 }
 
 export class WorkspaceTui {
@@ -179,6 +190,12 @@ export class WorkspaceTui {
   private talkUntilByDna = new Map<string, number>()
 
   private previousMessageIds = new Set<string>()
+  private messageWindow: MessageWindowState = {
+    threadId: "activity",
+    messages: [],
+    limit: MESSAGE_WINDOW_DEFAULT_LIMIT,
+    hasOlder: false,
+  }
 
   private lastReadByThread = new Map<string, number>()
 
@@ -575,8 +592,12 @@ export class WorkspaceTui {
     }
 
     if (normalizedInput === "\u001b[5~" && this.view === "messages") {
-      const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
-      this.scrollMessages(page)
+      if (this.messageScrollOffset >= this.messageScrollMax && this.messageWindow.hasOlder) {
+        this.loadOlderMessages()
+      } else {
+        const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
+        this.scrollMessages(page)
+      }
       this.render()
       return
     }
@@ -1188,6 +1209,7 @@ export class WorkspaceTui {
     if (this.selectedThreadId === "activity") {
       this.clearDraftInput()
     }
+    this.refreshSelectedThreadWindow()
     this.mentionSelectionIndex = 0
     this.inputFocused = true
     this.messageScrollOffset = 0
@@ -1325,7 +1347,12 @@ export class WorkspaceTui {
   private applyOptimisticMessage(message: WorkspaceMessage): void {
     const next = [...this.snapshot.messages, message]
     next.sort((a, b) => a.ts - b.ts)
-    this.snapshot.messages = next.slice(-1000)
+    this.snapshot.messages = next.slice(-RECENT_ACTIVITY_SNAPSHOT_LIMIT)
+    if (this.isMessageInThread(message, this.messageWindow.threadId)) {
+      const threadNext = [...this.messageWindow.messages, message]
+      threadNext.sort((a, b) => a.ts - b.ts)
+      this.messageWindow.messages = threadNext.slice(-this.messageWindow.limit)
+    }
     this.previousMessageIds.add(message.id)
   }
 
@@ -1681,16 +1708,16 @@ export class WorkspaceTui {
         }
       }
 
-      const workspaceMessages = readWorkspaceMessages({ limit: 1000 }, this.root)
+      const workspaceMessages = readWorkspaceMessages({ limit: RECENT_ACTIVITY_SNAPSHOT_LIMIT }, this.root)
       const browserActivityMessages = this.readBrowserActivityMessages()
       const messages = [...workspaceMessages, ...browserActivityMessages]
         .sort((a, b) => {
           if (a.ts !== b.ts) return a.ts - b.ts
           return a.id.localeCompare(b.id)
         })
-        .slice(-1000)
+        .slice(-RECENT_ACTIVITY_SNAPSHOT_LIMIT)
       const sessionDnaById = new Map(sessions.map((session) => [session.sessionId, session.dna]))
-      const typingBySessionId = this.collectSessionTypingBySession(sessions, messages)
+      const typingBySessionId = this.collectSessionTypingBySession(sessions, workspaceMessages)
       const nextMessageIds = new Set(messages.map((message) => message.id))
       const isInitialSnapshot = this.previousMessageIds.size === 0 && this.snapshot.messages.length === 0
 
@@ -1730,10 +1757,12 @@ export class WorkspaceTui {
         requests,
         generatedAt: Date.now(),
       }
+      this.refreshSelectedThreadWindow()
 
       if (this.selectedThreadId !== "activity" && !dmThreads.some((thread) => thread.id === this.selectedThreadId)) {
         this.selectedThreadId = "activity"
         this.messageScrollOffset = 0
+        this.refreshSelectedThreadWindow()
       }
 
       const pendingReqCount = requests.filter(r => r.status === "pending").length
@@ -2031,6 +2060,93 @@ export class WorkspaceTui {
   private selectedDmThread(): DmThread | null {
     if (!this.selectedThreadId.startsWith("agent:")) return null
     return this.snapshot.dmThreads.find((thread) => thread.id === this.selectedThreadId) ?? null
+  }
+
+  private loadActivityWindow(limit: number): { messages: WorkspaceMessage[]; hasOlder: boolean } {
+    const rawLimit = Math.max(1, limit + 1)
+    const workspaceMessages = readWorkspaceMessages({ limit: rawLimit }, this.root)
+    const browserActivityMessages = this.readBrowserActivityMessages(rawLimit)
+    const combined = [...workspaceMessages, ...browserActivityMessages]
+      .sort((a, b) => {
+        if (a.ts !== b.ts) return a.ts - b.ts
+        return a.id.localeCompare(b.id)
+      })
+      .filter((message, index, all) => all.findIndex((candidate) => candidate.id === message.id) === index)
+
+    return {
+      messages: combined.slice(-limit),
+      hasOlder: combined.length > limit,
+    }
+  }
+
+  private loadDmThreadWindow(threadId: string, limit: number): { messages: WorkspaceMessage[]; hasOlder: boolean } {
+    const thread = this.snapshot.dmThreads.find((candidate) => candidate.id === threadId)
+    if (!thread) {
+      return { messages: [], hasOlder: false }
+    }
+
+    const rawLimit = Math.max(1, limit + 1)
+    const candidateTargets = new Set<string>()
+    if (thread.slug) candidateTargets.add(`agent:${thread.slug}`)
+    candidateTargets.add(`agent:${thread.dna}`)
+    for (const session of this.snapshot.sessions) {
+      if (session.dna !== thread.dna) continue
+      candidateTargets.add(session.sessionId)
+    }
+
+    const combined: WorkspaceMessage[] = []
+    for (const target of candidateTargets) {
+      combined.push(
+        ...getDmMessages(target, this.root, {
+          limit: rawLimit,
+          match: (message) => this.isOperatorAgentDmForThread(message, thread.dna),
+        }),
+      )
+    }
+    combined.push(
+      ...getDmMessages("human:default", this.root, {
+        limit: rawLimit,
+        match: (message) => this.isOperatorAgentDmForThread(message, thread.dna),
+      }),
+    )
+
+    const deduped = combined
+      .sort((a, b) => {
+        if (a.ts !== b.ts) return a.ts - b.ts
+        return a.id.localeCompare(b.id)
+      })
+      .filter((message, index, all) => all.findIndex((candidate) => candidate.id === message.id) === index)
+
+    return {
+      messages: deduped.slice(-limit),
+      hasOlder: deduped.length > limit,
+    }
+  }
+
+  private refreshSelectedThreadWindow(limitOverride?: number): void {
+    const threadId = this.selectedThreadId
+    const previousLimit = this.messageWindow.threadId === threadId
+      ? this.messageWindow.limit
+      : MESSAGE_WINDOW_DEFAULT_LIMIT
+    const limit = Math.max(1, limitOverride ?? previousLimit)
+    const loaded = threadId === "activity"
+      ? this.loadActivityWindow(limit)
+      : this.loadDmThreadWindow(threadId, limit)
+
+    this.messageWindow = {
+      threadId,
+      messages: loaded.messages,
+      limit,
+      hasOlder: loaded.hasOlder,
+    }
+  }
+
+  private loadOlderMessages(): void {
+    const nextLimit = this.messageWindow.threadId === this.selectedThreadId
+      ? this.messageWindow.limit + MESSAGE_WINDOW_LOAD_STEP
+      : MESSAGE_WINDOW_DEFAULT_LIMIT + MESSAGE_WINDOW_LOAD_STEP
+    this.refreshSelectedThreadWindow(nextLimit)
+    this.messageScrollOffset = Number.MAX_SAFE_INTEGER
   }
 
   private isComposerAvailable(): boolean {
@@ -2976,8 +3092,9 @@ export class WorkspaceTui {
       : null
     const typingFooterPadRows = typingFooter ? 2 : 0
 
-    const visible = this.snapshot.messages
-      .filter((message) => this.isMessageInThread(message, this.selectedThreadId))
+    const visible = this.messageWindow.threadId === this.selectedThreadId
+      ? this.messageWindow.messages
+      : this.snapshot.messages.filter((message) => this.isMessageInThread(message, this.selectedThreadId))
 
     if (visible.length === 0) {
       if (noAgentsOnline) {
@@ -4954,7 +5071,8 @@ export class WorkspaceTui {
 
   private renderFooterRightMeta(): string {
     if (this.view === "messages") {
-      return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓`
+      const olderHint = this.messageWindow.hasOlder ? " · PgUp older" : ""
+      return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓${olderHint}`
     }
 
     if (this.view === "requests") {
