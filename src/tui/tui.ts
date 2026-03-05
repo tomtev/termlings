@@ -16,7 +16,6 @@ import {
   readSession,
   readWorkspaceMessages,
   removeSession,
-  updateWorkspaceSettings,
   upsertSession,
   type WorkspaceMessage,
   type WorkspaceSession,
@@ -205,8 +204,6 @@ class WorkspaceTui {
   private cursorBlinkVisible = true
 
   private mentionSelectionIndex = 0
-
-  private settingsSelectionIndex = 0
 
   private avatarSizeMode: "large" | "small" | "tiny" = "small"
   private showBrowserActivityInFeed = true
@@ -533,12 +530,6 @@ class WorkspaceTui {
         return
       }
 
-      if (this.view === "settings") {
-        this.moveSettingsSelection(isArrowUp ? -1 : 1)
-        this.render()
-        return
-      }
-
       if (this.view === "messages") {
         this.scrollMessages(isArrowUp ? MESSAGE_SCROLL_STEP : -MESSAGE_SCROLL_STEP)
         this.render()
@@ -661,8 +652,6 @@ class WorkspaceTui {
 
       if (this.view === "requests") {
         await this.handleRequestAction()
-      } else if (this.view === "settings") {
-        this.activateSelectedSetting()
       } else if (!this.inputFocused && this.isComposerAvailable()) {
         this.inputFocused = true
       } else {
@@ -704,8 +693,6 @@ class WorkspaceTui {
           this.toggleCalendarExpandedSelection()
         } else if (this.view === "requests") {
           await this.handleRequestAction()
-        } else if (this.view === "settings") {
-          this.activateSelectedSetting()
         } else if (!this.inputFocused && this.isComposerAvailable()) {
           this.inputFocused = true
         } else {
@@ -1120,7 +1107,7 @@ class WorkspaceTui {
   }
 
   private tabViews(): MainView[] {
-    return ["messages", "requests", "tasks", "calendar", "settings"]
+    return ["messages", "requests", "tasks", "calendar"]
   }
 
   private selectViewByNumber(viewNumber: number): void {
@@ -1140,31 +1127,6 @@ class WorkspaceTui {
     if (view === "messages" || view === "requests") {
       this.inputFocused = true
     }
-    if (view === "settings") {
-      this.inputFocused = false
-    }
-  }
-
-  private settingsItems(): Array<{ key: "avatar-size" | "browser-activity"; label: string; value: string; hint: string }> {
-    const avatarSizeLabel =
-      this.avatarSizeMode === "large" ? "Large"
-      : this.avatarSizeMode === "tiny" ? "Tiny"
-      : "Small"
-    const browserActivityLabel = this.showBrowserActivityInFeed ? "On" : "Off"
-    return [
-      {
-        key: "avatar-size",
-        label: "Avatar size",
-        value: avatarSizeLabel,
-        hint: "Large = full avatar, Small = compact avatar (default), Tiny = color square only.",
-      },
-      {
-        key: "browser-activity",
-        label: "Browser activity in feed",
-        value: browserActivityLabel,
-        hint: "Show browser visit events in All activity.",
-      },
-    ]
   }
 
   private loadWorkspaceSettings(): void {
@@ -1179,53 +1141,6 @@ class WorkspaceTui {
         this.showBrowserActivityInFeed = true
       }
     } catch {}
-  }
-
-  private moveSettingsSelection(delta: number): void {
-    if (this.view !== "settings") return
-    const items = this.settingsItems()
-    if (items.length <= 0) {
-      this.settingsSelectionIndex = 0
-      return
-    }
-    const next = this.settingsSelectionIndex + delta
-    this.settingsSelectionIndex = ((next % items.length) + items.length) % items.length
-  }
-
-  private activateSelectedSetting(): void {
-    if (this.view !== "settings") return
-    const items = this.settingsItems()
-    if (items.length <= 0) return
-    const selected = items[Math.max(0, Math.min(this.settingsSelectionIndex, items.length - 1))]
-    if (!selected) return
-
-    if (selected.key === "avatar-size") {
-      const order: Array<"large" | "small" | "tiny"> = ["large", "small", "tiny"]
-      const currentIndex = order.indexOf(this.avatarSizeMode)
-      const nextIndex = (currentIndex + 1) % order.length
-      this.avatarSizeMode = order[nextIndex] ?? "small"
-      try {
-        updateWorkspaceSettings({ avatarSize: this.avatarSizeMode }, this.root)
-      } catch {}
-      this.statusMessage = `Avatar size set to ${this.avatarSizeMode}.`
-      return
-    }
-
-    if (selected.key === "browser-activity") {
-      this.showBrowserActivityInFeed = !this.showBrowserActivityInFeed
-      if (!this.showBrowserActivityInFeed) {
-        this.browserActivityCache = []
-        this.browserActivityCacheMtimeMs = 0
-        this.browserActivityCacheSize = -1
-      }
-      try {
-        updateWorkspaceSettings({ showBrowserActivity: this.showBrowserActivityInFeed }, this.root)
-      } catch {}
-      this.statusMessage = this.showBrowserActivityInFeed
-        ? "Browser activity is now visible in All activity."
-        : "Browser activity is now hidden from All activity."
-      void this.reloadSnapshot().then(() => this.render())
-    }
   }
 
   private stepMentionSelection(delta: number, total: number): void {
@@ -4521,42 +4436,6 @@ class WorkspaceTui {
     return out
   }
 
-  private renderSettingsView(height: number, width: number): string[] {
-    const items = this.settingsItems()
-    const rows: string[] = []
-
-    if (items.length === 0) {
-      rows.push(`${FG_META}No settings available.${ANSI_RESET}`)
-      return this.renderHeaderFrame(rows, width)
-    }
-
-    const selected = Math.max(0, Math.min(this.settingsSelectionIndex, items.length - 1))
-    const maxRows = Math.max(1, height - 2) // reserve top+bottom frame rows
-    let renderedItems = 0
-
-    for (let index = 0; index < items.length && rows.length < maxRows; index++) {
-      const item = items[index]!
-      const prefix = index === selected ? "›" : " "
-      const row = `${prefix} ${item.label}: ${item.value}`
-      if (index === selected) {
-        rows.push(`${FG_SELECTED}\x1b[1m${row}\x1b[22m${ANSI_RESET}`)
-      } else {
-        rows.push(row)
-      }
-      if (rows.length < maxRows) {
-        rows.push(`${FG_META}  ${item.hint}${ANSI_RESET}`)
-      }
-      renderedItems = index + 1
-    }
-
-    const remainingItems = Math.max(0, items.length - renderedItems)
-    if (remainingItems > 0 && rows.length < maxRows) {
-      rows.push(`${FG_META}+${remainingItems} more setting${remainingItems === 1 ? "" : "s"}${ANSI_RESET}`)
-    }
-
-    return this.renderHeaderFrame(rows, width)
-  }
-
   private renderAvatarStrip(width: number): string[] {
     const agents = this.snapshot.agents
     this.avatarVisibleAgentCount = 0
@@ -4863,10 +4742,6 @@ class WorkspaceTui {
       return this.renderTasksView(height, width)
     }
 
-    if (this.view === "settings") {
-      return this.renderSettingsView(height, width)
-    }
-
     return this.renderCalendarView(height, width)
   }
 
@@ -4994,7 +4869,6 @@ class WorkspaceTui {
       { view: "requests", label: "Requests" },
       { view: "tasks", label: "Tasks" },
       { view: "calendar", label: "Calendar" },
-      { view: "settings", label: "Settings" },
     ]
 
     const leftBracket = `${FG_META}[${ANSI_RESET}`
@@ -5031,10 +4905,6 @@ class WorkspaceTui {
       return `${projectPrefix}requests`
     }
 
-    if (this.view === "settings") {
-      return `${projectPrefix}settings`
-    }
-
     if (this.view === "tasks") {
       return `${projectPrefix}tasks`
     }
@@ -5053,10 +4923,6 @@ class WorkspaceTui {
 
     if (this.view === "requests") {
       return "↑/↓ select | Enter respond"
-    }
-
-    if (this.view === "settings") {
-      return "↑/↓ select | Enter toggle"
     }
 
     if (this.view === "tasks") {

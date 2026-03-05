@@ -169,7 +169,7 @@ Environment toggles:
 TUI integration:
 
 - `All activity` includes browser visit events (e.g. `<agent> visited <url>`).
-- In `Settings`, toggle `Browser activity in feed` to hide/show those events.
+- Use `.termlings/workspace.json` `settings.showBrowserActivity` to hide/show those events.
 
 ## Workspace Files
 

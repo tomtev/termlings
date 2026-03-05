@@ -2,6 +2,15 @@
 
 Initialize a Termlings workspace in your project.
 
+## Quick Install
+
+```bash
+bun add -g termlings@latest
+
+# one-step run without global install
+npx termlings --spawn
+```
+
 ## Quick Start
 
 ```bash

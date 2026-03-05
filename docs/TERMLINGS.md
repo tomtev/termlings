@@ -385,6 +385,7 @@ termlings create alice       # Random DNA assigned
 
 - [MESSAGING.md](MESSAGING.md) - How termlings communicate
 - [TASK.md](TASK.md) - Termlings collaborating on tasks
+- [SETTINGS.md](SETTINGS.md) - Workspace UI settings (`.termlings/workspace.json`)
 - [BROWSER.md](BROWSER.md) - Termlings automating the web
 - [AGENTS.md](AGENTS.md) - SOUL frontmatter and identity schema
 - [ORGANIZATIONS.md](ORGANIZATIONS.md) - Reporting chains and org chart structure

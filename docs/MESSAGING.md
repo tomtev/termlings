@@ -1,25 +1,6 @@
 # Messaging & Agent Discovery
 
-Send direct messages and discover active teammates.
-
-## Discover Agents
-
-```bash
-termlings list-agents
-```
-
-Output:
-```
-Slug            Name         Title              Role
-agent:developer Alice        Developer          Build and ship product (you)
-agent:designer  Bob          Designer           Design and user experience
-```
-
-Tells you:
-- Who's currently online
-- Their slug (use for messaging)
-- Their display name and title
-- Their role
+Send direct messages and read conversations.
 
 ## Send Messages
 

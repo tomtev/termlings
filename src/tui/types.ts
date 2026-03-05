@@ -3,7 +3,7 @@ import type { Task } from "../engine/tasks.js"
 import type { AgentRequest } from "../engine/requests.js"
 import type { WorkspaceMessage, WorkspaceSession } from "../workspace/state.js"
 
-export type MainView = "messages" | "requests" | "tasks" | "calendar" | "settings"
+export type MainView = "messages" | "requests" | "tasks" | "calendar"
 
 export interface Identity {
   sessionId: string

@@ -121,6 +121,7 @@ You should not run these commands since they mostly work inside a agent session.
 .termlings/
   VISION.md
   .env
+  workspace.json
   sessions/
     tl-*.json
   agents/
@@ -154,6 +155,7 @@ What each file/folder is for:
 
 - `.termlings/VISION.md` - simple project vision injected into every agent context.
 - `.termlings/.env` - Termlings-internal environment values resolved from scoped requests.
+- `.termlings/workspace.json` - workspace metadata and TUI settings (`avatarSize`, `showBrowserActivity`).
 - `.termlings/sessions/tl-*.json` - live session presence and metadata.
 - `.termlings/agents/<slug>/SOUL.md` - saved agent identity, title, role, DNA, and optional `sort_order` for TUI ordering.
 - `.termlings/brand/brand.json` - default brand profile.
@@ -183,6 +185,7 @@ This is intentionally separated so operator docs stay short.
 - [docs/AGENTS.md](docs/AGENTS.md) - SOUL frontmatter and identity conventions
 - [docs/AGENTS.md](docs/AGENTS.md) - preset catalog and install flows
 - [docs/INIT.md](docs/INIT.md) - workspace initialization
+- [docs/SPAWN.md](docs/SPAWN.md) - launch agent runtime sessions
 - [docs/ORG-CHART.md](docs/ORG-CHART.md) - team hierarchy and reporting lines
 - [docs/BRIEF.md](docs/BRIEF.md) - full workspace startup snapshot
 - [docs/TEMPLATES.md](docs/TEMPLATES.md) - local and git template references
@@ -198,6 +201,7 @@ This is intentionally separated so operator docs stay short.
 - [docs/SERVER.md](docs/SERVER.md) - `termlings --server` design and security plan
 - [docs/AVATARS.md](docs/AVATARS.md) - avatar rendering
 - [docs/PRESENCE.md](docs/PRESENCE.md) - presence + typing model
+- [docs/SETTINGS.md](docs/SETTINGS.md) - workspace.json settings
 
 ## License
 
