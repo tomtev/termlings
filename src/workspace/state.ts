@@ -299,7 +299,6 @@ export function ensureWorkspaceDirs(root = process.cwd()): void {
   mkdirSync(join(base, "browser"), { recursive: true })
   migrateLegacyTypingFiles(root)
   msgStorage.initializeMessageDirs(root)
-  touchWorkspace(root)
 }
 
 export function clearWorkspaceRuntime(root = process.cwd()): void {

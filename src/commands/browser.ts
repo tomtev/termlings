@@ -107,6 +107,7 @@ NAVIGATION:
   termlings browser extract [--tab <index>] Get visible page text
   termlings browser tabs list         List open tabs
   termlings browser overview          Show browser + tabs overview
+  Note: when --tab is omitted, agent sessions auto-pin to a stable tab
 
 INTERACTION:
   termlings browser type <text> [--tab <index>] Type into focused element
@@ -117,7 +118,7 @@ INTERACTION:
 
 HUMAN-IN-LOOP:
   termlings browser check-login [--tab <index>] Exit 1 if login required
-  termlings browser request-help <msg> Notify operator via DM
+  termlings browser request-help <msg> [--tab <index>] Notify operator via DM
 
 QUERY PATTERNS (reusable automation):
   termlings browser patterns list     List available patterns
@@ -143,6 +144,7 @@ ENVIRONMENT:
   TERMLINGS_AGENT_NAME               Your name (auto-logged)
   TERMLINGS_AGENT_DNA                Your stable ID (auto-logged)
   TERMLINGS_BROWSER_INPAGE_CURSOR    true/false (default: true)
+  TERMLINGS_BROWSER_PRESERVE_FOCUS   true/false (macOS, default: true for agent sessions)
 
 PROFILES:
   Per-project profiles auto-created in ~/.termlings/chrome-profiles/
@@ -268,7 +270,8 @@ PROFILES:
           const slug = a.agentSlug ? ` (agent:${a.agentSlug})` : "";
           const ago = Math.floor((Date.now() - a.lastActionAt) / 1000);
           const url = a.url ? ` @ ${a.url}` : "";
-          console.log(`    ${name}${slug}: ${a.lastAction} ${ago}s ago${url}`);
+          const tab = a.tabId ? ` [tab ${a.tabId}]` : "";
+          console.log(`    ${name}${slug}: ${a.lastAction}${tab} ${ago}s ago${url}`);
         }
       }
       return;
@@ -283,10 +286,11 @@ PROFILES:
     const { requestOperatorIntervention } = await import("../engine/browser.js");
     const message = positional.slice(2).join(" ");
     if (!message) {
-      console.error("Usage: termlings browser request-help <message>");
+      console.error("Usage: termlings browser request-help <message> [--tab <index>]");
       process.exit(1);
     }
-    await requestOperatorIntervention(message);
+    const explicitTabId = opts.tab ?? opts["tab-id"] ?? opts.tabId;
+    await requestOperatorIntervention(message, explicitTabId);
     return;
   }
 
@@ -303,7 +307,39 @@ PROFILES:
   }
 
   const client = new BrowserClient(state.cdpWsUrl || state.port);
-  const tabId = opts.tab ?? opts["tab-id"] ?? opts.tabId;
+  const tabIdRaw = opts.tab ?? opts["tab-id"] ?? opts.tabId;
+  const tabId = typeof tabIdRaw === "string" && tabIdRaw.trim().length > 0
+    ? tabIdRaw.trim()
+    : undefined;
+
+  const resolveEffectiveTabId = (): string | undefined => {
+    if (tabId) return tabId;
+    const selected = client.getLastSelectedTabId();
+    if (typeof selected === "string" && selected.trim().length > 0) {
+      return selected.trim();
+    }
+    return undefined;
+  };
+
+  const appendEffectiveTabArg = (args: string[], effectiveTabId: string | undefined): string[] => {
+    if (!effectiveTabId) return args;
+    const hasTabArg = args.some((arg) => arg === "--tab" || arg.startsWith("--tab="));
+    if (hasTabArg) return args;
+    return [...args, `--tab=${effectiveTabId}`];
+  };
+
+  const logActivity = async (
+    command: string,
+    args: string[],
+    result: "success" | "error" | "timeout" = "success",
+    error?: string
+  ) => {
+    const effectiveTabId = resolveEffectiveTabId();
+    const payloadArgs = appendEffectiveTabArg(args, effectiveTabId);
+    await logBrowserActivity(command, payloadArgs, result, error, effectiveTabId);
+  };
+
+  await ensureInPageCursorWatcher(state.port);
 
   try {
     if (subcommand === "overview") {
@@ -314,7 +350,7 @@ PROFILES:
       } catch {
         // Keep overview resilient if extract fails.
       }
-      await logBrowserActivity("overview", [], "success");
+      await logActivity("overview", []);
 
       const stateSnapshot = readProcessState();
       const uptime = stateSnapshot?.startedAt ? Math.floor((Date.now() - stateSnapshot.startedAt) / 1000) : 0;
@@ -382,7 +418,7 @@ PROFILES:
         maxTokens,
         tabId,
       });
-      await logBrowserActivity("snapshot", positional.slice(2), "success");
+      await logActivity("snapshot", positional.slice(2));
 
       const outPath = opts.out;
       const output = JSON.stringify(snapshot, null, 2);
@@ -404,7 +440,7 @@ PROFILES:
         process.exit(1);
       }
       const tabs = await client.getTabs();
-      await logBrowserActivity("tabs", [action], "success");
+      await logActivity("tabs", [action]);
 
       if (tabs.length === 0) {
         console.log("No open tabs.");
@@ -431,14 +467,14 @@ PROFILES:
         process.exit(1);
       }
       await client.navigate(url, { tabId });
-      await logBrowserActivity("navigate", tabId ? [url, `--tab=${tabId}`] : [url], "success");
+      await logActivity("navigate", tabId ? [url, `--tab=${tabId}`] : [url]);
       console.log(`✓ Navigated to ${url}`);
       return;
     }
 
     if (subcommand === "screenshot") {
       const base64 = await client.screenshot({ tabId });
-      await logBrowserActivity("screenshot", tabId ? [`--tab=${tabId}`] : [], "success");
+      await logActivity("screenshot", tabId ? [`--tab=${tabId}`] : []);
       const outPath = opts.out;
       if (outPath) {
         const { writeFileSync } = await import("fs");
@@ -467,7 +503,7 @@ PROFILES:
         process.exit(1);
       }
       await client.typeText(text, { tabId });
-      await logBrowserActivity("type", tabId ? [text, `--tab=${tabId}`] : [text], "success");
+      await logActivity("type", tabId ? [text, `--tab=${tabId}`] : [text]);
       console.log(`✓ Typed: ${text}`);
       return;
     }
@@ -479,7 +515,7 @@ PROFILES:
         process.exit(1);
       }
       await client.clickSelector(selector, { tabId });
-      await logBrowserActivity("click", tabId ? [selector, `--tab=${tabId}`] : [selector], "success");
+      await logActivity("click", tabId ? [selector, `--tab=${tabId}`] : [selector]);
       console.log(`✓ Clicked: ${selector}`);
       return;
     }
@@ -491,7 +527,7 @@ PROFILES:
         process.exit(1);
       }
       await client.focusSelector(selector, { tabId });
-      await logBrowserActivity("focus", tabId ? [selector, `--tab=${tabId}`] : [selector], "success");
+      await logActivity("focus", tabId ? [selector, `--tab=${tabId}`] : [selector]);
       console.log(`✓ Focused: ${selector}`);
       return;
     }
@@ -502,14 +538,14 @@ PROFILES:
         await ensureInPageCursorWatcher(runningState.port);
       }
       await client.ensureAvatarCursor({ tabId, force: true });
-      await logBrowserActivity("cursor", tabId ? [`--tab=${tabId}`] : [], "success");
+      await logActivity("cursor", tabId ? [`--tab=${tabId}`] : []);
       console.log("✓ In-page avatar cursor overlay active");
       return;
     }
 
     if (subcommand === "extract") {
       const text = await client.extractText({ tabId });
-      await logBrowserActivity("extract", tabId ? [`--tab=${tabId}`] : [], "success");
+      await logActivity("extract", tabId ? [`--tab=${tabId}`] : []);
       console.log(text);
       return;
     }
@@ -518,7 +554,7 @@ PROFILES:
       const action = positional[2] || "list";
       if (action === "list") {
         const cookies = await client.getCookies({ tabId });
-        await logBrowserActivity("cookies", tabId ? ["list", `--tab=${tabId}`] : ["list"], "success");
+        await logActivity("cookies", tabId ? ["list", `--tab=${tabId}`] : ["list"]);
         console.log(JSON.stringify(cookies, null, 2));
         return;
       }
@@ -529,7 +565,7 @@ PROFILES:
     if (subcommand === "check-login") {
       const { checkIfLoginRequired } = await import("../engine/browser.js");
       const needsLogin = await checkIfLoginRequired(client, tabId);
-      await logBrowserActivity("check-login", tabId ? [`--tab=${tabId}`] : [], "success");
+      await logActivity("check-login", tabId ? [`--tab=${tabId}`] : []);
       if (needsLogin) {
         console.log("⚠️  Login required on current page");
         process.exit(1);
@@ -686,7 +722,7 @@ EXECUTE EXAMPLE:
         };
 
         savePattern(pattern);
-        await logBrowserActivity("patterns-save", [patternId], "success");
+        await logActivity("patterns-save", [patternId]);
         console.log(`✓ Saved pattern: ${patternId}`);
         return;
       }
@@ -797,7 +833,7 @@ EXECUTE EXAMPLE:
           filters: filterOutputs,
         };
 
-        await logBrowserActivity("patterns-execute", [pattern.id, navigateUrl], "success");
+        await logActivity("patterns-execute", [pattern.id, navigateUrl]);
 
         const outPath = opts.out;
         if (outPath) {
@@ -820,7 +856,7 @@ EXECUTE EXAMPLE:
     console.error("Usage: termlings browser <init|start|stop|status|overview|tabs|navigate|snapshot|screenshot|type|click|focus|cursor|extract|cookies|check-login|request-help|patterns>");
     process.exit(1);
   } catch (e) {
-    await logBrowserActivity(subcommand, positional.slice(2), "error", String(e));
+    await logActivity(subcommand, positional.slice(2), "error", String(e));
     console.error(`Error: ${e}`);
     process.exit(1);
   }

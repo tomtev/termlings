@@ -3,7 +3,7 @@
  * Stored as individual JSON files in .termlings/store/requests/
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "fs"
 import { join } from "path"
 import { getTermlingsDir } from "./ipc.js"
 import { randomBytes } from "crypto"
@@ -12,6 +12,13 @@ import { writeEnvVarForScope, type EnvScope } from "./env.js"
 export type RequestType = "env" | "confirm" | "choice"
 export type RequestStatus = "pending" | "resolved" | "dismissed"
 const REQUEST_OCC_MAX_RETRIES = 6
+
+interface RequestsCache {
+  fingerprint: string
+  requests: AgentRequest[]
+}
+
+let requestsCache: RequestsCache | null = null
 
 export interface AgentRequest {
   id: string
@@ -52,6 +59,20 @@ function generateRequestId(): string {
 
 function requestFile(id: string): string {
   return join(getRequestsDir(), `${id}.json`)
+}
+
+function requestsFingerprint(dir: string, files?: string[]): string {
+  const entries = (files ?? readdirSync(dir).filter((file) => file.endsWith(".json"))).sort()
+  return entries
+    .map((file) => {
+      try {
+        const stats = statSync(join(dir, file))
+        return `${file}:${stats.mtimeMs}:${stats.size}`
+      } catch {
+        return `${file}:missing`
+      }
+    })
+    .join("|")
 }
 
 function readRequestSnapshot(id: string): { request: AgentRequest; raw: string; file: string } | null {
@@ -126,6 +147,14 @@ export function createRequest(req: Omit<AgentRequest, "id" | "status" | "ts">): 
 export function listRequests(status?: RequestStatus): AgentRequest[] {
   const dir = getRequestsDir()
   const files = readdirSync(dir).filter(f => f.endsWith(".json"))
+  const fingerprint = requestsFingerprint(dir, files)
+
+  if (requestsCache && requestsCache.fingerprint === fingerprint) {
+    return status
+      ? requestsCache.requests.filter((request) => request.status === status)
+      : requestsCache.requests
+  }
+
   const requests: AgentRequest[] = []
 
   for (const file of files) {
@@ -140,7 +169,15 @@ export function listRequests(status?: RequestStatus): AgentRequest[] {
     }
   }
 
-  return requests.sort((a, b) => b.ts - a.ts)
+  requests.sort((a, b) => b.ts - a.ts)
+  requestsCache = {
+    fingerprint,
+    requests,
+  }
+
+  return status
+    ? requests.filter((request) => request.status === status)
+    : requests
 }
 
 /**

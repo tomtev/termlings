@@ -1,4 +1,5 @@
 import { discoverLocalAgents } from "../agents/discover.js"
+import { createHash } from "crypto"
 import { existsSync, readFileSync, statSync } from "fs"
 import { getAllCalendarEvents, type CalendarEvent, type CalendarRecurrence } from "../engine/calendar.js"
 import { writeMessages } from "../engine/ipc.js"
@@ -20,6 +21,7 @@ import {
   type WorkspaceMessage,
   type WorkspaceSession,
 } from "../workspace/state.js"
+import { readLastJsonLines } from "../workspace/jsonl.js"
 import type {
   AgentPresence,
   AvatarBlock,
@@ -119,7 +121,7 @@ interface WorkspaceTuiOptions {
   startupBanner?: string
 }
 
-class WorkspaceTui {
+export class WorkspaceTui {
   private readonly root: string
 
   private readonly stdin = process.stdin
@@ -936,6 +938,28 @@ class WorkspaceTui {
     return placeholder
   }
 
+  private clearDraftInput(): void {
+    this.draft = ""
+    this.draftCursorIndex = 0
+    this.mentionSelectionIndex = 0
+    this.syncMentionSelection()
+  }
+
+  private pruneDraftPlaceholderCaches(): void {
+    const activeImagePlaceholders = new Set(this.draft.match(/\[Image #\d+\]/g) ?? [])
+    for (const [placeholder, source] of this.imageSourceByPlaceholder.entries()) {
+      if (activeImagePlaceholders.has(placeholder)) continue
+      this.imageSourceByPlaceholder.delete(placeholder)
+      this.imagePlaceholderByUrl.delete(source)
+    }
+
+    const activePastedPlaceholders = new Set(this.draft.match(/\[Pasted Content(?: #\d+)? \d+ chars\]/g) ?? [])
+    for (const placeholder of this.pastedContentByPlaceholder.keys()) {
+      if (activePastedPlaceholders.has(placeholder)) continue
+      this.pastedContentByPlaceholder.delete(placeholder)
+    }
+  }
+
   private deleteLastDraftUnit(): void {
     if (this.draftCursorIndex <= 0) return
     const block = this.findDraftBlockSpanAt(this.draftCursorIndex - 1)
@@ -1092,8 +1116,7 @@ class WorkspaceTui {
     }
 
     if (this.draft.length > 0) {
-      this.draft = ""
-      this.draftCursorIndex = 0
+      this.clearDraftInput()
       this.inputFocused = true
       return
     }
@@ -1163,8 +1186,7 @@ class WorkspaceTui {
     const nextIndex = ((startIndex + delta) % rooms.length + rooms.length) % rooms.length
     this.selectedThreadId = rooms[nextIndex]!
     if (this.selectedThreadId === "activity") {
-      this.draft = ""
-      this.draftCursorIndex = 0
+      this.clearDraftInput()
     }
     this.mentionSelectionIndex = 0
     this.inputFocused = true
@@ -1258,9 +1280,7 @@ class WorkspaceTui {
         } else {
           this.statusMessage = `Sent to mentioned agents (${parsedDm.targetIds.length}: ${deliveredCount} live, ${storedCount} offline).`
         }
-        this.draft = ""
-        this.draftCursorIndex = 0
-        this.mentionSelectionIndex = 0
+        this.clearDraftInput()
         this.messageScrollOffset = 0
         void this.reloadSnapshot().then(() => this.render())
       } catch (error) {
@@ -1289,9 +1309,7 @@ class WorkspaceTui {
       const textWithMentions = this.encodeMentionsForTransport(expandedText)
       const outcome = await this.sendDm(this.selectedThreadId, textWithMentions)
       this.applyOptimisticMessage(outcome.record)
-      this.draft = ""
-      this.draftCursorIndex = 0
-      this.mentionSelectionIndex = 0
+      this.clearDraftInput()
       this.messageScrollOffset = 0
       this.statusMessage = outcome.delivered
         ? `Sent to ${this.threadLabel(this.selectedThreadId)}.`
@@ -1527,7 +1545,23 @@ class WorkspaceTui {
     return join(this.root, ".termlings", "browser", "history", "all.jsonl")
   }
 
-  private browserActivityEntryToMessage(entry: BrowserActivityEntry, lineNumber: number): WorkspaceMessage | null {
+  private browserActivityEntryId(entry: BrowserActivityEntry): string {
+    const digest = createHash("sha1")
+      .update(JSON.stringify([
+        entry.ts,
+        entry.sessionId || "",
+        entry.agentSlug || "",
+        entry.agentDna || "",
+        entry.command || "",
+        entry.args || [],
+        entry.result || "",
+      ]))
+      .digest("hex")
+      .slice(0, 12)
+    return `browser-${digest}`
+  }
+
+  private browserActivityEntryToMessage(entry: BrowserActivityEntry): WorkspaceMessage | null {
     if (!entry || typeof entry !== "object") return null
     if (entry.result !== "success") return null
     if (typeof entry.ts !== "number" || !Number.isFinite(entry.ts)) return null
@@ -1575,7 +1609,7 @@ class WorkspaceTui {
     const from = (entry.sessionId || "").trim() || `browser:${(entry.agentSlug || entry.agentDna || "unknown").toString()}`
     const fromDna = (entry.agentDna || "").trim() || this.resolveDnaByName(fromName)
     return {
-      id: `browser-${entry.ts}-${lineNumber}-${command}`,
+      id: this.browserActivityEntryId(entry),
       kind: "system",
       from,
       fromName,
@@ -1606,22 +1640,14 @@ class WorkspaceTui {
         return this.browserActivityCache.slice(-limit)
       }
 
-      const raw = readFileSync(historyPath, "utf8")
-      const lines = raw.split("\n")
       const parsed: WorkspaceMessage[] = []
-      for (let index = 0; index < lines.length; index++) {
-        const line = lines[index]?.trim()
-        if (!line) continue
-        try {
-          const entry = JSON.parse(line) as BrowserActivityEntry
-          const mapped = this.browserActivityEntryToMessage(entry, index)
-          if (mapped) parsed.push(mapped)
-        } catch {
-          // Ignore malformed line.
-        }
+      const cacheLimit = Math.max(limit, BROWSER_ACTIVITY_MAX_MESSAGES) * BROWSER_ACTIVITY_CACHE_MULTIPLIER
+      const entries = readLastJsonLines<BrowserActivityEntry>(historyPath, cacheLimit)
+      for (const entry of entries) {
+        const mapped = this.browserActivityEntryToMessage(entry)
+        if (mapped) parsed.push(mapped)
       }
 
-      const cacheLimit = Math.max(limit, BROWSER_ACTIVITY_MAX_MESSAGES) * BROWSER_ACTIVITY_CACHE_MULTIPLIER
       this.browserActivityCache = parsed.slice(-cacheLimit)
       this.browserActivityCacheMtimeMs = stats.mtimeMs
       this.browserActivityCacheSize = stats.size
@@ -1692,6 +1718,7 @@ class WorkspaceTui {
       const dmThreads = this.buildDmThreads(messages, agents, sessions)
       const requests = listRequests()
       this.refreshCalendarSchedulerStatus(now)
+      this.pruneLastReadThreadState(dmThreads)
 
       this.snapshot = {
         sessions,
@@ -2557,6 +2584,7 @@ class WorkspaceTui {
   }
 
   private syncMentionSelection(): void {
+    this.pruneDraftPlaceholderCaches()
     this.updateMentionWavesFromDraft()
 
     const mention = this.getMentionMenuState()
@@ -2585,6 +2613,14 @@ class WorkspaceTui {
     }
 
     this.draftMentionedAgentDnas = currentMentions
+  }
+
+  private pruneLastReadThreadState(dmThreads: DmThread[]): void {
+    const activeThreadIds = new Set(dmThreads.map((thread) => thread.id))
+    for (const threadId of this.lastReadByThread.keys()) {
+      if (activeThreadIds.has(threadId)) continue
+      this.lastReadByThread.delete(threadId)
+    }
   }
 
   private acceptMention(candidate: MentionCandidate, atIndex: number): void {

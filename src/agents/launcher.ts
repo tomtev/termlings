@@ -5,6 +5,7 @@ import { homedir } from "os"
 import { resolve as resolvePath, dirname as dirName, join as joinPath } from "path"
 import { fileURLToPath } from "url"
 import { readMessages, getIpcDir } from "../engine/ipc.js"
+import { sanitizeManagedRuntimeEnv } from "../engine/runtime-processes.js"
 import {
   appendWorkspaceMessage,
   ensureWorkspaceDirs,
@@ -445,7 +446,7 @@ export async function launchAgent(
   const ipcDir = getIpcDir()
 
   const env: Record<string, string> = {
-    ...(process.env as Record<string, string>),
+    ...sanitizeManagedRuntimeEnv(process.env as Record<string, string | undefined>),
     TERMLINGS_SESSION_ID: sessionId,
     TERMLINGS_AGENT_NAME: agentName,
     TERMLINGS_AGENT_DNA: agentDna,

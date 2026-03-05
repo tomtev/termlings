@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs"
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "fs"
 import { join } from "path"
 
 export type CalendarRecurrence = "none" | "hourly" | "daily" | "weekly" | "monthly"
@@ -18,6 +18,14 @@ export interface CalendarEvent {
   createdBy: string // "OWNER" or agent slug
   updatedAt: number
 }
+
+interface CalendarFileCache {
+  mtimeMs: number
+  size: number
+  events: CalendarEvent[]
+}
+
+let calendarFileCache: CalendarFileCache | null = null
 
 function calendarDir(): string {
   return join(process.cwd(), ".termlings", "store", "calendar")
@@ -117,12 +125,28 @@ export function getAllCalendarEvents(): CalendarEvent[] {
   const file = calendarFile()
   try {
     if (!existsSync(file)) {
+      calendarFileCache = null
       return []
     }
+    const stats = statSync(file)
+    if (
+      calendarFileCache
+      && calendarFileCache.mtimeMs === stats.mtimeMs
+      && calendarFileCache.size === stats.size
+    ) {
+      return calendarFileCache.events
+    }
     const data = readFileSync(file, "utf-8")
-    return JSON.parse(data) as CalendarEvent[]
+    const events = JSON.parse(data) as CalendarEvent[]
+    calendarFileCache = {
+      mtimeMs: stats.mtimeMs,
+      size: stats.size,
+      events,
+    }
+    return events
   } catch (e) {
     console.error(`Error reading calendar events: ${e}`)
+    calendarFileCache = null
     return []
   }
 }
@@ -225,7 +249,18 @@ export function checkAndNotifyCalendarEvents(): Array<{ event: CalendarEvent; sh
 function saveCalendarEvents(events: CalendarEvent[]): void {
   const file = calendarFile()
   mkdirSync(calendarDir(), { recursive: true })
-  writeFileSync(file, JSON.stringify(events, null, 2) + "\n")
+  const nextRaw = JSON.stringify(events, null, 2) + "\n"
+  writeFileSync(file, nextRaw)
+  try {
+    const stats = statSync(file)
+    calendarFileCache = {
+      mtimeMs: stats.mtimeMs,
+      size: stats.size,
+      events,
+    }
+  } catch {
+    calendarFileCache = null
+  }
 }
 
 /**

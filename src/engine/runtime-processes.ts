@@ -53,6 +53,20 @@ const DETACHED_ENV_BLOCKLIST = new Set<string>([
   "TERMLINGS_IPC_DIR",
   "TERMLINGS_CONTEXT_PROFILE",
 ])
+const DETACHED_ENV_PREFIX_BLOCKLIST = [
+  "CLAUDE_CODE_",
+  "CLAUDE_AGENT_SDK_",
+  "CODEX_",
+  "SUPERSET_",
+]
+const DETACHED_ENV_EXACT_BLOCKLIST = new Set<string>([
+  "CLAUDE_SESSION_ID",
+  "CLAUDE_PROJECT_DIR",
+  "CLAUDE_REPL_MODE",
+  "CLAUDE_AFTER_LAST_COMPACT",
+  "TERM_SESSION_ID",
+  "ITERM_SESSION_ID",
+])
 
 function statePath(root: string): string {
   return join(root, ".termlings", "store", "runtime-processes.json")
@@ -88,15 +102,29 @@ function asNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0
 }
 
-function buildDetachedEnv(): Record<string, string> {
-  const envEntries = Object.entries(process.env as Record<string, string | undefined>)
+function shouldOmitManagedRuntimeEnvKey(key: string): boolean {
+  if (DETACHED_ENV_BLOCKLIST.has(key) || DETACHED_ENV_EXACT_BLOCKLIST.has(key)) {
+    return true
+  }
+
+  return DETACHED_ENV_PREFIX_BLOCKLIST.some((prefix) => key.startsWith(prefix))
+}
+
+export function sanitizeManagedRuntimeEnv(
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
+): Record<string, string> {
+  const envEntries = Object.entries(env)
   const next: Record<string, string> = {}
   for (const [key, rawValue] of envEntries) {
-    if (DETACHED_ENV_BLOCKLIST.has(key)) continue
+    if (shouldOmitManagedRuntimeEnvKey(key)) continue
     if (typeof rawValue !== "string") continue
     next[key] = rawValue
   }
   return next
+}
+
+function buildDetachedEnv(): Record<string, string> {
+  return sanitizeManagedRuntimeEnv()
 }
 
 function readLogTail(logPath: string, maxBytes = 4096, maxLines = 24): string {

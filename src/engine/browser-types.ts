@@ -70,6 +70,7 @@ export interface AgentBrowserState {
   agentName?: string
   agentSlug?: string
   agentDna?: string
+  tabId?: string
   url?: string
   lastAction: string
   lastActionAt: number

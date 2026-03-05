@@ -1,5 +1,5 @@
 import { join } from "path";
-import { readdirSync, existsSync, readFileSync } from "fs";
+import { readdirSync, existsSync, readFileSync, statSync } from "fs";
 import { createInterface } from "readline";
 
 export interface LocalAgent {
@@ -17,6 +17,34 @@ export interface LocalAgent {
     dna: string;
     description: string;
   };
+}
+
+interface LocalAgentsCache {
+  root: string
+  fingerprint: string
+  agents: LocalAgent[]
+}
+
+let localAgentsCache: LocalAgentsCache | null = null
+
+function localAgentsFingerprint(agentsDir: string): string {
+  try {
+    return readdirSync(agentsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+      .map((entry) => {
+        const soulPath = join(agentsDir, entry.name, "SOUL.md");
+        if (!existsSync(soulPath)) return `${entry.name}:missing`;
+        try {
+          const stats = statSync(soulPath);
+          return `${entry.name}:${stats.mtimeMs}:${stats.size}`;
+        } catch {
+          return `${entry.name}:error`;
+        }
+      })
+      .join("|");
+  } catch {
+    return "";
+  }
 }
 
 function parseFrontmatterNumber(input?: string): number | undefined {
@@ -43,6 +71,15 @@ export function discoverLocalAgents(): LocalAgent[] {
   const agentsDir = join(process.cwd(), ".termlings", "agents");
 
   if (!existsSync(agentsDir)) return agents;
+
+  const fingerprint = localAgentsFingerprint(agentsDir);
+  if (
+    localAgentsCache
+    && localAgentsCache.root === agentsDir
+    && localAgentsCache.fingerprint === fingerprint
+  ) {
+    return localAgentsCache.agents;
+  }
 
   try {
     const entries = readdirSync(agentsDir, { withFileTypes: true });
@@ -100,6 +137,11 @@ export function discoverLocalAgents(): LocalAgent[] {
     }
   } catch {}
 
+  localAgentsCache = {
+    root: agentsDir,
+    fingerprint,
+    agents,
+  };
   return agents;
 }
 

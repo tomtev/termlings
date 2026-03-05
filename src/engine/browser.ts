@@ -15,9 +15,13 @@ import {
 } from "fs"
 import { spawnSync } from "child_process"
 import { createHash } from "crypto"
-import { basename, join } from "path"
+import { basename, dirname, join, resolve } from "path"
+import { fileURLToPath } from "url"
 import { getTermlingsDir } from "./ipc.js"
 import type { BrowserConfig, ProcessState, ActivityLogEntry, ProfileReference, AgentBrowserState } from "./browser-types.js"
+
+const ENGINE_FILE_PATH = fileURLToPath(import.meta.url)
+const ENGINE_DIR = dirname(ENGINE_FILE_PATH)
 
 /**
  * Get the browser directory (.termlings/browser)
@@ -127,6 +131,7 @@ interface CursorWatcherState {
   port: number
   status: "running" | "stopped"
   startedAt: number | null
+  signature?: string
 }
 
 function getCursorWatcherStatePath(): string {
@@ -145,6 +150,23 @@ function readCursorWatcherState(): CursorWatcherState | null {
 
 function writeCursorWatcherState(state: CursorWatcherState): void {
   writeFileSync(getCursorWatcherStatePath(), JSON.stringify(state, null, 2) + "\n")
+}
+
+function currentCursorWatcherSignature(cliPath: string): string {
+  const sourceFiles = [
+    resolve(cliPath),
+    ENGINE_FILE_PATH,
+    join(ENGINE_DIR, "browser-client.ts"),
+    join(ENGINE_DIR, "..", "commands", "browser.ts"),
+  ]
+
+  return sourceFiles.map((path) => {
+    try {
+      return `${path}:${statSync(path).mtimeMs}`
+    } catch {
+      return `${path}:missing`
+    }
+  }).join("|")
 }
 
 /**
@@ -579,6 +601,7 @@ export async function stopInPageCursorWatcher(): Promise<void> {
     port: state.port,
     status: "stopped",
     startedAt: null,
+    signature: state.signature,
   })
 }
 
@@ -593,7 +616,18 @@ export async function ensureInPageCursorWatcher(
   }
 
   const existing = readCursorWatcherState()
-  if (existing && existing.status === "running" && existing.pid && isProcessAlive(existing.pid) && existing.port === port) {
+  const execPath = process.execPath || "bun"
+  const cliPath = process.argv[1] || join(process.cwd(), "bin", "termlings.js")
+  const signature = currentCursorWatcherSignature(cliPath)
+
+  if (
+    existing
+    && existing.status === "running"
+    && existing.pid
+    && isProcessAlive(existing.pid)
+    && existing.port === port
+    && existing.signature === signature
+  ) {
     return
   }
   if (existing && existing.pid && isProcessAlive(existing.pid)) {
@@ -602,8 +636,6 @@ export async function ensureInPageCursorWatcher(
 
   const spawn = (await import("bun")).spawn
   const intervalMs = Math.max(80, Math.min(2000, Math.round(options.intervalMs ?? 240)))
-  const execPath = process.execPath || "bun"
-  const cliPath = process.argv[1] || join(process.cwd(), "bin", "termlings.js")
   const proc = spawn(
     [
       execPath,
@@ -633,6 +665,7 @@ export async function ensureInPageCursorWatcher(
     port,
     status: "running",
     startedAt: Date.now(),
+    signature,
   })
 }
 
@@ -810,11 +843,75 @@ function getAgentBrowserStateDir(): string {
   return join(getTermlingsBrowserDir(), "agents")
 }
 
+function extractTabIdFromArgs(args: unknown[]): string | undefined {
+  for (let i = 0; i < args.length; i++) {
+    const token = args[i]
+    if (typeof token !== "string") continue
+    const trimmed = token.trim()
+    if (!trimmed) continue
+
+    if (trimmed.startsWith("--tab=")) {
+      const candidate = trimmed.slice("--tab=".length).trim()
+      if (/^\d+$/.test(candidate)) return candidate
+      continue
+    }
+    if (trimmed === "--tab" && i + 1 < args.length) {
+      const next = args[i + 1]
+      if (typeof next === "string") {
+        const candidate = next.trim()
+        if (/^\d+$/.test(candidate)) return candidate
+      }
+    }
+  }
+  return undefined
+}
+
+function readAgentBrowserState(sessionId: string): AgentBrowserState | null {
+  const path = join(getAgentBrowserStateDir(), `${sessionId}.json`)
+  if (!existsSync(path)) return null
+  try {
+    return JSON.parse(readFileSync(path, "utf-8")) as AgentBrowserState
+  } catch {
+    return null
+  }
+}
+
+function resolveSessionBrowserTabId(sessionId: string): string | undefined {
+  const fromAgentState = readAgentBrowserState(sessionId)?.tabId?.trim()
+  if (fromAgentState && /^\d+$/.test(fromAgentState)) {
+    return fromAgentState
+  }
+
+  const ownersPath = join(getTermlingsBrowserDir(), "tab-owners.json")
+  if (!existsSync(ownersPath)) return undefined
+  try {
+    const parsed = JSON.parse(readFileSync(ownersPath, "utf8")) as {
+      owners?: Record<string, { tabId?: string; sessionId?: string }>
+    }
+    const owners = parsed.owners || {}
+    const ownerKey = `session:${sessionId}`
+    const direct = owners[ownerKey]?.tabId?.trim()
+    if (direct && /^\d+$/.test(direct)) {
+      return direct
+    }
+    for (const owner of Object.values(owners)) {
+      const candidateSessionId = (owner?.sessionId || "").trim()
+      const candidateTabId = (owner?.tabId || "").trim()
+      if (candidateSessionId === sessionId && /^\d+$/.test(candidateTabId)) {
+        return candidateTabId
+      }
+    }
+  } catch {
+    return undefined
+  }
+  return undefined
+}
+
 /**
  * Update the per-agent browser state file
  * Written on every browser command so the workspace knows which agent is using the browser
  */
-export function updateAgentBrowserState(command: string, args: unknown[] = []): void {
+export function updateAgentBrowserState(command: string, args: unknown[] = [], tabId?: string): void {
   const sessionId = process.env.TERMLINGS_SESSION_ID
   if (!sessionId) return
 
@@ -834,6 +931,7 @@ export function updateAgentBrowserState(command: string, args: unknown[] = []): 
     sessionId,
     agentName: process.env.TERMLINGS_AGENT_NAME,
     agentDna: process.env.TERMLINGS_AGENT_DNA,
+    tabId: (tabId || extractTabIdFromArgs(args) || "").trim() || undefined,
     url,
     lastAction: command,
     lastActionAt: Date.now(),
@@ -916,7 +1014,8 @@ export function logBrowserActivity(
   command: string,
   args: unknown[] = [],
   result: "success" | "error" | "timeout" = "success",
-  error?: string
+  error?: string,
+  tabId?: string
 ): void {
   try {
     mkdirSync(getActivityHistoryDir(), { recursive: true })
@@ -954,7 +1053,7 @@ export function logBrowserActivity(
   }
 
   if (result === "success") {
-    updateAgentBrowserState(command, args)
+    updateAgentBrowserState(command, args, tabId)
   }
 }
 
@@ -962,12 +1061,24 @@ export function logBrowserActivity(
  * Request human operator intervention via message command
  * Sends message to operator through IPC
  */
-export async function requestOperatorIntervention(message: string): Promise<void> {
+export async function requestOperatorIntervention(message: string, explicitTabId?: string): Promise<void> {
   const agentName = process.env.TERMLINGS_AGENT_NAME || "Agent"
+  const sessionId = (process.env.TERMLINGS_SESSION_ID || "").trim()
+  const resolvedTabId = (explicitTabId || "").trim() || (sessionId ? resolveSessionBrowserTabId(sessionId) : undefined)
 
-  logBrowserActivity("request-help", [message], "success")
+  logBrowserActivity(
+    "request-help",
+    resolvedTabId ? [message, `--tab=${resolvedTabId}`] : [message],
+    "success",
+    undefined,
+    resolvedTabId,
+  )
 
-  const formattedMessage = `🔔 **Browser needs your help** (${agentName})\n\n${message}\n\nRun: \`termlings browser\` commands to interact`
+  const tabLine = resolvedTabId ? `Tab: \`${resolvedTabId}\`\n\n` : ""
+  const runLine = resolvedTabId
+    ? `Run: \`termlings browser tabs list\` or use \`--tab ${resolvedTabId}\` with browser commands`
+    : "Run: `termlings browser` commands to interact"
+  const formattedMessage = `🔔 **Browser needs your help** (${agentName})\n\n${tabLine}${message}\n\n${runLine}`
 
   const { spawn } = await import("bun")
 
@@ -981,7 +1092,11 @@ export async function requestOperatorIntervention(message: string): Promise<void
 
     console.log(`✓ Operator notified: ${message}`)
     console.log("\nWaiting for operator to interact with browser...")
-    console.log("Operator can run: termlings browser tabs list (then use --tab with navigate/screenshot/type/click/extract)")
+    if (resolvedTabId) {
+      console.log(`Operator can run: termlings browser tabs list, then use --tab ${resolvedTabId}`)
+    } else {
+      console.log("Operator can run: termlings browser tabs list (then use --tab with navigate/screenshot/type/click/extract)")
+    }
   } catch (e) {
     console.error(`Could not notify operator: ${e}`)
   }

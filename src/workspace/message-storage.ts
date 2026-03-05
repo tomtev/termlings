@@ -25,6 +25,7 @@ import {
   writeFileSync,
 } from "fs"
 import { join } from "path"
+import { parseJsonLines, readLastJsonLines } from "./jsonl.js"
 
 export interface WorkspaceMessage {
   id: string
@@ -52,20 +53,6 @@ interface MessageIndex {
     lastTs: number
   }>
   updatedAt: number
-}
-
-function parseJsonLines<T>(filePath: string): T[] {
-  if (!existsSync(filePath)) return []
-  try {
-    const raw = readFileSync(filePath, "utf8")
-    return raw
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
-      .map((line) => JSON.parse(line) as T)
-  } catch {
-    return []
-  }
 }
 
 function getStorageDir(root: string): string {
@@ -288,39 +275,58 @@ export function appendMessage(
   return record
 }
 
-export function getChannelMessages(channel: string, root: string): WorkspaceMessage[] {
-  return parseJsonLines<WorkspaceMessage>(getChannelPath(channel, root))
+export function getChannelMessages(
+  channel: string,
+  root: string,
+  opts: { limit?: number } = {},
+): WorkspaceMessage[] {
+  const path = getChannelPath(channel, root)
+  return typeof opts.limit === "number"
+    ? readLastJsonLines<WorkspaceMessage>(path, opts.limit)
+    : parseJsonLines<WorkspaceMessage>(path)
 }
 
-export function getDmMessages(target: string, root: string): WorkspaceMessage[] {
-  return parseJsonLines<WorkspaceMessage>(getDmPath(target, root))
+export function getDmMessages(
+  target: string,
+  root: string,
+  opts: { limit?: number } = {},
+): WorkspaceMessage[] {
+  const path = getDmPath(target, root)
+  return typeof opts.limit === "number"
+    ? readLastJsonLines<WorkspaceMessage>(path, opts.limit)
+    : parseJsonLines<WorkspaceMessage>(path)
 }
 
-export function getSystemMessages(root: string): WorkspaceMessage[] {
-  return parseJsonLines<WorkspaceMessage>(getSystemPath(root))
+export function getSystemMessages(
+  root: string,
+  opts: { limit?: number } = {},
+): WorkspaceMessage[] {
+  const path = getSystemPath(root)
+  return typeof opts.limit === "number"
+    ? readLastJsonLines<WorkspaceMessage>(path, opts.limit)
+    : parseJsonLines<WorkspaceMessage>(path)
 }
 
 export function getRecentMessages(
   limit: number = 300,
   root: string,
 ): WorkspaceMessage[] {
+  if (limit <= 0) return []
+
   const index = loadIndex(root)
   const messages: WorkspaceMessage[] = []
+  const useTailReads = limit <= 2_000
 
-  // Load all indexed channel messages and trim globally after merge.
   for (const channel of index.channels) {
-    messages.push(...getChannelMessages(channel.name, root))
+    messages.push(...getChannelMessages(channel.name, root, useTailReads ? { limit } : {}))
   }
 
-  // Load all indexed DM messages and trim globally after merge.
   for (const dm of index.dms) {
-    messages.push(...getDmMessages(dm.target, root))
+    messages.push(...getDmMessages(dm.target, root, useTailReads ? { limit } : {}))
   }
 
-  // Include system events alongside chat/DM entries.
-  messages.push(...getSystemMessages(root))
+  messages.push(...getSystemMessages(root, useTailReads ? { limit } : {}))
 
-  // Sort by timestamp and return recent globally.
   messages.sort((a, b) => a.ts - b.ts)
   return messages.slice(-limit)
 }

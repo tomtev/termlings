@@ -7,10 +7,10 @@ import {
   existsSync,
   mkdirSync,
   openSync,
-  readdirSync,
   readFileSync,
   statSync,
   unlinkSync,
+  writeFileSync,
 } from "fs"
 import { spawnSync } from "child_process"
 import { tmpdir } from "os"
@@ -18,6 +18,7 @@ import { join } from "path"
 import type { Cookie, HealthCheckResponse } from "./browser-types.js"
 import { getTermlingsDir } from "./ipc.js"
 import { getAvatarCSS, renderLayeredSVG } from "../index.js"
+import { readSession } from "../workspace/state.js"
 
 export interface BrowserTab {
   id: string
@@ -36,8 +37,62 @@ interface AgentBrowserEnvelope {
   error?: string | null
 }
 
-const LOCK_STALE_MS = 30_000
-const LOCK_WAIT_TIMEOUT_MS = 20_000
+const LOCK_STALE_MS = 120_000
+const LOCK_WAIT_TIMEOUT_MS = 35_000
+const TAB_OWNER_STATE_VERSION = 1
+const TAB_OWNER_STALE_MS = 7 * 24 * 60 * 60 * 1000
+
+interface BrowserLockMetadata {
+  pid: number
+  createdAt: number
+  sessionId?: string
+  agentSlug?: string
+  agentName?: string
+}
+
+interface TabOwnerRecord {
+  tabId: string
+  updatedAt: number
+  sessionId?: string
+  agentSlug?: string
+  agentName?: string
+}
+
+interface TabOwnerState {
+  version: number
+  owners: Record<string, TabOwnerRecord>
+}
+
+function isProcessAlive(pid: number): boolean {
+  if (!Number.isFinite(pid) || pid <= 0) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function readBrowserLockMetadata(lockPath: string): BrowserLockMetadata | null {
+  if (!existsSync(lockPath)) return null
+  try {
+    const raw = readFileSync(lockPath, "utf8").trim()
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<BrowserLockMetadata>
+    const pid = typeof parsed.pid === "number" ? parsed.pid : Number.parseInt(String(parsed.pid ?? ""), 10)
+    if (!Number.isFinite(pid) || pid <= 0) return null
+    const createdAt = typeof parsed.createdAt === "number" ? parsed.createdAt : 0
+    return {
+      pid,
+      createdAt,
+      sessionId: typeof parsed.sessionId === "string" ? parsed.sessionId : undefined,
+      agentSlug: typeof parsed.agentSlug === "string" ? parsed.agentSlug : undefined,
+      agentName: typeof parsed.agentName === "string" ? parsed.agentName : undefined,
+    }
+  } catch {
+    return null
+  }
+}
 
 export class BrowserClient {
   private readonly cdpTarget: string
@@ -46,6 +101,7 @@ export class BrowserClient {
   private cursorScriptBuiltAt = 0
   private cursorLastX: number | null = null
   private cursorLastY: number | null = null
+  private lastSelectedTabId: string | null = null
 
   constructor(cdpTarget: number | string, timeout: number = 30_000) {
     this.cdpTarget = String(cdpTarget)
@@ -291,50 +347,21 @@ export class BrowserClient {
    */
   async getTabs(): Promise<BrowserTab[]> {
     return await this.withBrowserLock(async () => {
-      const data = this.runAgentBrowser(["tab"])
-      const record = (data && typeof data === "object" ? data as Record<string, unknown> : {})
-      const active = typeof record.active === "number" ? record.active : undefined
-      const tabsRaw = Array.isArray(record.tabs) ? record.tabs as Array<Record<string, unknown>> : []
-
-      return tabsRaw.map((tab, index) => {
-        const tabIndex = typeof tab.index === "number" ? tab.index : index
-        const isActive = typeof tab.active === "boolean" ? tab.active : active === tabIndex
-        return {
-          id: String(tabIndex),
-          title: typeof tab.title === "string" ? tab.title : undefined,
-          url: typeof tab.url === "string" ? tab.url : undefined,
-          active: isActive,
-          current: isActive,
-          selected: isActive,
-          focused: isActive,
-        }
-      })
+      return this.listTabsUnlocked()
     })
   }
 
   async createTab(url?: string): Promise<string> {
     return await this.withBrowserLock(async () => {
       this.captureCursorAnchorFromPage()
-      const args = ["tab", "new", ...(url ? [url] : [])]
-      const data = this.runAgentBrowser(args)
-      if (data && typeof data === "object") {
-        const record = data as Record<string, unknown>
-        if (typeof record.index === "number") {
-          const tabId = String(record.index)
-          this.runAgentBrowser(["tab", tabId])
-          await this.ensureInPageAvatarCursor()
-          await this.recoverCursorAfterPotentialNavigation()
-          return tabId
+      const tabId = this.createTabUnlocked(url)
+      if (tabId) {
+        this.selectTabUnlocked(tabId)
+        const ownerKey = this.resolveTabOwnerKey()
+        if (ownerKey) {
+          this.recordOwnerTabUnlocked(ownerKey, tabId)
         }
       }
-      const tabData = this.runAgentBrowser(["tab"])
-      const tabRecord = (tabData && typeof tabData === "object" ? tabData as Record<string, unknown> : {})
-      const tabsRaw = Array.isArray(tabRecord.tabs) ? tabRecord.tabs as Array<Record<string, unknown>> : []
-      if (tabsRaw.length === 0) return ""
-      const lastTab = tabsRaw[tabsRaw.length - 1]
-      const tabIndex = typeof lastTab?.index === "number" ? lastTab.index : tabsRaw.length - 1
-      const tabId = String(tabIndex)
-      this.runAgentBrowser(["tab", tabId])
       await this.ensureInPageAvatarCursor()
       await this.recoverCursorAfterPotentialNavigation()
       return tabId
@@ -391,6 +418,10 @@ export class BrowserClient {
     })
   }
 
+  getLastSelectedTabId(): string | null {
+    return this.lastSelectedTabId
+  }
+
   private normalizeTabId(tabId: string): number {
     const trimmed = String(tabId || "").trim()
     if (!/^\d+$/.test(trimmed)) {
@@ -401,11 +432,31 @@ export class BrowserClient {
 
   private async withSelectedTab<T>(tabId: string | undefined, run: () => Promise<T>): Promise<T> {
     return await this.withBrowserLock(async () => {
+      const ownerKey = this.resolveTabOwnerKey()
+      let resolvedTabId: string | null = null
+
       if (typeof tabId === "string" && tabId.trim().length > 0) {
-        const index = this.normalizeTabId(tabId)
-        this.runAgentBrowser(["tab", String(index)])
+        resolvedTabId = String(this.normalizeTabId(tabId))
+        if (ownerKey) {
+          this.recordOwnerTabUnlocked(ownerKey, resolvedTabId)
+        }
+      } else if (ownerKey) {
+        resolvedTabId = this.resolveOrAssignOwnerTabUnlocked(ownerKey)
       }
-      return await run()
+
+      if (resolvedTabId) {
+        this.selectTabUnlocked(resolvedTabId)
+        this.lastSelectedTabId = resolvedTabId
+      } else {
+        this.lastSelectedTabId = null
+      }
+
+      const result = await run()
+
+      if (ownerKey && resolvedTabId) {
+        this.recordOwnerTabUnlocked(ownerKey, resolvedTabId)
+      }
+      return result
     })
   }
 
@@ -423,6 +474,25 @@ export class BrowserClient {
     while (lockFd === null) {
       try {
         lockFd = openSync(lockPath, "wx")
+        const lockMetadata: BrowserLockMetadata = {
+          pid: process.pid,
+          createdAt: Date.now(),
+          sessionId: process.env.TERMLINGS_SESSION_ID,
+          agentSlug: process.env.TERMLINGS_AGENT_SLUG,
+          agentName: process.env.TERMLINGS_AGENT_NAME,
+        }
+        try {
+          writeFileSync(lockFd, `${JSON.stringify(lockMetadata)}\n`, "utf8")
+        } catch (error) {
+          try {
+            closeSync(lockFd)
+          } catch {}
+          lockFd = null
+          try {
+            if (existsSync(lockPath)) unlinkSync(lockPath)
+          } catch {}
+          throw error
+        }
         break
       } catch (error) {
         const maybeErr = error as NodeJS.ErrnoException
@@ -430,9 +500,19 @@ export class BrowserClient {
           throw error
         }
 
+        const currentOwner = readBrowserLockMetadata(lockPath)
+        if (currentOwner && !isProcessAlive(currentOwner.pid)) {
+          try {
+            unlinkSync(lockPath)
+            continue
+          } catch {
+            // ignore races
+          }
+        }
+
         try {
           const mtime = statSync(lockPath).mtimeMs
-          if (Date.now() - mtime > LOCK_STALE_MS) {
+          if (!currentOwner && Date.now() - mtime > LOCK_STALE_MS) {
             unlinkSync(lockPath)
             continue
           }
@@ -441,7 +521,13 @@ export class BrowserClient {
         }
 
         if (Date.now() - startedAt > LOCK_WAIT_TIMEOUT_MS) {
-          throw new Error("Timed out waiting for browser lock. Another browser command may be stuck.")
+          const ownerLabel =
+            currentOwner?.agentName ||
+            currentOwner?.agentSlug ||
+            currentOwner?.sessionId ||
+            (currentOwner ? `pid ${currentOwner.pid}` : null)
+          const ownerContext = ownerLabel ? ` Current owner: ${ownerLabel}.` : ""
+          throw new Error(`Timed out waiting for browser lock.${ownerContext} Another browser command may be stuck.`)
         }
 
         await new Promise((resolve) => setTimeout(resolve, 60))
@@ -464,6 +550,259 @@ export class BrowserClient {
     }
   }
 
+  private listTabsUnlocked(): BrowserTab[] {
+    const data = this.runAgentBrowser(["tab"])
+    const record = (data && typeof data === "object" ? data as Record<string, unknown> : {})
+    const active = typeof record.active === "number" ? record.active : undefined
+    const tabsRaw = Array.isArray(record.tabs) ? record.tabs as Array<Record<string, unknown>> : []
+
+    return tabsRaw.map((tab, index) => {
+      const tabIndex = typeof tab.index === "number" ? tab.index : index
+      const isActive = typeof tab.active === "boolean" ? tab.active : active === tabIndex
+      return {
+        id: String(tabIndex),
+        title: typeof tab.title === "string" ? tab.title : undefined,
+        url: typeof tab.url === "string" ? tab.url : undefined,
+        active: isActive,
+        current: isActive,
+        selected: isActive,
+        focused: isActive,
+      }
+    })
+  }
+
+  private createTabUnlocked(url?: string): string {
+    const args = ["tab", "new", ...(url ? [url] : [])]
+    const data = this.runAgentBrowser(args)
+    if (data && typeof data === "object") {
+      const record = data as Record<string, unknown>
+      if (typeof record.index === "number") {
+        return String(record.index)
+      }
+    }
+
+    const tabs = this.listTabsUnlocked()
+    if (tabs.length === 0) return ""
+    const lastTab = tabs[tabs.length - 1]
+    if (!lastTab) return ""
+    return lastTab.id
+  }
+
+  private selectTabUnlocked(tabId: string): void {
+    const index = this.normalizeTabId(tabId)
+    this.runAgentBrowser(["tab", String(index)])
+  }
+
+  private tabOwnerStatePath(): string {
+    return join(getTermlingsDir(), "browser", "tab-owners.json")
+  }
+
+  private emptyTabOwnerState(): TabOwnerState {
+    return { version: TAB_OWNER_STATE_VERSION, owners: {} }
+  }
+
+  private readTabOwnerStateUnlocked(): TabOwnerState {
+    const statePath = this.tabOwnerStatePath()
+    if (!existsSync(statePath)) return this.emptyTabOwnerState()
+    try {
+      const parsed = JSON.parse(readFileSync(statePath, "utf8")) as Partial<TabOwnerState>
+      const owners: Record<string, TabOwnerRecord> = {}
+      const rawOwners = parsed.owners && typeof parsed.owners === "object"
+        ? parsed.owners as Record<string, Partial<TabOwnerRecord>>
+        : {}
+      for (const [ownerKey, raw] of Object.entries(rawOwners)) {
+        const tabIdRaw = typeof raw?.tabId === "string" ? raw.tabId.trim() : ""
+        const updatedAt = typeof raw?.updatedAt === "number" ? raw.updatedAt : 0
+        if (!tabIdRaw || !/^\d+$/.test(tabIdRaw) || updatedAt <= 0) continue
+        owners[ownerKey] = {
+          tabId: tabIdRaw,
+          updatedAt,
+          sessionId: typeof raw?.sessionId === "string" ? raw.sessionId : undefined,
+          agentSlug: typeof raw?.agentSlug === "string" ? raw.agentSlug : undefined,
+          agentName: typeof raw?.agentName === "string" ? raw.agentName : undefined,
+        }
+      }
+      return {
+        version: typeof parsed.version === "number" ? parsed.version : TAB_OWNER_STATE_VERSION,
+        owners,
+      }
+    } catch {
+      return this.emptyTabOwnerState()
+    }
+  }
+
+  private writeTabOwnerStateUnlocked(state: TabOwnerState): void {
+    const now = Date.now()
+    const normalized: TabOwnerState = {
+      version: TAB_OWNER_STATE_VERSION,
+      owners: {},
+    }
+    for (const [ownerKey, owner] of Object.entries(state.owners || {})) {
+      const tabId = (owner.tabId || "").trim()
+      if (!tabId || !/^\d+$/.test(tabId)) continue
+      const updatedAt = typeof owner.updatedAt === "number" && owner.updatedAt > 0
+        ? owner.updatedAt
+        : now
+      normalized.owners[ownerKey] = {
+        tabId,
+        updatedAt,
+        sessionId: owner.sessionId,
+        agentSlug: owner.agentSlug,
+        agentName: owner.agentName,
+      }
+    }
+    const browserDir = join(getTermlingsDir(), "browser")
+    mkdirSync(browserDir, { recursive: true })
+    writeFileSync(this.tabOwnerStatePath(), JSON.stringify(normalized, null, 2) + "\n")
+  }
+
+  private pruneTabOwnerStateUnlocked(state: TabOwnerState, knownTabIds: Set<string>): void {
+    const cutoff = Date.now() - TAB_OWNER_STALE_MS
+    for (const [ownerKey, owner] of Object.entries(state.owners)) {
+      if (owner.updatedAt < cutoff) {
+        delete state.owners[ownerKey]
+        continue
+      }
+      if (!knownTabIds.has(owner.tabId)) {
+        delete state.owners[ownerKey]
+      }
+    }
+  }
+
+  private resolveTabOwnerKey(): string | null {
+    const sessionId = (process.env.TERMLINGS_SESSION_ID || "").trim()
+    if (sessionId) return `session:${sessionId}`
+    const agentSlug = (process.env.TERMLINGS_AGENT_SLUG || "").trim()
+    if (agentSlug) return `agent:${agentSlug}`
+    return null
+  }
+
+  private recordOwnerTabUnlocked(ownerKey: string, tabId: string): void {
+    const state = this.readTabOwnerStateUnlocked()
+    state.owners[ownerKey] = {
+      tabId,
+      updatedAt: Date.now(),
+      sessionId: (process.env.TERMLINGS_SESSION_ID || "").trim() || undefined,
+      agentSlug: (process.env.TERMLINGS_AGENT_SLUG || "").trim() || undefined,
+      agentName: (process.env.TERMLINGS_AGENT_NAME || "").trim() || undefined,
+    }
+    this.writeTabOwnerStateUnlocked(state)
+  }
+
+  private isBlankLikeTab(tab: BrowserTab): boolean {
+    const url = (tab.url || "").trim().toLowerCase()
+    const title = (tab.title || "").trim().toLowerCase()
+    if (!url || url === "about:blank") return true
+    if (url.startsWith("chrome://newtab")) return true
+    if (!title) return true
+    return false
+  }
+
+  private resolveOrAssignOwnerTabUnlocked(ownerKey: string): string | null {
+    const tabs = this.listTabsUnlocked()
+    const knownTabIds = new Set(tabs.map((tab) => tab.id))
+    const state = this.readTabOwnerStateUnlocked()
+    this.pruneTabOwnerStateUnlocked(state, knownTabIds)
+
+    const existing = state.owners[ownerKey]
+    if (existing && knownTabIds.has(existing.tabId)) {
+      existing.updatedAt = Date.now()
+      state.owners[ownerKey] = existing
+      this.writeTabOwnerStateUnlocked(state)
+      return existing.tabId
+    }
+
+    const claimedByOthers = new Set<string>()
+    for (const [otherOwner, assignment] of Object.entries(state.owners)) {
+      if (otherOwner === ownerKey) continue
+      if (knownTabIds.has(assignment.tabId)) {
+        claimedByOthers.add(assignment.tabId)
+      }
+    }
+
+    let assignedTabId = ""
+
+    // Reuse blank/unclaimed tabs first.
+    const blankCandidate = tabs.find((tab) => !claimedByOthers.has(tab.id) && this.isBlankLikeTab(tab))
+    if (blankCandidate) {
+      assignedTabId = blankCandidate.id
+    }
+
+    // If nothing is claimed yet, allow taking the current active tab.
+    if (!assignedTabId && tabs.length > 0 && claimedByOthers.size === 0) {
+      const active = tabs.find((tab) => Boolean(tab.active || tab.current || tab.selected || tab.focused))
+      assignedTabId = (active || tabs[0])?.id || ""
+    }
+
+    // Otherwise create an isolated tab for this owner.
+    if (!assignedTabId) {
+      assignedTabId = this.createTabUnlocked("about:blank")
+    }
+
+    if (!assignedTabId) {
+      this.writeTabOwnerStateUnlocked(state)
+      return null
+    }
+
+    state.owners[ownerKey] = {
+      tabId: assignedTabId,
+      updatedAt: Date.now(),
+      sessionId: (process.env.TERMLINGS_SESSION_ID || "").trim() || undefined,
+      agentSlug: (process.env.TERMLINGS_AGENT_SLUG || "").trim() || undefined,
+      agentName: (process.env.TERMLINGS_AGENT_NAME || "").trim() || undefined,
+    }
+    this.writeTabOwnerStateUnlocked(state)
+    return assignedTabId
+  }
+
+  private shouldPreserveForegroundApp(): boolean {
+    if (process.platform !== "darwin") return false
+    const raw = (process.env.TERMLINGS_BROWSER_PRESERVE_FOCUS || "").trim().toLowerCase()
+    if (raw === "0" || raw === "false" || raw === "off" || raw === "no") return false
+    if (raw === "1" || raw === "true" || raw === "on" || raw === "yes") return true
+    return (process.env.TERMLINGS_SESSION_ID || "").trim().length > 0
+  }
+
+  private captureFrontmostMacApp(): string | null {
+    if (!this.shouldPreserveForegroundApp()) return null
+    try {
+      const proc = spawnSync(
+        "osascript",
+        ["-e", "tell application \"System Events\" to get name of first application process whose frontmost is true"],
+        {
+          encoding: "utf8",
+          timeout: 800,
+          stdio: ["ignore", "pipe", "ignore"],
+        },
+      )
+      if ((proc.status ?? 1) !== 0) return null
+      const name = String(proc.stdout || "").trim()
+      if (!name) return null
+      const normalized = name.toLowerCase()
+      if (normalized.includes("chrome") || normalized.includes("chromium")) return null
+      return name
+    } catch {
+      return null
+    }
+  }
+
+  private restoreFrontmostMacApp(appName: string | null): void {
+    if (!appName) return
+    try {
+      spawnSync(
+        "osascript",
+        ["-e", `tell application ${JSON.stringify(appName)} to activate`],
+        {
+          encoding: "utf8",
+          timeout: 800,
+          stdio: ["ignore", "ignore", "ignore"],
+        },
+      )
+    } catch {
+      // best-effort only
+    }
+  }
+
   private runAgentBrowser(commandArgs: string[], timeoutOverride?: number): unknown {
     const timeout = typeof timeoutOverride === "number" && timeoutOverride > 0
       ? timeoutOverride
@@ -477,6 +816,7 @@ export class BrowserClient {
       ...commandArgs,
     ]
 
+    const frontmostApp = this.captureFrontmostMacApp()
     const proc = spawnSync("agent-browser", args, {
       encoding: "utf8",
       timeout,
@@ -486,6 +826,7 @@ export class BrowserClient {
         AGENT_BROWSER_DEFAULT_TIMEOUT: String(Math.max(1_000, Math.min(25_000, timeout))),
       },
     })
+    this.restoreFrontmostMacApp(frontmostApp)
 
     if (proc.error) {
       const code = (proc.error as NodeJS.ErrnoException).code
@@ -531,59 +872,36 @@ export class BrowserClient {
   }
 
   private resolveAvatarCandidateSlugs(): string[] {
-    const candidates: string[] = []
-    const addCandidate = (slug: string | undefined) => {
-      const clean = (slug || "").trim()
-      if (!clean) return
-      if (!candidates.includes(clean)) candidates.push(clean)
-    }
+    const slug = (process.env.TERMLINGS_AGENT_SLUG || "").trim()
+    if (slug) return [slug]
 
-    addCandidate(process.env.TERMLINGS_AGENT_SLUG)
+    const watcherSlug = this.resolveWatcherAgentSlug()
+    if (watcherSlug) return [watcherSlug]
 
-    // Detached watcher process has no agent env; use the most recent actor.
-    try {
-      const agentsStateDir = join(getTermlingsDir(), "browser", "agents")
-      if (existsSync(agentsStateDir)) {
-        const recent = readdirSync(agentsStateDir)
-          .filter((file) => file.endsWith(".json"))
-          .map((file) => {
-            try {
-              const parsed = JSON.parse(readFileSync(join(agentsStateDir, file), "utf8")) as {
-                agentSlug?: string
-                lastActionAt?: number
-              }
-              return {
-                slug: (parsed.agentSlug || "").trim(),
-                ts: typeof parsed.lastActionAt === "number" ? parsed.lastActionAt : 0,
-              }
-            } catch {
-              return { slug: "", ts: 0 }
-            }
-          })
-          .filter((entry) => entry.slug.length > 0)
-          .sort((a, b) => b.ts - a.ts)
-        addCandidate(recent[0]?.slug)
-      }
-    } catch {
-      // ignore state lookup
-    }
+    return []
+  }
 
-    // Canonical default team lead avatar.
-    addCandidate("pm")
+  private resolveWatcherAgentSlug(): string | null {
+    if ((process.env.TERMLINGS_BROWSER_CURSOR_WATCHER || "").trim() !== "1") return null
 
     try {
-      const agentsDir = join(getTermlingsDir(), "agents")
-      if (existsSync(agentsDir)) {
-        for (const entry of readdirSync(agentsDir, { withFileTypes: true })) {
-          if (!entry.isDirectory() || entry.name.startsWith(".")) continue
-          addCandidate(entry.name)
-        }
-      }
-    } catch {
-      // ignore local agent scan
-    }
+      const tabs = this.listTabsUnlocked()
+      const activeTab = tabs.find((tab) => Boolean(tab.active || tab.current || tab.selected || tab.focused))
+      if (!activeTab) return null
 
-    return candidates
+      const owners = this.readTabOwnerStateUnlocked().owners
+      const owner = Object.values(owners).find((entry) => entry.tabId === activeTab.id)
+      if (!owner?.agentSlug) return null
+
+      if (owner.sessionId) {
+        const session = readSession(owner.sessionId)
+        if (!session) return null
+      }
+
+      return owner.agentSlug
+    } catch {
+      return null
+    }
   }
 
   private readAgentDNA(slug: string): string | null {
@@ -599,22 +917,7 @@ export class BrowserClient {
     }
   }
 
-  private getAvatarCursorMarkup(): { markup: string; css: string; signature: string } {
-    const fallbackSvg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#4fd1c5"/>
-      <stop offset="100%" stop-color="#2c7a7b"/>
-    </linearGradient>
-  </defs>
-  <circle cx="22" cy="22" r="18" fill="url(#g)" stroke="#0f172a" stroke-width="2"/>
-  <circle cx="16.5" cy="20" r="2.1" fill="#0f172a"/>
-  <circle cx="27.5" cy="20" r="2.1" fill="#0f172a"/>
-  <path d="M14 27c2.2 3.4 5.1 5 8 5s5.8-1.6 8-5" fill="none" stroke="#0f172a" stroke-width="2.2" stroke-linecap="round"/>
-</svg>
-    `.trim()
-
+  private getAvatarCursorMarkup(): { markup: string; css: string; signature: string } | null {
     const tryReadAvatarSvg = (slug: string): { markup: string; signature: string } | null => {
       if (!slug) return null
       const avatarPath = join(getTermlingsDir(), "agents", slug, "avatar.svg")
@@ -663,18 +966,15 @@ export class BrowserClient {
         }
       }
     } catch {
-      // ignore and use fallback
+      // ignore and treat as unavailable
     }
 
-    return {
-      markup: `<div class="tg-avatar">${fallbackSvg}</div>`,
-      css: getAvatarCSS(),
-      signature: "fallback-smiley",
-    }
+    return null
   }
 
-  private buildAvatarCursorScript(): string {
+  private buildAvatarCursorScript(): string | null {
     const visual = this.getAvatarCursorMarkup()
+    if (!visual) return null
     const markupJson = JSON.stringify(visual.markup)
     const signatureJson = JSON.stringify(visual.signature)
     const cssJson = JSON.stringify(visual.css)
@@ -848,6 +1148,26 @@ export class BrowserClient {
 })()`
   }
 
+  private removeInPageAvatarCursor(): void {
+    try {
+      this.runAgentBrowser([
+        "eval",
+        `(() => {
+          try { delete window.__termlingsAvatarCursor; } catch {}
+          const style = document.getElementById("__termlingsAvatarCursorStyle");
+          if (style) { try { style.remove(); } catch {} }
+          const nodes = document.querySelectorAll('[data-termlings-avatar-cursor="1"], [data-termlings-avatar-signature]');
+          for (const node of nodes) {
+            try { node.remove(); } catch {}
+          }
+          return true;
+        })()`,
+      ])
+    } catch {
+      // best-effort only
+    }
+  }
+
   private async ensureInPageAvatarCursor(force: boolean = false): Promise<void> {
     if (!force && !this.shouldInjectAvatarCursor()) return
 
@@ -857,6 +1177,12 @@ export class BrowserClient {
         this.cursorScript = this.buildAvatarCursorScript()
         this.cursorScriptBuiltAt = now
       }
+
+      if (!this.cursorScript) {
+        this.removeInPageAvatarCursor()
+        return
+      }
+
       if (this.cursorLastX !== null && this.cursorLastY !== null) {
         this.runAgentBrowser([
           "eval",

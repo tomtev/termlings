@@ -116,20 +116,24 @@ termlings browser request-help "Need manual login"
 
 `termlings browser click ...` automatically animates the in-page avatar cursor toward the target before issuing the click (single command, no separate cursor call needed).
 `termlings browser focus ...` and selector-based `termlings browser type ...` use the same pre-action cursor movement.
+Cursor identity now follows only the connected agent session (`TERMLINGS_AGENT_SLUG`); if no connected agent is available, the cursor overlay is hidden.
 
 ## Tabs and Shared Access
 
 All agents share one browser process per workspace.
 
 - `termlings browser tabs list` returns tab indexes
-- Use `--tab <index>` when you want deterministic behavior
-- Coordinate tab ownership in tasks/DMs to avoid collisions
+- By default, when `--tab` is omitted, Termlings auto-assigns a stable tab per agent session and reuses it
+- Explicit `--tab <index>` overrides auto-assignment and updates that agent's tab ownership
+- Ownership state is stored in `.termlings/browser/tab-owners.json`
+- Use `--tab <index>` when you need strict/manual control
 
 ## Human-in-loop Login Flow
 
 1. Agent navigates to target site.
 2. Agent detects auth gate (`termlings browser check-login`).
 3. Agent requests intervention (`termlings browser request-help "..."`).
+   When the agent has a known assigned tab, the operator message includes the tab index.
 4. Operator completes login in the headed browser window.
 5. Agent resumes using the same profile/session.
 
@@ -165,6 +169,7 @@ Notes:
 Environment toggles:
 
 - `TERMLINGS_BROWSER_INPAGE_CURSOR=true|false`: enable/disable in-page avatar cursor overlay injection (default: `true`)
+- `TERMLINGS_BROWSER_PRESERVE_FOCUS=true|false`: on macOS, keep terminal/app focus while agent sessions run browser commands (default: enabled for agent sessions)
 
 TUI integration:
 
@@ -178,6 +183,7 @@ TUI integration:
   config.json
   process.json
   profile.json
+  tab-owners.json
   history/
     all.jsonl
     agent/*.jsonl

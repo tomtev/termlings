@@ -1,9 +1,18 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs"
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "fs"
 import { join } from "path"
 
 export type TaskStatus = "open" | "claimed" | "in-progress" | "completed" | "blocked"
 export type TaskPriority = "low" | "medium" | "high"
 const TASK_OCC_MAX_RETRIES = 6
+
+interface TaskFileCache {
+  mtimeMs: number
+  size: number
+  raw: string
+  tasks: Task[]
+}
+
+let taskFileCache: TaskFileCache | null = null
 
 export interface Task {
   id: string
@@ -61,14 +70,32 @@ function parseTasksRaw(raw: string): Task[] {
 function readTasksSnapshot(): { tasks: Task[]; raw: string } {
   const file = tasksFile()
   if (!existsSync(file)) {
+    taskFileCache = null
     return { tasks: [], raw: "" }
   }
 
   try {
+    const stats = statSync(file)
+    if (
+      taskFileCache
+      && taskFileCache.mtimeMs === stats.mtimeMs
+      && taskFileCache.size === stats.size
+    ) {
+      return { tasks: taskFileCache.tasks, raw: taskFileCache.raw }
+    }
+
     const raw = readFileSync(file, "utf-8")
-    return { tasks: parseTasksRaw(raw), raw }
+    const tasks = parseTasksRaw(raw)
+    taskFileCache = {
+      mtimeMs: stats.mtimeMs,
+      size: stats.size,
+      raw,
+      tasks,
+    }
+    return { tasks, raw }
   } catch (e) {
     console.error(`Error reading tasks: ${e}`)
+    taskFileCache = null
     return { tasks: [], raw: "" }
   }
 }
@@ -90,7 +117,19 @@ function tryWriteTasks(tasks: Task[], expectedRaw: string): boolean {
     return false
   }
 
-  writeFileSync(file, JSON.stringify(tasks, null, 2) + "\n")
+  const nextRaw = JSON.stringify(tasks, null, 2) + "\n"
+  writeFileSync(file, nextRaw)
+  try {
+    const stats = statSync(file)
+    taskFileCache = {
+      mtimeMs: stats.mtimeMs,
+      size: stats.size,
+      raw: nextRaw,
+      tasks,
+    }
+  } catch {
+    taskFileCache = null
+  }
   return true
 }
 
