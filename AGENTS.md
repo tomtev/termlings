@@ -384,7 +384,6 @@ termlings calendar enable evt-001
 
 ## Docs
 
-- [docs/HOOKS.md](docs/HOOKS.md)
 - [docs/SKILLS.md](docs/SKILLS.md)
 - [src/termlings-system-message.md](src/termlings-system-message.md)
 - [docs/team-coordination.md](docs/team-coordination.md)

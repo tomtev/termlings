@@ -1,6 +1,7 @@
 import type { AgentAdapter } from "./types.js"
-import { randomBytes } from "crypto"
-import { mkdirSync, readFileSync, existsSync, unlinkSync, writeFileSync } from "fs"
+import { createHash, randomBytes } from "crypto"
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, statSync, unlinkSync, writeFileSync } from "fs"
+import { homedir } from "os"
 import { resolve as resolvePath, dirname as dirName, join as joinPath } from "path"
 import { fileURLToPath } from "url"
 import { readMessages, getIpcDir } from "../engine/ipc.js"
@@ -27,7 +28,10 @@ const TERMINAL_TYPING_IDLE_MS = 3500
 const TERMINAL_TYPING_WRITE_THROTTLE_MS = 1500
 const INJECT_WHEN_IDLE_MS = 1200
 const RESIZE_ACTIVITY_SUPPRESS_MS = 1500
-type ContextProfile = "default" | "sim"
+const RUNTIME_SESSION_DISCOVERY_WINDOW_MS = 45_000
+const RUNTIME_SESSION_DISCOVERY_POLL_MS = 750
+const RUNTIME_SESSION_FILE_SCAN_LIMIT = 20
+const RUNTIME_SESSION_PREFIX_BYTES = 64 * 1024
 
 function pickRandomName(): string {
   const idx = Math.floor(Math.random() * RANDOM_NAMES.length)
@@ -38,33 +42,9 @@ function runtimeLabelForAdapter(adapter: AgentAdapter): string {
   const bin = (adapter.bin || "").trim().toLowerCase()
   if (bin === "claude") return "Claude"
   if (bin === "codex") return "Codex"
-  if (bin === "pi") return "Pi"
 
   const fallback = (adapter.defaultName || "").trim()
   return fallback || adapter.bin || "Unknown"
-}
-
-function isTruthyEnv(value?: string): boolean {
-  if (!value) return false
-  const normalized = value.trim().toLowerCase()
-  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on"
-}
-
-function detectContextProfile(): ContextProfile {
-  const forcedProfile = (process.env.TERMLINGS_CONTEXT_PROFILE || "").trim().toLowerCase()
-  if (forcedProfile === "sim") return "sim"
-  if (forcedProfile === "default") return "default"
-
-  if (isTruthyEnv(process.env.TERMLINGS_SIM_MODE) || isTruthyEnv(process.env.TERMLINGS_SIM)) {
-    return "sim"
-  }
-
-  const mapMetadataPath = resolvePath(".termlings", "map-metadata.json")
-  if (existsSync(mapMetadataPath)) {
-    return "sim"
-  }
-
-  return "default"
 }
 
 function readFirstContextFile(paths: string[]): string {
@@ -76,29 +56,14 @@ function readFirstContextFile(paths: string[]): string {
   return ""
 }
 
-function loadContext(profile: ContextProfile): string {
+function loadContext(): string {
   // Load framework context (termlings-system-message.md)
-  const baseContext = readFirstContextFile([
+  let context = readFirstContextFile([
     // Installed / built layout
     joinPath(__dirname, "..", "termlings-system-message.md"),
     // Dev mode
     resolvePath("src/termlings-system-message.md"),
   ])
-
-  let context = baseContext
-
-  if (profile === "sim") {
-    const simAddendum = readFirstContextFile([
-      // Installed / built layout
-      joinPath(__dirname, "..", "sim", "termlings-system-message-sim.md"),
-      // Dev mode
-      resolvePath("src/sim/termlings-system-message-sim.md"),
-    ]).trim()
-
-    if (simAddendum) {
-      context = context ? `${context}\n\n${simAddendum}\n` : `${simAddendum}\n`
-    }
-  }
 
   // Append project vision addendum if present.
   try {
@@ -141,6 +106,170 @@ function parseSoul(): { name: string; dna: string } {
   } catch {
     return { name: "", dna: "" }
   }
+}
+
+function runtimeSessionDirForBin(bin: string, cwd: string): string | null {
+  const normalized = (bin || "").trim().toLowerCase()
+  if (normalized === "claude") {
+    return joinPath(homedir(), ".claude", "projects", cwd.replace(/\//g, "-"))
+  }
+  if (normalized === "codex") {
+    const now = new Date()
+    const y = String(now.getFullYear())
+    const m = String(now.getMonth() + 1).padStart(2, "0")
+    const d = String(now.getDate()).padStart(2, "0")
+    return joinPath(homedir(), ".codex", "sessions", y, m, d)
+  }
+  return null
+}
+
+function listRuntimeJsonlFiles(bin: string, cwd: string): string[] {
+  const dir = runtimeSessionDirForBin(bin, cwd)
+  if (!dir || !existsSync(dir)) return []
+  try {
+    return readdirSync(dir)
+      .filter((name) => name.endsWith(".jsonl"))
+      .map((name) => joinPath(dir, name))
+  } catch {
+    return []
+  }
+}
+
+function newestRuntimeJsonlFiles(bin: string, cwd: string, limit = RUNTIME_SESSION_FILE_SCAN_LIMIT): string[] {
+  const files = listRuntimeJsonlFiles(bin, cwd)
+  const withMtime: Array<{ path: string; mtime: number }> = []
+  for (const filePath of files) {
+    try {
+      const stat = statSync(filePath)
+      withMtime.push({ path: filePath, mtime: stat.mtimeMs })
+    } catch {}
+  }
+  withMtime.sort((a, b) => b.mtime - a.mtime)
+  return withMtime.slice(0, limit).map((entry) => entry.path)
+}
+
+function readFilePrefix(filePath: string, maxBytes = RUNTIME_SESSION_PREFIX_BYTES): string {
+  let fd: number | null = null
+  try {
+    fd = openSync(filePath, "r")
+    const buffer = Buffer.allocUnsafe(maxBytes)
+    const bytesRead = readSync(fd, buffer, 0, maxBytes, 0)
+    if (bytesRead <= 0) return ""
+    return buffer.subarray(0, bytesRead).toString("utf8")
+  } catch {
+    return ""
+  } finally {
+    if (fd !== null) {
+      try {
+        closeSync(fd)
+      } catch {}
+    }
+  }
+}
+
+function readFileTail(filePath: string, maxBytes = RUNTIME_SESSION_PREFIX_BYTES): string {
+  let fd: number | null = null
+  try {
+    const size = statSync(filePath).size
+    if (!Number.isFinite(size) || size <= 0) return ""
+    const bytesToRead = Math.min(maxBytes, Math.max(0, size))
+    const start = Math.max(0, size - bytesToRead)
+    fd = openSync(filePath, "r")
+    const buffer = Buffer.allocUnsafe(bytesToRead)
+    const bytesRead = readSync(fd, buffer, 0, bytesToRead, start)
+    if (bytesRead <= 0) return ""
+    return buffer.subarray(0, bytesRead).toString("utf8")
+  } catch {
+    return ""
+  } finally {
+    if (fd !== null) {
+      try {
+        closeSync(fd)
+      } catch {}
+    }
+  }
+}
+
+function fileContainsSessionMarker(filePath: string, marker: string): boolean {
+  if (!marker) return false
+  const prefix = readFilePrefix(filePath)
+  if (prefix.includes(marker)) return true
+  return readFileTail(filePath).includes(marker)
+}
+
+function extractRuntimeSessionId(filePath: string): string | undefined {
+  const prefix = readFilePrefix(filePath)
+  if (!prefix) return undefined
+  const lines = prefix.split(/\r?\n/).slice(0, 80)
+  for (const line of lines) {
+    if (!line.trim()) continue
+    try {
+      const parsed = JSON.parse(line) as Record<string, unknown>
+      if (typeof parsed.sessionId === "string" && parsed.sessionId.trim().length > 0) {
+        return parsed.sessionId.trim()
+      }
+      const payload = parsed.payload
+      if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+        const payloadSessionId = (payload as Record<string, unknown>).sessionId
+        if (typeof payloadSessionId === "string" && payloadSessionId.trim().length > 0) {
+          return payloadSessionId.trim()
+        }
+        const payloadId = (payload as Record<string, unknown>).id
+        if (typeof payloadId === "string" && payloadId.trim().length > 0) {
+          return payloadId.trim()
+        }
+      }
+    } catch {}
+  }
+  return undefined
+}
+
+function hasArgFlag(args: string[], flag: string): boolean {
+  return args.some((arg) => arg === flag || arg.startsWith(`${flag}=`))
+}
+
+function readArgValue(args: string[], longFlag: string, shortFlag?: string): string {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!
+    if (arg === longFlag || (shortFlag && arg === shortFlag)) {
+      const next = args[i + 1]
+      if (next && !next.startsWith("-")) return next
+      return ""
+    }
+    if (arg.startsWith(`${longFlag}=`)) return arg.slice(longFlag.length + 1)
+    if (shortFlag && arg.startsWith(`${shortFlag}=`)) return arg.slice(shortFlag.length + 1)
+  }
+  return ""
+}
+
+function isUuidLike(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim())
+}
+
+function shouldInjectClaudeSessionId(args: string[]): boolean {
+  if (hasArgFlag(args, "--session-id")) return false
+  if (hasArgFlag(args, "--resume") || hasArgFlag(args, "--continue") || hasArgFlag(args, "--from-pr")) return false
+  if (args.includes("-r") || args.includes("-c")) return false
+  return true
+}
+
+function extractClaudeSessionRefFromArgs(args: string[]): string {
+  const explicitSession = readArgValue(args, "--session-id")
+  if (isUuidLike(explicitSession)) return explicitSession.trim()
+
+  const resumeValue = readArgValue(args, "--resume", "-r")
+  if (isUuidLike(resumeValue)) return resumeValue.trim()
+
+  return ""
+}
+
+function uuidFromSeed(seed: string): string {
+  const digest = createHash("sha256").update(seed).digest()
+  const bytes = Uint8Array.from(digest.subarray(0, 16))
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40 // version 4 layout
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80 // variant
+  const hex = Buffer.from(bytes).toString("hex")
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`
 }
 
 /**
@@ -201,11 +330,12 @@ export async function launchAgent(
   },
 ): Promise<never> {
   const sessionId = `tl-${randomBytes(4).toString("hex")}`
-  const contextProfile = detectContextProfile()
-  const context = loadContext(contextProfile)
+  const runtimeDiscoveryMarker = `tlm-${sessionId}-${randomBytes(6).toString("hex")}`
+  const context = loadContext()
   const soul = soulData || parseSoul()
 
   const agentName = termlingOpts.name || soul.name || pickRandomName()
+  const agentSlug = termlingOpts.slug || ""
   // Generate random DNA if not provided
   let agentDna = termlingOpts.dna || soul.dna
   if (!agentDna) {
@@ -246,8 +376,23 @@ export async function launchAgent(
     }
   }
 
+  // Per-launch marker used only to link this runtime process to its transcript file.
+  // It improves mapping accuracy when multiple agents spawn concurrently.
+  finalContext = finalContext
+    ? `${finalContext}\n\n<TERMLINGS-RUNTIME-MARKER>${runtimeDiscoveryMarker}</TERMLINGS-RUNTIME-MARKER>\n`
+    : `<TERMLINGS-RUNTIME-MARKER>${runtimeDiscoveryMarker}</TERMLINGS-RUNTIME-MARKER>\n`
+
   const contextArgs = adapter.contextArgs(finalContext)
-  const finalArgs = [...contextArgs, ...passthroughArgs]
+  const requestedClaudeSessionRef = adapter.bin === "claude"
+    ? extractClaudeSessionRefFromArgs(passthroughArgs)
+    : ""
+  const autoClaudeSessionId =
+    adapter.bin === "claude" && shouldInjectClaudeSessionId(passthroughArgs)
+      ? uuidFromSeed(`${agentSlug || agentName}|${sessionId}`)
+      : ""
+  const runtimeSessionRefSeed = autoClaudeSessionId || requestedClaudeSessionRef
+  const runtimeSessionArgs = autoClaudeSessionId ? ["--session-id", autoClaudeSessionId] : []
+  const finalArgs = [...contextArgs, ...runtimeSessionArgs, ...passthroughArgs]
 
   // Remove legacy Claude hook registration so terminal activity remains authoritative.
   if (adapter.bin === "claude") {
@@ -299,8 +444,6 @@ export async function launchAgent(
 
   const ipcDir = getIpcDir()
 
-  const agentSlug = termlingOpts.slug || ""
-
   const env: Record<string, string> = {
     ...(process.env as Record<string, string>),
     TERMLINGS_SESSION_ID: sessionId,
@@ -312,8 +455,7 @@ export async function launchAgent(
     TERMLINGS_AGENT_ROLE: agentRole || "",
     TERMLINGS_AGENT_MANAGE_AGENTS: agentCanManageAgents ? "1" : "0",
     TERMLINGS_IPC_DIR: ipcDir,
-    TERMLINGS_CONTEXT_PROFILE: contextProfile,
-    TERMLINGS_SIM_MODE: contextProfile === "sim" ? "1" : "0",
+    TERMLINGS_CONTEXT_PROFILE: "default",
   }
   const typingDir = joinPath(ipcDir, "store", "presence")
   try {
@@ -403,12 +545,34 @@ export async function launchAgent(
     env.TERMLINGS_CONTEXT = envContext
   }
 
+  const launchCwd = process.cwd()
+  let runtimePid = 0
+  let runtimeSessionRef = runtimeSessionRefSeed
+  let runtimeJsonlFile = ""
+  if (adapter.bin === "claude" && runtimeSessionRef) {
+    const claudeSessionDir = runtimeSessionDirForBin(adapter.bin, launchCwd)
+    if (claudeSessionDir) {
+      runtimeJsonlFile = joinPath(claudeSessionDir, `${runtimeSessionRef}.jsonl`)
+    }
+  }
+  let runtimeMetadataTimer: ReturnType<typeof setInterval> | null = null
+
+  const refreshSessionPresence = (lastSeenAt?: number) => {
+    upsertSession(sessionId, {
+      name: agentName,
+      dna: agentDna,
+      lastSeenAt: lastSeenAt ?? Date.now(),
+      runtime: adapter.bin,
+      launcherPid: process.pid,
+      runtimePid: runtimePid > 0 ? runtimePid : undefined,
+      jsonlFile: runtimeJsonlFile || undefined,
+      runtimeSessionId: runtimeSessionRef || undefined,
+    })
+  }
+
   // Register as an online workspace session.
   ensureWorkspaceDirs()
-  upsertSession(sessionId, {
-    name: agentName,
-    dna: agentDna,
-  })
+  refreshSessionPresence()
   appendWorkspaceMessage({
     kind: "system",
     from: "system",
@@ -417,11 +581,7 @@ export async function launchAgent(
   })
   const heartbeatTimer = setInterval(() => {
     try {
-      upsertSession(sessionId, {
-        name: agentName,
-        dna: agentDna,
-        lastSeenAt: Date.now(),
-      })
+      refreshSessionPresence(Date.now())
     } catch {}
   }, 5000)
 
@@ -481,6 +641,82 @@ export async function launchAgent(
     },
     env,
   })
+
+  runtimePid = Number.isFinite(proc.pid) && proc.pid > 0 ? proc.pid : 0
+  try {
+    refreshSessionPresence()
+  } catch {}
+
+  if (runtimeSessionDirForBin(adapter.bin, launchCwd)) {
+    const knownRuntimeJsonlFiles = new Set(listRuntimeJsonlFiles(adapter.bin, launchCwd))
+    const pendingRuntimeJsonlFiles = new Set<string>()
+    const pendingAttempts = new Map<string, number>()
+
+    // One-time bootstrap for resume/restart cases where runtime keeps writing to an existing file.
+    for (const filePath of newestRuntimeJsonlFiles(adapter.bin, launchCwd, 5)) {
+      pendingRuntimeJsonlFiles.add(filePath)
+      pendingAttempts.set(filePath, 0)
+    }
+
+    const discoverRuntimeMetadata = () => {
+      if (!runtimeJsonlFile) {
+        const currentFiles = listRuntimeJsonlFiles(adapter.bin, launchCwd)
+        for (const filePath of currentFiles) {
+          if (knownRuntimeJsonlFiles.has(filePath)) continue
+          knownRuntimeJsonlFiles.add(filePath)
+          pendingRuntimeJsonlFiles.add(filePath)
+          pendingAttempts.set(filePath, 0)
+        }
+
+        for (const filePath of Array.from(pendingRuntimeJsonlFiles)) {
+          if (fileContainsSessionMarker(filePath, runtimeDiscoveryMarker)) {
+            runtimeJsonlFile = filePath
+            pendingRuntimeJsonlFiles.clear()
+            pendingAttempts.clear()
+            break
+          }
+
+          const attempts = (pendingAttempts.get(filePath) || 0) + 1
+          pendingAttempts.set(filePath, attempts)
+          if (attempts >= 20) {
+            pendingRuntimeJsonlFiles.delete(filePath)
+            pendingAttempts.delete(filePath)
+          }
+        }
+      }
+
+      if (!runtimeJsonlFile) return
+
+      if (!runtimeSessionRef) {
+        runtimeSessionRef = extractRuntimeSessionId(runtimeJsonlFile) || ""
+      }
+
+      try {
+        refreshSessionPresence()
+      } catch {}
+    }
+
+    const discoveryDeadline = Date.now() + RUNTIME_SESSION_DISCOVERY_WINDOW_MS
+    discoverRuntimeMetadata()
+    runtimeMetadataTimer = setInterval(() => {
+      if (Date.now() >= discoveryDeadline) {
+        if (runtimeMetadataTimer) {
+          clearInterval(runtimeMetadataTimer)
+          runtimeMetadataTimer = null
+        }
+        return
+      }
+
+      discoverRuntimeMetadata()
+
+      if (runtimeJsonlFile && runtimeSessionRef) {
+        if (runtimeMetadataTimer) {
+          clearInterval(runtimeMetadataTimer)
+          runtimeMetadataTimer = null
+        }
+      }
+    }, RUNTIME_SESSION_DISCOVERY_POLL_MS)
+  }
 
   const terminal = proc.terminal!
 
@@ -571,6 +807,10 @@ export async function launchAgent(
 
     clearInterval(heartbeatTimer)
     clearInterval(pollTimer)
+    if (runtimeMetadataTimer) {
+      clearInterval(runtimeMetadataTimer)
+      runtimeMetadataTimer = null
+    }
     clearTerminalTyping()
     process.stdin.off("data", onStdinData)
     process.stdout.off("resize", onResize)

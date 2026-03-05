@@ -15,6 +15,8 @@ const ANSI_ITEM_SELECTED = "\x1b[48;5;24m\x1b[38;5;231m";
 const ANSI_ITEM_DESC = "\x1b[38;5;245m";
 const ANSI_FOOTER = "\x1b[38;5;244m";
 const ANSI_HINT = "\x1b[38;5;242m";
+const ANSI_MUTED_STRONG = "\x1b[38;5;244m";
+const ANSI_MUTED_SOFT = "\x1b[38;5;240m";
 const ANSI_ESCAPE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
 
 function supportsAnsi(output: Writable): boolean {
@@ -177,11 +179,11 @@ export async function confirm(
     const defaultStr = defaultValue ? "Y/n" : "y/N";
     const decoratedDefault = supportsAnsi(output)
       ? defaultValue
-        ? `${ANSI_FOOTER}Y${ANSI_RESET}/n`
-        : `y/${ANSI_FOOTER}N${ANSI_RESET}`
+        ? `${ANSI_MUTED_STRONG}Y${ANSI_RESET}/${ANSI_MUTED_SOFT}n${ANSI_RESET}`
+        : `${ANSI_MUTED_SOFT}y${ANSI_RESET}/${ANSI_MUTED_STRONG}N${ANSI_RESET}`
       : defaultStr;
 
-    rl.question(`${message} [${decoratedDefault}] `, (answer) => {
+    rl.question(`${message} (${decoratedDefault}) `, (answer) => {
       rl.close();
       const normalized = answer.trim().toLowerCase();
       if (normalized === "") {

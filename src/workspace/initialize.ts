@@ -165,7 +165,7 @@ function getDefaultHumanName(): string {
   return "User"
 }
 
-type RuntimeSlug = "claude" | "codex" | "pi"
+type RuntimeSlug = "claude" | "codex"
 
 interface RuntimeChoice {
   slug: RuntimeSlug
@@ -177,7 +177,6 @@ interface RuntimeChoice {
 const RUNTIME_CHOICES: Array<Omit<RuntimeChoice, "installed">> = [
   { slug: "claude", label: "Claude", bin: "claude" },
   { slug: "codex", label: "Codex", bin: "codex" },
-  { slug: "pi", label: "Pi", bin: "pi" },
 ]
 
 function commandExists(bin: string): boolean {
@@ -391,11 +390,7 @@ async function setupDefaultRuntime(
     const updated = updateSpawnDefaults(projectRoot, selected)
     if (updated) {
       console.log(`✓ Default runtime: ${selectedChoice?.label || selected}`)
-      if (selected === "pi") {
-        console.log("  Pi has no explicit dangerous flag; launch uses Pi default tool mode.")
-      } else {
-        console.log("  Launches use dangerous mode presets by default.")
-      }
+      console.log("  Launches use dangerous mode presets by default.")
     } else {
       console.log("! Could not update .termlings/spawn.json with default runtime.")
     }

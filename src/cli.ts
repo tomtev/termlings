@@ -6,13 +6,88 @@
 
 import { launchWorkspaceTui } from "./tui/tui.js";
 import { getUpdateNotice } from "./update-check.js";
-import { runSimCommand } from "./sim/index.js";
 import { loadTermlingsEnv } from "./engine/env.js";
 
-function tmuxInstallHint(): string {
-  if (process.platform === "darwin") return "macOS: brew install tmux";
-  if (process.platform === "win32") return "Windows (WSL): sudo apt install tmux";
-  return "Linux: sudo apt install tmux";
+async function ensureSchedulerDaemon(root: string): Promise<void> {
+  const { ensureManagedRuntimeProcess } = await import("./engine/runtime-processes.js");
+  const scheduler = await ensureManagedRuntimeProcess({
+    key: "scheduler",
+    kind: "scheduler",
+    args: ["scheduler", "--daemon"],
+    root,
+    startupProbeMs: 0,
+  });
+  if (!scheduler.ok) {
+    console.error(`Warning: failed to start scheduler daemon: ${scheduler.error || "unknown error"}`);
+    console.error("Run `termlings scheduler --daemon` manually in another terminal if needed.");
+  }
+}
+
+async function startSpawnAllInBackground(root: string): Promise<{ ok: boolean; pid?: number; logPath?: string; error?: string }> {
+  const [{ appendFileSync, closeSync, mkdirSync, openSync }, { join, resolve }, { spawn }] = await Promise.all([
+    import("fs"),
+    import("path"),
+    import("child_process"),
+  ]);
+
+  const logDir = join(root, ".termlings", "store", "runtime-logs");
+  mkdirSync(logDir, { recursive: true });
+  const logPath = join(logDir, `startup-spawn-${Date.now()}.log`);
+
+  const cliEntry = (process.argv[1] || "").trim().length > 0
+    ? resolve(process.argv[1]!)
+    : join(root, "bin", "termlings.js");
+  const command = (process.execPath || "").trim() || "bun";
+  const commandArgs = [cliEntry, "spawn", "--all", "--quiet"];
+  const sessionEnv = {
+    ...(process.env as Record<string, string | undefined>),
+  };
+  delete sessionEnv.TERMLINGS_SESSION_ID;
+  delete sessionEnv.TERMLINGS_AGENT_NAME;
+  delete sessionEnv.TERMLINGS_AGENT_DNA;
+  delete sessionEnv.TERMLINGS_AGENT_SLUG;
+  delete sessionEnv.TERMLINGS_CONTEXT;
+  delete sessionEnv.TERMLINGS_IPC_DIR;
+
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(sessionEnv)) {
+    if (typeof value !== "string") continue;
+    env[key] = value;
+  }
+
+  let logFd: number | null = null;
+  try {
+    appendFileSync(logPath, `[${new Date().toISOString()}] launching: ${command} ${commandArgs.join(" ")}\n`);
+    logFd = openSync(logPath, "a");
+    const child = spawn(command, commandArgs, {
+      cwd: root,
+      detached: true,
+      stdio: ["ignore", logFd, logFd],
+      env,
+    });
+    child.unref();
+
+    const pid = child.pid;
+    if (!Number.isFinite(pid) || (pid ?? 0) <= 0) {
+      appendFileSync(logPath, `[${new Date().toISOString()}] failed: missing child pid\n`);
+      return { ok: false, error: "failed to launch spawn worker", logPath };
+    }
+
+    appendFileSync(logPath, `[${new Date().toISOString()}] started pid=${pid}\n`);
+    return { ok: true, pid: pid as number, logPath };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    try {
+      appendFileSync(logPath, `[${new Date().toISOString()}] launch exception: ${message}\n`);
+    } catch {}
+    return { ok: false, error: message, logPath };
+  } finally {
+    if (logFd !== null) {
+      try {
+        closeSync(logFd);
+      } catch {}
+    }
+  }
 }
 
 const args = process.argv.slice(2);
@@ -25,7 +100,7 @@ let agentPassthrough: string[] = [];
 
 // Known flags that take a space-separated value
 const VALUE_FLAGS = new Set([
-  "name", "dna", "owner", "purpose", "dangerous-skip-confirmation",
+  "name", "dna", "owner", "purpose",
   "slug", "title", "title-short", "title_short", "role", "team", "reports-to", "reports_to",
   "port", "host", "color", "size", "padding", "bg", "fps", "duration", "out",
   "headed", "headless", "depth", "max-tokens", "maxTokens", "tab", "tab-id", "tabId", "limit",
@@ -105,11 +180,6 @@ try {
     }
   }
 
-  if (flags.has("sim") || command === "sim") {
-    await runSimCommand(positional, flags);
-    process.exit(0);
-  }
-
   const handled = await routeCommand(positional, flags, opts);
 
   if (!handled) {
@@ -125,8 +195,8 @@ try {
        termlings <agent> [options]
 
 Workspace:
-  termlings                Start the terminal workspace UI
-  termlings --auto-spawn   Start tmux control panel, scheduler daemon, and all agent windows
+  termlings                Start the terminal workspace UI (auto-starts scheduler daemon)
+  termlings --spawn        Open workspace immediately, then spawn all agents in background
   termlings init           Initialize .termlings in this project
   termlings --server       Run secure HTTP server mode
 
@@ -134,14 +204,12 @@ Agent System:
   termlings brief          Full workspace snapshot (run at session start)
   termlings org-chart      Show org chart (list-agents alias)
   termlings list-agents    Legacy alias for org-chart
-  termlings peek [agent]   Jump to an agent terminal window
-  termlings control        Jump back to workspace control window
   termlings skills <cmd>   List/install/update skills (skills.sh wrapper)
+  termlings agents <cmd>   Browse/install predefined teams and termlings
   termlings message <target> <text>  Send DM
   termlings conversation <target>     Read message history
   termlings request <type> Request decision/env var from operator
   termlings task <cmd>     Task management
-  termlings email <cmd>    Email wrapper (Himalaya)
   termlings calendar <cmd> Calendar management
   termlings brand <cmd>    Brand profiles (colors/logo/voice/domain/email)
 
@@ -154,7 +222,7 @@ Server:
   --cors-origin <origin>    Allow browser origin (repeat via CSV)
 
 Scheduler:
-  termlings scheduler      Run calendar scheduler
+  termlings scheduler      Run scheduled work checks (calendar/tasks)
   termlings scheduler --daemon  Run as background daemon
 
 Avatar & Creation:
@@ -164,61 +232,41 @@ Avatar & Creation:
 
 Spawn:
   termlings spawn                      Interactive spawn picker (run in another terminal)
-  termlings spawn --all                Spawn all agents (requires tmux)
-  termlings spawn --all --detached     Spawn all agents without attaching tmux
+  termlings spawn --all                Spawn all agents
   termlings spawn --agent=<slug> ...   Spawn one agent
   termlings spawn ... --inline         Run one agent in current terminal
 
 Upgrade:
   npm install -g termlings@latest
   bun add -g termlings@latest
-
-Sim (optional):
-  termlings --sim                     Start sim runtime
-  termlings sim                       Start sim runtime
-  termlings sim walk <x>,<y>
-  termlings sim gesture [wave|talk]
-  termlings sim map [--agents|--ascii]
-  termlings sim --help                Show sim command details
 `);
       process.exit(0);
     }
 
     if (!positional[0]) {
-      const allowedTopLevelFlags = new Set(["help", "h", "server", "sim", "inside-tmux", "auto-spawn"]);
+      const allowedTopLevelFlags = new Set(["help", "h", "server", "spawn"]);
       const unsupportedFlags = Array.from(flags).filter((flag) => !allowedTopLevelFlags.has(flag));
       if (unsupportedFlags.length > 0) {
         console.error(`Unknown option(s): ${unsupportedFlags.map((flag) => `--${flag}`).join(", ")}`);
         console.error("Run: termlings --help");
         process.exit(1);
       }
-      const autoSpawn = flags.has("auto-spawn");
-      let autoSpawnEnabled = autoSpawn;
-      if (autoSpawn) {
-        const { isTmuxAvailable } = await import("./engine/tmux.js");
-        if (!isTmuxAvailable()) {
-          autoSpawnEnabled = false;
-          console.log("tmux not found. Starting workspace UI without auto-spawn.");
-          console.log("Start agents manually in another terminal: `termlings spawn`");
-          console.log("Optional scheduler daemon in another terminal: `termlings scheduler --daemon`");
-          console.log(`Install tmux for one-step auto-spawn. ${tmuxInstallHint()}`);
-        }
-      }
+      const spawnStartup = flags.has("spawn");
 
       // Show init banner if no workspace exists yet
       const { existsSync } = await import("fs");
       const { join } = await import("path");
       if (!existsSync(join(process.cwd(), ".termlings"))) {
         const { handleInit } = await import("./commands/init.js");
-        const initExit = await handleInit(new Set(), ["init"], {}, { exitOnComplete: !autoSpawn });
-        if (!autoSpawn) {
+        const initExit = await handleInit(new Set(), ["init"], {}, { exitOnComplete: !spawnStartup });
+        if (!spawnStartup) {
           process.exit(0);
         }
         if (typeof initExit === "number" && initExit !== 0) {
           process.exit(initExit);
         }
         if (!existsSync(join(process.cwd(), ".termlings"))) {
-          console.error("Workspace setup was not completed; auto-spawn cancelled.");
+          console.error("Workspace setup was not completed; --spawn startup cancelled.");
           process.exit(1);
         }
       }
@@ -227,8 +275,8 @@ Sim (optional):
       let agents = discoverLocalAgents();
       if (agents.length === 0) {
         const { handleInit } = await import("./commands/init.js");
-        const initExit = await handleInit(new Set(["force"]), ["init"], {}, { exitOnComplete: !autoSpawn });
-        if (!autoSpawn) {
+        const initExit = await handleInit(new Set(["force"]), ["init"], {}, { exitOnComplete: !spawnStartup });
+        if (!spawnStartup) {
           process.exit(0);
         }
         if (typeof initExit === "number" && initExit !== 0) {
@@ -237,31 +285,44 @@ Sim (optional):
         agents = discoverLocalAgents();
       }
 
-      if (autoSpawnEnabled) {
+      if (spawnStartup) {
         if (agents.length === 0) {
           console.error("No agents found in .termlings/agents after setup.");
-          console.error("Add at least one agent, then run `termlings --auto-spawn` again.");
+          console.error("Add at least one agent, then run `termlings --spawn` again.");
           process.exit(1);
         }
-        const { attachControlSession, openSchedulerWindow, projectTmuxSessionName } = await import("./engine/tmux.js");
-        const { handleSpawn } = await import("./commands/spawn.js");
-        await handleSpawn(new Set(["all", "detached", "quiet"]), ["spawn"], {});
         const root = process.cwd();
-        const sessionName = projectTmuxSessionName(root);
-        const scheduler = openSchedulerWindow(sessionName, root);
-        if (!scheduler.ok) {
-          console.error(`Warning: failed to start scheduler daemon: ${scheduler.error || "unknown error"}`);
-          console.error("Run `termlings scheduler --daemon` manually in another terminal if needed.");
+        await ensureSchedulerDaemon(root);
+        const { appendWorkspaceMessage } = await import("./workspace/state.js");
+        const startupSpawn = await startSpawnAllInBackground(root);
+        if (startupSpawn.ok) {
+          appendWorkspaceMessage({
+            kind: "system",
+            from: "system",
+            fromName: "Workspace",
+            text: "Spawning agents in background...",
+          }, root);
+        } else {
+          const detail = startupSpawn.logPath
+            ? `${startupSpawn.error || "unknown error"} (log: ${startupSpawn.logPath})`
+            : startupSpawn.error || "unknown error";
+          appendWorkspaceMessage({
+            kind: "system",
+            from: "system",
+            fromName: "Workspace",
+            text: `Background spawn failed: ${detail}`,
+          }, root);
+          console.error(`Warning: failed to start background spawn worker: ${detail}`);
         }
-        const attached = attachControlSession(process.cwd());
-        if (!attached.ok) {
-          console.error(attached.error || "Failed to attach tmux control session.");
-          process.exit(1);
-        }
+
+        process.env.TERMLINGS_SPAWN_DETACHED = "1";
+        await launchWorkspaceTui(root);
         process.exit(0);
       }
 
-      await launchWorkspaceTui(process.cwd());
+      const root = process.cwd();
+      await ensureSchedulerDaemon(root);
+      await launchWorkspaceTui(root);
       process.exit(0);
     }
 
@@ -302,12 +363,6 @@ Sim (optional):
         await launchAgent(runtimeAdapter, agentPassthrough, opts);
       }
       process.exit(0);
-    }
-
-    if (positional[0] === "action") {
-      console.error("`action` commands are sim-specific.")
-      console.error("Run: termlings sim <walk|gesture|map> ...")
-      process.exit(1)
     }
 
     console.error(`Unknown command: ${positional[0] || "(default)"}`);

@@ -7,8 +7,8 @@ Termlings runs in a shared workspace (`.termlings/`) in your project folders whe
 Our vision is to make building and running companies with AI agents feel like a video game, while still producing the best possible websites, apps and services.
 
 Run `termlings` in your project folder to open the TUI and manage your team.  
-Use `termlings --auto-spawn` for a single-terminal startup (opens the control panel inside tmux, starts the scheduler daemon, spawns all agent windows behind it, and tears down that tmux session when the control panel exits), or run `termlings` + `termlings spawn` in separate terminals.
-`--auto-spawn` uses tmux sessions behind the scenes to manage the control panel and agent terminals.
+`termlings` auto-starts the scheduler daemon, then opens the workspace UI.
+Use `termlings --spawn` for a single-terminal startup (opens the workspace UI immediately, while scheduler + agent spawning run in background), or run `termlings` + `termlings spawn` in separate terminals.
 Browser defaults are optimized for human-in-the-loop operations (headed + workspace profile + shared tabs).
 For scraping/CI workloads, run headless with `termlings browser start --headless` (still CDP-controlled, just no visible window).
 
@@ -27,10 +27,12 @@ Every agent gets access to these tools (via termlings CLI):
 ## Install
 
 ```bash
-npm install -g termlings@latest
-# or
 bun add -g termlings@latest
+# optional if Bun is already installed:
+npm install -g termlings@latest
 ```
+
+Runtime requirement: Bun must be installed because the `termlings` executable runs via Bun.
 
 ## Quick Start (Operator)
 
@@ -45,8 +47,8 @@ termlings init --template default
 termlings init --template executeive-team
 termlings init --template personal-assistant
 
-# 2A) One-terminal startup (requires tmux)
-termlings --auto-spawn
+# 2A) One-terminal startup
+termlings --spawn
 
 # 2B) Or: keep workspace and spawning separate
 termlings
@@ -64,12 +66,12 @@ Termlings adds an agent coordination layer in `.termlings/` on top of your exist
    - `default` sets workspace-wide runtime/preset
    - `agents.<slug>` can override runtime/preset per agent
    - `runtimes` defines runtime preset commands
-   - `termlings --auto-spawn` batch-spawns all agents, then opens the control panel as the front tmux window in the same session
+   - `termlings` auto-starts the scheduler daemon before opening the workspace UI
+   - `termlings --spawn` opens the workspace UI immediately and starts scheduler + background spawn startup
 2. Termlings injects workspace + role context into the runtime session.
 3. The runtime starts with that context:
    - Claude Code (`termlings claude`) via `--append-system-prompt "<termlings context>"`
    - Codex CLI (`termlings codex`) via `-i "<termlings context>"`
-   - Pi (`termlings pi`) via `--append-system-prompt "<termlings context>"`
 4. Agents coordinate through `termlings` commands (`message`, `task`, `calendar`, `request`, etc.), while shared state in `.termlings/store/*` keeps TUI + CLI in sync across terminals.
 
 Each Termling agent gets role-specific context derived from its `SOUL.md` plus shared workspace context.
@@ -85,15 +87,16 @@ The built-in terminal UI is like an AI-native Slack: chat with your agents, trac
 
 | Command | What it does | Docs |
 | --- | --- | --- |
-| `termlings` | Start the workspace TUI | [docs/INIT.md](docs/INIT.md) |
-| `termlings --auto-spawn` | Open tmux control panel + scheduler daemon + spawn all agents | [docs/INIT.md](docs/INIT.md) |
-| `termlings spawn` | Pick an agent + launch preset | [docs/SOUL.md](docs/SOUL.md) |
-| `termlings create` | Create a new agent in .termlings/agents | [docs/SOUL.md](docs/SOUL.md) |
+| `termlings` | Start workspace UI + auto-start scheduler daemon | [docs/INIT.md](docs/INIT.md) |
+| `termlings --spawn` | Open workspace UI immediately + start scheduler daemon + background spawn startup | [docs/INIT.md](docs/INIT.md) |
+| `termlings spawn` | Pick an agent + launch preset | [docs/AGENTS.md](docs/AGENTS.md) |
+| `termlings create` | Create a new agent in .termlings/agents | [docs/AGENTS.md](docs/AGENTS.md) |
+| `termlings agents <cmd>` | Browse/install predefined teams and agent presets | [docs/AGENTS.md](docs/AGENTS.md) |
 | `termlings init` | Initialize `.termlings/` in current project | [docs/INIT.md](docs/INIT.md) |
 | `termlings avatar <dna|name>` | Render avatar identity | [docs/AVATARS.md](docs/AVATARS.md) |
 | `termlings --help` | Full command reference | CLI help |
 | `termlings --server` | Run secure HTTP API server [WIP] | [docs/SERVER.md](docs/SERVER.md) |
-| `termlings scheduler --deamon` | Run cron jobs for calendear | [docs/SCHEDULER.md](docs/SCHEDULER.md) |
+| `termlings scheduler --daemon` | Run scheduler daemon (calendar/tasks) | [docs/SCHEDULER.md](docs/SCHEDULER.md) |
 
 ### Agent-facing commands
 These are primarily for agents running inside sessions. You can run them manually when needed.
@@ -101,16 +104,15 @@ You should not run these commands since they mostly work inside a agent session.
 
 | Command | What it does | Docs |
 | --- | --- | --- |
-| `termlings brief` | Session startup snapshot | [docs/SOUL.md](docs/SOUL.md) |
-| `termlings org-chart` | Show org + online status | [docs/SOUL.md](docs/SOUL.md) |
-| `termlings skills <cmd>` | List/install/update agent skills (skills.sh wrapper) | [docs/SOUL.md](docs/SOUL.md) |
+| `termlings brief` | Session startup snapshot | [docs/BRIEF.md](docs/BRIEF.md) |
+| `termlings org-chart` | Show org + online status | [docs/ORG-CHART.md](docs/ORG-CHART.md) |
+| `termlings skills <cmd>` | List/install/update agent skills (skills.sh wrapper) | [docs/SKILLS.md](docs/SKILLS.md) |
 | `termlings brand <cmd>` | Manage brand profiles | [docs/BRAND.md](docs/BRAND.md) |
 | `termlings message <target> <text>` | Send DM to session/agent/human | [docs/MESSAGING.md](docs/MESSAGING.md) |
 | `termlings conversation <target>` | Read recent channel/DM history | [docs/MESSAGING.md](docs/MESSAGING.md) |
 | `termlings task <cmd>` | Task workflow commands | [docs/TASK.md](docs/TASK.md) |
-| `termlings email <cmd>` | Email workflow wrapper (Himalaya) | [docs/EMAIL.md](docs/EMAIL.md) |
 | `termlings calendar <cmd>` | Calendar/event workflow | [docs/CALENDAR.md](docs/CALENDAR.md) |
-| `termlings request <type>` | Ask operator for decisions/credentials | [docs/HUMANS.md](docs/HUMANS.md) |
+| `termlings request <type>` | Ask operator for decisions/credentials | [docs/REQUESTS.md](docs/REQUESTS.md) |
 | `termlings browser <cmd>` | Browser automation commands | [docs/browser.md](docs/browser.md) |
 
 ## `.termlings` Structure
@@ -119,7 +121,6 @@ You should not run these commands since they mostly work inside a agent session.
 .termlings/
   VISION.md
   .env
-  emails.json
   sessions/
     tl-*.json
   agents/
@@ -139,7 +140,7 @@ You should not run these commands since they mostly work inside a agent session.
       tl-*.typing.json
     tasks/tasks.json
     calendar/calendar.json
-    requests/requests.jsonl
+    requests/*.json
   browser/
     config.json
     process.json
@@ -153,7 +154,6 @@ What each file/folder is for:
 
 - `.termlings/VISION.md` - simple project vision injected into every agent context.
 - `.termlings/.env` - Termlings-internal environment values resolved from scoped requests.
-- `.termlings/emails.json` - email account mapping for `termlings email`.
 - `.termlings/sessions/tl-*.json` - live session presence and metadata.
 - `.termlings/agents/<slug>/SOUL.md` - saved agent identity, title, role, DNA, and optional `sort_order` for TUI ordering.
 - `.termlings/brand/brand.json` - default brand profile.
@@ -162,7 +162,7 @@ What each file/folder is for:
 - `.termlings/store/presence/` - session typing/activity state.
 - `.termlings/store/tasks/tasks.json` - task list and task state.
 - `.termlings/store/calendar/calendar.json` - events and recurrence.
-- `.termlings/store/requests/requests.jsonl` - operator request log.
+- `.termlings/store/requests/*.json` - operator request records.
 - `.termlings/browser/config.json` - browser runtime settings (CDP port, binary, profile path).
 - `.termlings/browser/process.json` - active browser process/CDP state.
 - `.termlings/browser/profile.json` - workspace profile metadata.
@@ -180,14 +180,17 @@ This is intentionally separated so operator docs stay short.
 ## Documentation Index
 
 - [docs/TERMLINGS.md](docs/TERMLINGS.md) - termling identity and concepts
-- [docs/SOUL.md](docs/SOUL.md) - SOUL frontmatter and identity conventions
+- [docs/AGENTS.md](docs/AGENTS.md) - SOUL frontmatter and identity conventions
+- [docs/AGENTS.md](docs/AGENTS.md) - preset catalog and install flows
 - [docs/INIT.md](docs/INIT.md) - workspace initialization
+- [docs/ORG-CHART.md](docs/ORG-CHART.md) - team hierarchy and reporting lines
+- [docs/BRIEF.md](docs/BRIEF.md) - full workspace startup snapshot
 - [docs/TEMPLATES.md](docs/TEMPLATES.md) - local and git template references
 - [docs/MESSAGING.md](docs/MESSAGING.md) - messaging model
 - [docs/SKILLS.md](docs/SKILLS.md) - skills.sh wrapper behavior and agent workflow
 - [docs/TASK.md](docs/TASK.md) - task system
-- [docs/EMAIL.md](docs/EMAIL.md) - email wrapper and account mapping
 - [docs/CALENDAR.md](docs/CALENDAR.md) - calendar system
+- [docs/REQUESTS.md](docs/REQUESTS.md) - operator request workflow
 - [docs/SCHEDULER.md](docs/SCHEDULER.md) - scheduler daemon
 - [docs/BRAND.md](docs/BRAND.md) - brand schema and commands
 - [docs/browser.md](docs/browser.md) - browser automation
@@ -195,13 +198,6 @@ This is intentionally separated so operator docs stay short.
 - [docs/SERVER.md](docs/SERVER.md) - `termlings --server` design and security plan
 - [docs/AVATARS.md](docs/AVATARS.md) - avatar rendering
 - [docs/PRESENCE.md](docs/PRESENCE.md) - presence + typing model
-- [docs/HOOKS.md](docs/HOOKS.md) - legacy hook cleanup notes
-
-## SIM (WIP Experiment)
-
-SIM is an experimental runtime and not part of the default operator workflow.
-
-- [docs/SIM.md](docs/SIM.md)
 
 ## License
 

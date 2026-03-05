@@ -28,10 +28,9 @@ Context injection is implemented in `src/agents/launcher.ts` and adapter files u
 
 ### 1) Load base context
 
-`loadContext(profile)` reads:
+`loadContext()` reads:
 
 - `src/termlings-system-message.md` (base)
-- `src/sim/termlings-system-message-sim.md` (only when SIM profile is active)
 - `.termlings/VISION.md` (appended when present, wrapped in `<TERMLINGS-VISION>` tags)
 
 ### 2) Apply runtime substitutions
@@ -118,18 +117,30 @@ Workspace state is file-backed under `.termlings/`:
 ```text
 .termlings/
   sessions/*.json
-  store/messages.jsonl
+  store/messages/
+    channels/*.jsonl
+    dms/*.jsonl
+    system.jsonl
+    index.json
   store/tasks/tasks.json
   store/calendar/calendar.json
-  store/requests/requests.jsonl
+  store/requests/*.json
   agents/<slug>/SOUL.md
 ```
 
 Runtime behavior:
 
-- messaging appends to `store/messages.jsonl`
+- messaging appends to `store/messages/*`
 - task/calendar commands update JSON stores
 - browser actions log into `.termlings/browser/history/all.jsonl` and `.termlings/browser/history/agent/*.jsonl`
+
+Session metadata may include runtime linkage fields when detected:
+
+- `runtime` (for example `claude`, `codex`)
+- `launcherPid` (termlings launcher process)
+- `runtimePid` (child CLI process)
+- `jsonlFile` (resolved runtime transcript path)
+- `runtimeSessionId` (runtime-native session id when parsable from JSONL)
 
 ## Session End
 
@@ -141,7 +152,7 @@ When an agent process exits:
 
 ## Related Docs
 
-- [SOUL.md](SOUL.md)
+- [AGENTS.md](AGENTS.md)
 - [TERMLINGS.md](TERMLINGS.md)
 - [INIT.md](INIT.md)
 - [PRESENCE.md](PRESENCE.md)

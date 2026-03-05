@@ -12,8 +12,9 @@ This creates `.termlings/` directory with all necessary files and folders.
 
 ## Prerequisites
 
-Before running `termlings init`, have at least one coding runtime installed and logged in:
+Before running `termlings init`, install Bun and have at least one coding runtime installed + logged in:
 
+- Bun runtime (`bun`) - required to execute the `termlings` CLI
 - Claude Code CLI (`claude`)
 - Codex CLI (`codex`)
 
@@ -23,12 +24,15 @@ Before running `termlings init`, have at least one coding runtime installed and 
 
 After init, you have two launch patterns:
 
-### Single terminal (auto-spawn all, requires tmux)
+`termlings` now auto-starts the scheduler daemon before opening the workspace UI.
+
+### Single terminal (spawn all)
 ```bash
-termlings --auto-spawn
+termlings --spawn
 ```
 
-This starts the control panel inside tmux and spawns all agent windows in the same tmux session. When the control panel exits, that tmux session is torn down.
+This starts all agents + scheduler in background and opens the workspace UI in the current terminal.
+The TUI opens immediately; agent spawning continues in the background.
 
 ### Two terminals (manual spawn flow)
 ```bash
@@ -79,7 +83,7 @@ You'll be prompted to:
    - Ignore all
    - Ignore messages (recommended)
    - No ignore
-5. Pick default model runtime (Claude/Codex/Pi)
+5. Pick default model runtime (Claude/Codex)
 
 ### Force re-run
 ```bash
@@ -209,4 +213,4 @@ After initialization, you can customize:
 ## Related
 
 - [CREATE.md](CREATE.md) - Creating agents
-- [CLAUDE.md](CLAUDE.md) - Getting started with Claude
+- [TERMLINGS.md](TERMLINGS.md) - Launching and operating agent sessions

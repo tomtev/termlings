@@ -20,6 +20,11 @@ export interface WorkspaceSession {
   dna: string
   joinedAt: number
   lastSeenAt: number
+  runtime?: string
+  launcherPid?: number
+  runtimePid?: number
+  jsonlFile?: string
+  runtimeSessionId?: string
 }
 
 export interface WorkspaceMessage {
@@ -253,7 +258,34 @@ function normalizeSession(raw: any, fallbackSessionId: string): WorkspaceSession
   const now = Date.now()
   const joinedAt = typeof raw.joinedAt === "number" ? raw.joinedAt : now
   const lastSeenAt = typeof raw.lastSeenAt === "number" ? raw.lastSeenAt : now
-  return { sessionId, name, dna, joinedAt, lastSeenAt }
+  const runtime = typeof raw.runtime === "string" && raw.runtime.trim().length > 0 ? raw.runtime.trim() : undefined
+  const launcherPid =
+    typeof raw.launcherPid === "number" && Number.isFinite(raw.launcherPid) && raw.launcherPid > 0
+      ? raw.launcherPid
+      : undefined
+  const runtimePid =
+    typeof raw.runtimePid === "number" && Number.isFinite(raw.runtimePid) && raw.runtimePid > 0
+      ? raw.runtimePid
+      : undefined
+  const jsonlFile =
+    typeof raw.jsonlFile === "string" && raw.jsonlFile.trim().length > 0 ? raw.jsonlFile.trim() : undefined
+  const runtimeSessionId =
+    typeof raw.runtimeSessionId === "string" && raw.runtimeSessionId.trim().length > 0
+      ? raw.runtimeSessionId.trim()
+      : undefined
+
+  return {
+    sessionId,
+    name,
+    dna,
+    joinedAt,
+    lastSeenAt,
+    runtime,
+    launcherPid,
+    runtimePid,
+    jsonlFile,
+    runtimeSessionId,
+  }
 }
 
 export function ensureWorkspaceDirs(root = process.cwd()): void {
@@ -306,7 +338,17 @@ export function clearWorkspaceRuntime(root = process.cwd()): void {
 
 export function upsertSession(
   sessionId: string,
-  data: { name: string; dna: string; joinedAt?: number; lastSeenAt?: number },
+  data: {
+    name: string
+    dna: string
+    joinedAt?: number
+    lastSeenAt?: number
+    runtime?: string
+    launcherPid?: number
+    runtimePid?: number
+    jsonlFile?: string
+    runtimeSessionId?: string
+  },
   root = process.cwd(),
 ): WorkspaceSession {
   ensureWorkspaceDirs(root)
@@ -320,12 +362,37 @@ export function upsertSession(
     existing = null
   }
 
+  const runtime = typeof data.runtime === "string" && data.runtime.trim().length > 0
+    ? data.runtime.trim()
+    : existing?.runtime
+  const launcherPid = typeof data.launcherPid === "number"
+    && Number.isFinite(data.launcherPid)
+    && data.launcherPid > 0
+    ? data.launcherPid
+    : existing?.launcherPid
+  const runtimePid = typeof data.runtimePid === "number"
+    && Number.isFinite(data.runtimePid)
+    && data.runtimePid > 0
+    ? data.runtimePid
+    : existing?.runtimePid
+  const jsonlFile = typeof data.jsonlFile === "string" && data.jsonlFile.trim().length > 0
+    ? data.jsonlFile.trim()
+    : existing?.jsonlFile
+  const runtimeSessionId = typeof data.runtimeSessionId === "string" && data.runtimeSessionId.trim().length > 0
+    ? data.runtimeSessionId.trim()
+    : existing?.runtimeSessionId
+
   const session: WorkspaceSession = {
     sessionId,
     name: data.name,
     dna: data.dna,
     joinedAt: existing?.joinedAt ?? data.joinedAt ?? now,
     lastSeenAt: data.lastSeenAt ?? now,
+    runtime: runtime || undefined,
+    launcherPid,
+    runtimePid,
+    jsonlFile,
+    runtimeSessionId,
   }
 
   writeFileSync(path, JSON.stringify(session, null, 2) + "\n")

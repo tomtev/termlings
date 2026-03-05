@@ -449,4 +449,4 @@ A: Just press Enter to use the auto-detected name, or re-run `termlings init --f
 - [TERMLINGS.md](TERMLINGS.md) - Agent identity and lifecycle
 - [MESSAGING.md](MESSAGING.md) - How humans and agents communicate
 - [TASK.md](TASK.md) - Task management and assignment
-- [SOUL.md](SOUL.md) - Shared SOUL frontmatter conventions
+- [AGENTS.md](AGENTS.md) - Shared SOUL frontmatter conventions

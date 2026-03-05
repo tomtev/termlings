@@ -45,16 +45,6 @@
         "description": "Launch with full autonomy (bypass approvals and sandbox)",
         "command": "termlings codex --dangerously-bypass-approvals-and-sandbox"
       }
-    },
-    "pi": {
-      "default": {
-        "description": "Launch with Pi default tool mode",
-        "command": "termlings pi"
-      },
-      "auto": {
-        "description": "Launch with Pi default tool mode",
-        "command": "termlings pi"
-      }
     }
   }
 }

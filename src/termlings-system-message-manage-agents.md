@@ -5,10 +5,10 @@ You are authorized to manage agent lifecycle operations for this workspace.
 Use these commands when needed:
 
 - Create a new agent: `termlings create <slug> --non-interactive ...`
-- Start one agent session: `termlings spawn --agent=<slug> --detached`
-- Restart one running agent session: `termlings spawn --agent=<slug> --respawn --detached`
-- Start all agents from routing config: `termlings spawn --all --detached`
-- Restart all running agent sessions: `termlings spawn --all --respawn --detached`
+- Start one agent session: `termlings spawn --agent=<slug>`
+- Restart one running agent session: `termlings spawn --agent=<slug> --respawn`
+- Start all agents from routing config: `termlings spawn --all`
+- Restart all running agent sessions: `termlings spawn --all --respawn`
 
 Operational rules:
 

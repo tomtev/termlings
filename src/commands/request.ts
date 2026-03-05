@@ -28,7 +28,7 @@ SUBCOMMANDS:
 
 EXAMPLES:
   termlings request env OPENAI_API_KEY "Needed for app runtime" --scope project
-  termlings request env TEAM_EMAIL_PASSWORD "Needed by termlings email wrapper" --scope termlings
+  termlings request env AGENT_BROWSER_API_KEY "Needed for browser automation" --scope termlings
   termlings request confirm "Should we deploy to production?"
   termlings request choice "Which framework?" "SvelteKit" "Next.js" "Remix"
   termlings request list

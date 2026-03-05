@@ -15,11 +15,9 @@ import { handleRequest } from "./request.js";
 import { handleOrgChart } from "./org-chart.js";
 import { handleBrief } from "./brief.js";
 import { handleBrand } from "./brand.js";
-import { handleEmail } from "./email.js";
 import { handleConversation } from "./conversation.js";
 import { handleSkills } from "./skills.js";
-import { handlePeek } from "./peek.js";
-import { handleControl } from "./control.js";
+import { handleAgents } from "./agents.js";
 
 export async function routeCommand(
   positional: string[],
@@ -61,10 +59,6 @@ export async function routeCommand(
       await handleBrand(flags, positional, opts);
       return true;
 
-    case "email":
-      await handleEmail(flags, positional, opts);
-      return true;
-
     case "skills":
       await handleSkills(flags, positional);
       return true;
@@ -85,20 +79,16 @@ export async function routeCommand(
       await handleCreate(flags, positional, opts);
       return true;
 
+    case "agents":
+      await handleAgents(flags, positional, opts);
+      return true;
+
     case "avatar":
       await handleAvatar(flags, positional, opts);
       return true;
 
     case "spawn":
       await handleSpawn(flags, positional, opts);
-      return true;
-
-    case "peek":
-      await handlePeek(flags, positional);
-      return true;
-
-    case "control":
-      await handleControl(flags, positional);
       return true;
 
     case "request":

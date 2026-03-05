@@ -9,39 +9,6 @@ function hasCommand(bin: string, args: string[] = ["--version"]): boolean {
   return (proc.status ?? 1) === 0;
 }
 
-function runTmuxQuiet(args: string[]): { ok: boolean; stdout: string } {
-  const proc = spawnSync("tmux", args, {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "ignore"],
-  });
-  return {
-    ok: (proc.status ?? 1) === 0,
-    stdout: typeof proc.stdout === "string" ? proc.stdout.trim() : "",
-  };
-}
-
-function currentTmuxSessionName(): string | null {
-  if (!process.env.TMUX) return null;
-  const fromEnv = (process.env.TERMLINGS_TMUX_SESSION || "").trim();
-  if (fromEnv) return fromEnv;
-  const result = runTmuxQuiet(["display-message", "-p", "#S"]);
-  if (!result.ok || !result.stdout) return null;
-  return result.stdout;
-}
-
-function hideTmuxStatusDuringInit(): (() => void) | null {
-  const sessionName = currentTmuxSessionName();
-  if (!sessionName) return null;
-
-  const previous = runTmuxQuiet(["show-options", "-v", "-t", sessionName, "status"]);
-  runTmuxQuiet(["set-option", "-t", sessionName, "status", "off"]);
-
-  return () => {
-    const restoreValue = previous.ok && previous.stdout ? previous.stdout : "on";
-    runTmuxQuiet(["set-option", "-t", sessionName, "status", restoreValue]);
-  };
-}
-
 function detectBunVersion(): string | null {
   const runtimeBun = (process.versions as Record<string, string | undefined>).bun;
   if (runtimeBun && runtimeBun.trim().length > 0) {
@@ -298,7 +265,7 @@ EXAMPLES:
 NEXT STEPS:
   1. termlings             Start the workspace UI
   2. termlings spawn       Launch agents (run in another terminal)
-  3. termlings spawn --all Spawn all agents (requires tmux)
+  3. termlings spawn --all Spawn all agents (background sessions)
   4. termlings org-chart   See team hierarchy
 `);
     if (!exitOnComplete) return 0;
@@ -319,7 +286,6 @@ NEXT STEPS:
 
   // Show logo banner before init prompts
   const { printSetupWizardBanner, printPostInitBanner, printPostInitTeamWave } = await import("../banner.js");
-  const restoreTmuxStatus = hideTmuxStatusDuringInit();
   let exitCode = 0;
   try {
     printSetupWizardBanner(forceSetup);
@@ -356,10 +322,6 @@ NEXT STEPS:
     const message = error instanceof Error ? error.message : String(error);
     console.error(message);
     exitCode = 1;
-  } finally {
-    try {
-      restoreTmuxStatus?.();
-    } catch {}
   }
   if (!exitOnComplete) return exitCode;
   process.exit(exitCode);

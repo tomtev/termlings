@@ -162,5 +162,4 @@ export async function runCreate(options: CreateOptions = {}): Promise<void> {
   console.log(`  SOUL.md (name: ${agentName})`);
   console.log(`  avatar.svg (dna: ${dna})`);
   console.log(`\nLaunch with: termlings ${slug}`);
-  console.log(`Or auto-confirm (dangerous): termlings ${slug} --dangerous-skip-confirmation`);
 }

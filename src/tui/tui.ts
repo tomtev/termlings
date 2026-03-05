@@ -2,11 +2,12 @@ import { discoverLocalAgents } from "../agents/discover.js"
 import { existsSync, readFileSync, statSync } from "fs"
 import { getAllCalendarEvents, type CalendarEvent, type CalendarRecurrence } from "../engine/calendar.js"
 import { writeMessages } from "../engine/ipc.js"
+import { stopManagedRuntimeProcesses } from "../engine/runtime-processes.js"
 import { getAllTasks, type Task, type TaskPriority, type TaskStatus } from "../engine/tasks.js"
 import { listRequests, resolveRequest, dismissRequest, type AgentRequest } from "../engine/requests.js"
 import { decodeDNA, getTraitColors, renderTerminal, renderTerminalSmall, renderTermlingsLogo } from "../index.js"
 import { basename, join } from "path"
-import { execSync, spawnSync } from "child_process"
+import { execSync } from "child_process"
 import {
   appendWorkspaceMessage,
   ensureWorkspaceDirs,
@@ -95,7 +96,6 @@ const DRAFT_BLOCK_TOKEN_PATTERN = /(?:\[Image #\d+\]|\[Pasted Content(?: #\d+)? 
 const DRAFT_BLOCK_TOKEN_GLOBAL = /\[Image #\d+\]|\[Pasted Content(?: #\d+)? \d+ chars\]/g
 const FG_RUNTIME_CLAUDE = "\x1b[38;2;217;119;87m"
 const FG_RUNTIME_CODEX = "\x1b[38;2;148;163;184m"
-const FG_RUNTIME_PI = "\x1b[38;5;114m"
 const BROWSER_ACTIVITY_MAX_MESSAGES = 200
 const BROWSER_ACTIVITY_CACHE_MULTIPLIER = 3
 
@@ -189,10 +189,16 @@ class WorkspaceTui {
   private messageScrollMax = 0
   private taskScrollOffset = 0
   private taskScrollMax = 0
+  private taskSelectionIndex = 0
+  private taskSelectedId = ""
+  private taskExpandedId = ""
   private taskFilterIndex = 0
   private calendarScrollOffset = 0
   private calendarScrollMax = 0
   private calendarFilterIndex = 0
+  private calendarSelectionIndex = 0
+  private calendarSelectedId = ""
+  private calendarExpandedId = ""
 
   private inputFocused = true
 
@@ -211,8 +217,6 @@ class WorkspaceTui {
   private avatarTotalAgentCount = 0
   private renderScheduled = false
   private lastRenderTime = 0
-  private lastTmuxStatusLeft = ""
-  private lastTmuxStatusRight = ""
 
   private calendarSchedulerRunning = false
   private calendarSchedulerCheckedAt = 0
@@ -349,98 +353,6 @@ class WorkspaceTui {
     } catch {}
   }
 
-  private isControlPanelSession(): boolean {
-    const raw = (process.env.TERMLINGS_CONTROL_PANEL || "").trim().toLowerCase()
-    return raw === "1" || raw === "true" || raw === "yes" || raw === "on"
-  }
-
-  private isInsideTmuxSession(): boolean {
-    return Boolean((process.env.TMUX || "").trim())
-  }
-
-  private tmuxSessionName(): string {
-    return (process.env.TERMLINGS_TMUX_SESSION || "").trim()
-  }
-
-  private currentViewLabel(): string {
-    if (this.view === "messages") return "Chat"
-    if (this.view === "requests") return "Requests"
-    if (this.view === "tasks") return "Tasks"
-    if (this.view === "calendar") return "Calendar"
-    if (this.view === "settings") return "Settings"
-    return "Workspace"
-  }
-
-  private renderTmuxStatusLeft(): string {
-    const project = basename(this.root || process.cwd()) || "workspace"
-    const parts = [project, this.currentViewLabel()]
-    if (this.view === "messages") {
-      parts.push(this.threadLabel(this.selectedThreadId))
-    }
-    return parts.join(" / ")
-  }
-
-  private renderTmuxStatusRight(): string {
-    if (this.view === "messages") {
-      return `${this.messageScrollOffset}/${this.messageScrollMax} ↑/↓`
-    }
-
-    if (this.view === "requests") {
-      return "↑/↓ select | Enter respond"
-    }
-
-    if (this.view === "settings") {
-      return "↑/↓ select | Enter toggle"
-    }
-
-    if (this.view === "tasks") {
-      return `${this.taskScrollOffset}/${this.taskScrollMax} ↑/↓`
-    }
-
-    if (this.view === "calendar") {
-      return `${this.calendarScrollOffset}/${this.calendarScrollMax} ↑/↓`
-    }
-
-    return ""
-  }
-
-  private syncTmuxStatusBar(): void {
-    if (!this.isInsideTmuxSession()) return
-    const sessionName = this.tmuxSessionName()
-    if (!sessionName) return
-
-    const left = this.renderTmuxStatusLeft()
-    const right = this.renderTmuxStatusRight()
-
-    if (left !== this.lastTmuxStatusLeft) {
-      this.lastTmuxStatusLeft = left
-      try {
-        spawnSync("tmux", ["set-option", "-t", sessionName, "@termlings_control_left", ` #[fg=colour141,bold]${left}#[default] `], {
-          stdio: "ignore",
-        })
-      } catch {}
-    }
-
-    if (right !== this.lastTmuxStatusRight) {
-      this.lastTmuxStatusRight = right
-      try {
-        spawnSync("tmux", ["set-option", "-t", sessionName, "@termlings_control_right", `#[fg=colour245]${right}#[default] `], {
-          stdio: "ignore",
-        })
-      } catch {}
-    }
-  }
-
-  private teardownControlTmuxSession(): void {
-    if (!this.isControlPanelSession()) return
-    const sessionName = (process.env.TERMLINGS_TMUX_SESSION || "").trim()
-    if (!sessionName) return
-
-    try {
-      spawnSync("tmux", ["kill-session", "-t", sessionName], { stdio: "ignore" })
-    } catch {}
-  }
-
   private stop(code: number): never {
     if (!this.running) {
       process.exit(code)
@@ -472,8 +384,13 @@ class WorkspaceTui {
       removeSession(this.identity.sessionId, this.root)
     }
 
+    if ((process.env.TERMLINGS_SPAWN_DETACHED || "").trim() === "1") {
+      try {
+        stopManagedRuntimeProcesses(this.root)
+      } catch {}
+    }
+
     this.leaveScreen()
-    this.teardownControlTmuxSession()
     process.exit(code)
   }
 
@@ -629,13 +546,13 @@ class WorkspaceTui {
       }
 
       if (this.view === "tasks") {
-        this.scrollTasks(isArrowUp ? -MESSAGE_SCROLL_STEP : MESSAGE_SCROLL_STEP)
+        this.moveTaskSelection(isArrowUp ? -1 : 1)
         this.render()
         return
       }
 
       if (this.view === "calendar") {
-        this.scrollCalendar(isArrowUp ? -MESSAGE_SCROLL_STEP : MESSAGE_SCROLL_STEP)
+        this.moveCalendarSelection(isArrowUp ? -1 : 1)
         this.render()
         return
       }
@@ -673,14 +590,14 @@ class WorkspaceTui {
 
     if (normalizedInput === "\u001b[5~" && this.view === "tasks") {
       const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
-      this.scrollTasks(-page)
+      this.moveTaskSelection(-page)
       this.render()
       return
     }
 
     if (normalizedInput === "\u001b[5~" && this.view === "calendar") {
       const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
-      this.scrollCalendar(-page)
+      this.moveCalendarSelection(-page)
       this.render()
       return
     }
@@ -694,14 +611,14 @@ class WorkspaceTui {
 
     if (normalizedInput === "\u001b[6~" && this.view === "tasks") {
       const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
-      this.scrollTasks(page)
+      this.moveTaskSelection(page)
       this.render()
       return
     }
 
     if (normalizedInput === "\u001b[6~" && this.view === "calendar") {
       const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
-      this.scrollCalendar(page)
+      this.moveCalendarSelection(page)
       this.render()
       return
     }
@@ -726,6 +643,18 @@ class WorkspaceTui {
           this.acceptMention(selected, mentionState.atIndex)
         }
         this.syncMentionSelection()
+        this.render()
+        return
+      }
+
+      if (this.view === "tasks") {
+        this.toggleTaskExpandedSelection()
+        this.render()
+        return
+      }
+
+      if (this.view === "calendar") {
+        this.toggleCalendarExpandedSelection()
         this.render()
         return
       }
@@ -769,7 +698,11 @@ class WorkspaceTui {
       }
 
       if (ch === "\r" || ch === "\n") {
-        if (this.view === "requests") {
+        if (this.view === "tasks") {
+          this.toggleTaskExpandedSelection()
+        } else if (this.view === "calendar") {
+          this.toggleCalendarExpandedSelection()
+        } else if (this.view === "requests") {
           await this.handleRequestAction()
         } else if (this.view === "settings") {
           this.activateSelectedSetting()
@@ -807,12 +740,12 @@ class WorkspaceTui {
         }
 
         if (lower === "b" && this.view === "tasks" && this.taskScrollMax > 0) {
-          this.taskScrollOffset = this.taskScrollMax
+          this.jumpTaskSelectionToBottom()
           continue
         }
 
         if (lower === "b" && this.view === "calendar" && this.calendarScrollMax > 0) {
-          this.calendarScrollOffset = this.calendarScrollMax
+          this.jumpCalendarSelectionToBottom()
           continue
         }
 
@@ -1334,14 +1267,12 @@ class WorkspaceTui {
 
   private scrollTasks(delta: number): void {
     if (this.view !== "tasks") return
-    const next = this.taskScrollOffset + delta
-    this.taskScrollOffset = Math.max(0, next)
+    this.moveTaskSelection(delta)
   }
 
   private scrollCalendar(delta: number): void {
     if (this.view !== "calendar") return
-    const next = this.calendarScrollOffset + delta
-    this.calendarScrollOffset = Math.max(0, next)
+    this.moveCalendarSelection(delta)
   }
 
   private parseMouseWheelDirection(input: string): -1 | 1 | null {
@@ -1363,11 +1294,11 @@ class WorkspaceTui {
       return
     }
     if (this.view === "tasks") {
-      this.scrollTasks(direction < 0 ? -step : step)
+      this.moveTaskSelection(direction < 0 ? -1 : 1)
       return
     }
     if (this.view === "calendar") {
-      this.scrollCalendar(direction < 0 ? -step : step)
+      this.moveCalendarSelection(direction < 0 ? -1 : 1)
     }
   }
 
@@ -2405,30 +2336,27 @@ class WorkspaceTui {
     }
   }
 
-  private runtimeKindFromLabel(label?: string): "claude" | "codex" | "pi" | "other" | undefined {
+  private runtimeKindFromLabel(label?: string): "claude" | "codex" | "other" | undefined {
     const normalized = (label || "").trim().toLowerCase()
     if (!normalized) return undefined
     if (normalized.includes("claude")) return "claude"
     if (normalized.includes("codex")) return "codex"
-    if (normalized === "pi" || normalized.startsWith("pi ")) return "pi"
     return "other"
   }
 
   private runtimeLabelForDisplay(
-    runtimeKind: "claude" | "codex" | "pi" | "other" | undefined,
+    runtimeKind: "claude" | "codex" | "other" | undefined,
     rawLabel?: string,
   ): string | undefined {
     if (runtimeKind === "claude") return "Claude"
     if (runtimeKind === "codex") return "Codex"
-    if (runtimeKind === "pi") return "Pi"
     const trimmed = (rawLabel || "").trim()
     return trimmed.length > 0 ? trimmed : undefined
   }
 
-  private runtimeColorChip(runtimeKind?: "claude" | "codex" | "pi" | "other"): string {
+  private runtimeColorChip(runtimeKind?: "claude" | "codex" | "other"): string {
     if (runtimeKind === "claude") return `${FG_RUNTIME_CLAUDE}■${ANSI_RESET}`
     if (runtimeKind === "codex") return `${FG_RUNTIME_CODEX}■${ANSI_RESET}`
-    if (runtimeKind === "pi") return `${FG_RUNTIME_PI}■${ANSI_RESET}`
     return `${FG_META}■${ANSI_RESET}`
   }
 
@@ -2825,7 +2753,7 @@ class WorkspaceTui {
     name: string
     action: "joined" | "left"
     dna?: string
-    runtimeKind?: "claude" | "codex" | "pi" | "other"
+    runtimeKind?: "claude" | "codex" | "other"
     runtimeLabel?: string
   } | null {
     if (message.kind !== "system") return null
@@ -3383,12 +3311,20 @@ class WorkspaceTui {
   }
 
   private taskFilters(): Array<{ id: string; label: string; predicate: (task: Task) => boolean }> {
+    const now = Date.now()
     return [
       { id: "all", label: "All", predicate: () => true },
-      { id: "open", label: "Open", predicate: (task) => task.status === "open" },
-      { id: "claimed", label: "Claimed", predicate: (task) => task.status === "claimed" },
-      { id: "in-progress", label: "In-progress", predicate: (task) => task.status === "in-progress" },
+      { id: "active", label: "Active", predicate: (task) => task.status !== "completed" },
+      { id: "in-progress", label: "In Progress", predicate: (task) => task.status === "in-progress" },
       { id: "blocked", label: "Blocked", predicate: (task) => task.status === "blocked" },
+      { id: "high", label: "High", predicate: (task) => task.priority === "high" },
+      { id: "assigned", label: "Assigned", predicate: (task) => Boolean(task.assignedTo) },
+      { id: "unassigned", label: "Unassigned", predicate: (task) => !task.assignedTo },
+      {
+        id: "overdue",
+        label: "Overdue",
+        predicate: (task) => Boolean(task.dueDate && task.status !== "completed" && task.dueDate < now),
+      },
       { id: "completed", label: "Completed", predicate: (task) => task.status === "completed" },
     ]
   }
@@ -3410,6 +3346,9 @@ class WorkspaceTui {
     const next = this.taskFilterIndex + delta
     this.taskFilterIndex = ((next % filters.length) + filters.length) % filters.length
     this.taskScrollOffset = 0
+    this.taskSelectionIndex = 0
+    this.taskSelectedId = ""
+    this.taskExpandedId = ""
   }
 
   private stepCalendarFilter(delta: number): void {
@@ -3419,17 +3358,230 @@ class WorkspaceTui {
     const next = this.calendarFilterIndex + delta
     this.calendarFilterIndex = ((next % filters.length) + filters.length) % filters.length
     this.calendarScrollOffset = 0
+    this.calendarSelectionIndex = 0
+    this.calendarSelectedId = ""
+    this.calendarExpandedId = ""
   }
 
-  private renderFilterLine(filters: Array<{ label: string }>, selectedIndex: number): string {
-    const separator = `${FG_SUBTLE_HINT} · ${ANSI_RESET}`
-    const chips = filters.map((filter, index) => {
-      if (index === selectedIndex) {
-        return `${FG_SELECTED}[${filter.label}]${ANSI_RESET}`
+  private renderFilterLine(filters: Array<{ label: string }>, selectedIndex: number, width: number): string {
+    const prefix = `${FG_META}Filter:${ANSI_RESET} `
+    if (filters.length === 0) {
+      return `${prefix}${FG_SELECTED}[All]${ANSI_RESET}`
+    }
+
+    const safeSelected = Math.max(0, Math.min(selectedIndex, filters.length - 1))
+    const maxTabsWidth = Math.max(8, width - visibleLength("Filter: "))
+    const separatorPlain = "  "
+    const separatorAnsi = "  "
+    const ellipsis = `${FG_SUBTLE_HINT}…${ANSI_RESET}`
+
+    const renderTab = (index: number): { text: string; plain: string } => {
+      const label = filters[index]?.label || ""
+      if (index === safeSelected) {
+        return { text: `${FG_SELECTED}[${label}]${ANSI_RESET}`, plain: `[${label}]` }
       }
-      return `${FG_META}${filter.label}${ANSI_RESET}`
-    })
-    return `${FG_META}Filter:${ANSI_RESET} ${chips.join(separator)}`
+      return { text: `${FG_META}${label}${ANSI_RESET}`, plain: label }
+    }
+
+    let left = safeSelected
+    let right = safeSelected
+    let preferLeft = true
+
+    const build = (): { text: string; plainLength: number } => {
+      const parts: Array<{ text: string; plain: string }> = []
+      if (left > 0) {
+        parts.push({ text: ellipsis, plain: "…" })
+      }
+      for (let index = left; index <= right; index++) {
+        parts.push(renderTab(index))
+      }
+      if (right < filters.length - 1) {
+        parts.push({ text: ellipsis, plain: "…" })
+      }
+
+      const plainLength = parts.reduce((sum, part) => sum + part.plain.length, 0)
+        + Math.max(0, (parts.length - 1) * separatorPlain.length)
+      return {
+        text: parts.map(part => part.text).join(separatorAnsi),
+        plainLength,
+      }
+    }
+
+    let built = build()
+    while (true) {
+      const canGrowLeft = left > 0
+      const canGrowRight = right < filters.length - 1
+      if (!canGrowLeft && !canGrowRight) break
+
+      const nextLeft = preferLeft && canGrowLeft ? left - 1 : left
+      const nextRight = !preferLeft && canGrowRight ? right + 1 : right
+      let candidateLeft = nextLeft
+      let candidateRight = nextRight
+      if (candidateLeft === left && candidateRight === right) {
+        if (canGrowLeft) candidateLeft = left - 1
+        else if (canGrowRight) candidateRight = right + 1
+      }
+
+      const prevLeft = left
+      const prevRight = right
+      left = candidateLeft
+      right = candidateRight
+      const candidate = build()
+      if (candidate.plainLength > maxTabsWidth) {
+        left = prevLeft
+        right = prevRight
+        break
+      }
+      built = candidate
+      preferLeft = !preferLeft
+    }
+
+    while (built.plainLength > maxTabsWidth && (left < safeSelected || right > safeSelected)) {
+      if ((safeSelected - left) >= (right - safeSelected) && left < safeSelected) {
+        left += 1
+      } else if (right > safeSelected) {
+        right -= 1
+      } else if (left < safeSelected) {
+        left += 1
+      } else {
+        break
+      }
+      built = build()
+    }
+
+    if (built.plainLength > maxTabsWidth) {
+      const current = filters[safeSelected]?.label || "All"
+      const compact = `${FG_SELECTED}[${truncatePlain(current, Math.max(3, maxTabsWidth - 2))}]${ANSI_RESET}`
+      return `${prefix}${compact}`
+    }
+
+    return `${prefix}${built.text}`
+  }
+
+  private taskViewData(): {
+    allTasks: Task[]
+    filters: Array<{ id: string; label: string; predicate: (task: Task) => boolean }>
+    safeFilterIndex: number
+    tasks: Task[]
+  } {
+    const allTasks = [...this.snapshot.tasks].sort((a, b) => b.updatedAt - a.updatedAt)
+    const filters = this.taskFilters()
+    const safeFilterIndex = Math.max(0, Math.min(this.taskFilterIndex, filters.length - 1))
+    this.taskFilterIndex = safeFilterIndex
+    const activeFilter = filters[safeFilterIndex] ?? filters[0]
+    const tasks = activeFilter ? allTasks.filter(activeFilter.predicate) : allTasks
+    return { allTasks, filters, safeFilterIndex, tasks }
+  }
+
+  private syncTaskSelection(tasks: Task[]): number {
+    if (tasks.length === 0) {
+      this.taskSelectionIndex = 0
+      this.taskSelectedId = ""
+      return -1
+    }
+
+    if (this.taskSelectedId) {
+      const byId = tasks.findIndex(task => task.id === this.taskSelectedId)
+      if (byId >= 0) {
+        this.taskSelectionIndex = byId
+        return byId
+      }
+    }
+
+    const clamped = Math.max(0, Math.min(tasks.length - 1, this.taskSelectionIndex))
+    this.taskSelectionIndex = clamped
+    this.taskSelectedId = tasks[clamped]!.id
+    return clamped
+  }
+
+  private moveTaskSelection(delta: number): void {
+    if (this.view !== "tasks") return
+    const { tasks } = this.taskViewData()
+    const currentIndex = this.syncTaskSelection(tasks)
+    if (currentIndex < 0) return
+    const next = Math.max(0, Math.min(tasks.length - 1, currentIndex + delta))
+    this.taskSelectionIndex = next
+    this.taskSelectedId = tasks[next]!.id
+  }
+
+  private jumpTaskSelectionToBottom(): void {
+    if (this.view !== "tasks") return
+    const { tasks } = this.taskViewData()
+    if (tasks.length === 0) return
+    this.taskSelectionIndex = tasks.length - 1
+    this.taskSelectedId = tasks[this.taskSelectionIndex]!.id
+  }
+
+  private toggleTaskExpandedSelection(): void {
+    if (this.view !== "tasks") return
+    const { tasks } = this.taskViewData()
+    const selectedIndex = this.syncTaskSelection(tasks)
+    if (selectedIndex < 0) return
+    const selectedTask = tasks[selectedIndex]!
+    this.taskExpandedId = this.taskExpandedId === selectedTask.id ? "" : selectedTask.id
+  }
+
+  private calendarViewData(): {
+    allEvents: CalendarEvent[]
+    filters: Array<{ id: string; label: string; predicate: (event: CalendarEvent) => boolean }>
+    safeFilterIndex: number
+    events: CalendarEvent[]
+  } {
+    const allEvents = [...this.snapshot.calendarEvents].sort((a, b) => a.startTime - b.startTime)
+    const filters = this.calendarFilters()
+    const safeFilterIndex = Math.max(0, Math.min(this.calendarFilterIndex, filters.length - 1))
+    this.calendarFilterIndex = safeFilterIndex
+    const activeFilter = filters[safeFilterIndex] ?? filters[0]
+    const events = activeFilter ? allEvents.filter(activeFilter.predicate) : allEvents
+    return { allEvents, filters, safeFilterIndex, events }
+  }
+
+  private syncCalendarSelection(events: CalendarEvent[]): number {
+    if (events.length === 0) {
+      this.calendarSelectionIndex = 0
+      this.calendarSelectedId = ""
+      return -1
+    }
+
+    if (this.calendarSelectedId) {
+      const byId = events.findIndex(event => event.id === this.calendarSelectedId)
+      if (byId >= 0) {
+        this.calendarSelectionIndex = byId
+        return byId
+      }
+    }
+
+    const clamped = Math.max(0, Math.min(events.length - 1, this.calendarSelectionIndex))
+    this.calendarSelectionIndex = clamped
+    this.calendarSelectedId = events[clamped]!.id
+    return clamped
+  }
+
+  private moveCalendarSelection(delta: number): void {
+    if (this.view !== "calendar") return
+    const { events } = this.calendarViewData()
+    const currentIndex = this.syncCalendarSelection(events)
+    if (currentIndex < 0) return
+    const next = Math.max(0, Math.min(events.length - 1, currentIndex + delta))
+    this.calendarSelectionIndex = next
+    this.calendarSelectedId = events[next]!.id
+  }
+
+  private jumpCalendarSelectionToBottom(): void {
+    if (this.view !== "calendar") return
+    const { events } = this.calendarViewData()
+    if (events.length === 0) return
+    this.calendarSelectionIndex = events.length - 1
+    this.calendarSelectedId = events[this.calendarSelectionIndex]!.id
+  }
+
+  private toggleCalendarExpandedSelection(): void {
+    if (this.view !== "calendar") return
+    const { events } = this.calendarViewData()
+    const selectedIndex = this.syncCalendarSelection(events)
+    if (selectedIndex < 0) return
+    const selectedEvent = events[selectedIndex]!
+    this.calendarExpandedId = this.calendarExpandedId === selectedEvent.id ? "" : selectedEvent.id
   }
 
   private elapsedSince(ts: number): string {
@@ -3479,6 +3631,409 @@ class WorkspaceTui {
     return unresolved
   }
 
+  private taskStatusShort(status: TaskStatus): string {
+    if (status === "in-progress") return "inprog"
+    if (status === "completed") return "done"
+    return status
+  }
+
+  private taskPriorityShort(priority: TaskPriority): string {
+    if (priority === "high") return "H"
+    if (priority === "low") return "L"
+    return "M"
+  }
+
+  private taskStatusLabel(status: TaskStatus): string {
+    if (status === "in-progress") return "IN PROGRESS"
+    if (status === "completed") return "COMPLETED"
+    if (status === "blocked") return "BLOCKED"
+    if (status === "claimed") return "CLAIMED"
+    return "OPEN"
+  }
+
+  private taskPriorityLabel(priority: TaskPriority): string {
+    if (priority === "high") return "HIGH"
+    if (priority === "low") return "LOW"
+    return "MEDIUM"
+  }
+
+  private taskDueDisplay(task: Task): { text: string; color: string } {
+    if (!task.dueDate) {
+      return { text: "none", color: FG_META }
+    }
+
+    const due = new Date(task.dueDate)
+    const dueText = due.toLocaleDateString()
+    if (task.status === "completed") {
+      return { text: dueText, color: FG_META }
+    }
+
+    const delta = task.dueDate - Date.now()
+    if (delta < 0) {
+      return { text: `${this.durationLabel(Math.abs(delta))} overdue`, color: "\x1b[38;5;203m" }
+    }
+    if (delta <= 86_400_000) {
+      return { text: `in ${this.durationLabel(delta)}`, color: "\x1b[38;5;220m" }
+    }
+    return { text: dueText, color: FG_META }
+  }
+
+  private taskTableLayout(tableWidth: number): {
+    status: number
+    priority: number
+    owner: number
+    title: number
+    due: number
+    deps: number
+    notes: number
+    updated: number
+  } {
+    const layout = {
+      status: 8,
+      priority: 4,
+      owner: 12,
+      title: 24,
+      due: 12,
+      deps: 7,
+      notes: 5,
+      updated: 7,
+    }
+    const min = {
+      status: 6,
+      priority: 3,
+      owner: 8,
+      title: 10,
+      due: 8,
+      deps: 5,
+      notes: 3,
+      updated: 5,
+    }
+
+    const separatorWidth = 3
+    const separatorCount = 7
+    const nonTitleWidth = (): number => (
+      layout.status
+      + layout.priority
+      + layout.owner
+      + layout.due
+      + layout.deps
+      + layout.notes
+      + layout.updated
+      + (separatorCount * separatorWidth)
+    )
+
+    const shrinkOrder: Array<keyof typeof layout> = ["owner", "due", "updated", "status", "deps", "priority", "notes"]
+    let overBy = Math.max(0, nonTitleWidth() + layout.title - tableWidth)
+    for (const key of shrinkOrder) {
+      while (overBy > 0 && layout[key] > min[key]) {
+        layout[key] -= 1
+        overBy -= 1
+      }
+      if (overBy === 0) break
+    }
+
+    const availableForTitle = tableWidth - nonTitleWidth()
+    layout.title = Math.max(min.title, availableForTitle)
+    return layout
+  }
+
+  private taskTableCell(text: string, width: number, color = ""): string {
+    const safeWidth = Math.max(1, width)
+    const fitted = fitPlain(truncatePlain(text, safeWidth), safeWidth)
+    if (!color) return fitted
+    return `${color}${fitted}${ANSI_RESET}`
+  }
+
+  private taskTableSeparator(): string {
+    return ` ${FG_FRAME}${FRAME_V}${ANSI_RESET} `
+  }
+
+  private renderTaskTableHeader(
+    layout: { status: number; priority: number; owner: number; title: number; due: number; deps: number; notes: number; updated: number },
+    tableWidth: number,
+  ): string {
+    const sep = this.taskTableSeparator()
+    const cells = [
+      this.taskTableCell("STATE", layout.status, FG_META),
+      this.taskTableCell("PRI", layout.priority, FG_META),
+      this.taskTableCell("OWNER", layout.owner, FG_META),
+      this.taskTableCell("TITLE", layout.title, FG_META),
+      this.taskTableCell("DUE", layout.due, FG_META),
+      this.taskTableCell("DEPS", layout.deps, FG_META),
+      this.taskTableCell("NOTE", layout.notes, FG_META),
+      this.taskTableCell("UPDATED", layout.updated, FG_META),
+    ]
+    return truncateAnsi(cells.join(sep), tableWidth)
+  }
+
+  private renderTaskTableDivider(tableWidth: number): string {
+    return `${FG_FRAME}${FRAME_H.repeat(Math.max(1, tableWidth))}${ANSI_RESET}`
+  }
+
+  private renderTaskTableRow(
+    task: Task,
+    layout: { status: number; priority: number; owner: number; title: number; due: number; deps: number; notes: number; updated: number },
+    taskById: Map<string, Task>,
+    tableWidth: number,
+    selected: boolean,
+  ): string {
+    const sep = this.taskTableSeparator()
+    const depCount = task.blockedBy?.length ?? 0
+    const unresolved = this.unresolvedDependencies(task, taskById)
+    const depsText = depCount > 0 ? `${unresolved}/${depCount}` : "-"
+    const depsColor = unresolved > 0 ? (task.status === "blocked" ? "\x1b[38;5;203m" : "\x1b[38;5;220m") : FG_META
+    const due = this.taskDueDisplay(task)
+    const owner = task.assignedTo ? `@${task.assignedTo}` : "unassigned"
+    const ownerColor = task.assignedTo ? "" : FG_META
+    const statusText = selected
+      ? `▶ ${this.taskStatusShort(task.status)}`
+      : `${statusIcon(task.status)} ${this.taskStatusShort(task.status)}`
+    const priorityText = this.taskPriorityShort(task.priority)
+    const titleText = task.title || "(untitled task)"
+    const updatedText = this.elapsedSince(task.updatedAt)
+    const titleColor = selected ? FG_SELECTED : ""
+
+    const cells = [
+      this.taskTableCell(statusText, layout.status, this.taskStatusColor(task.status)),
+      this.taskTableCell(priorityText, layout.priority, this.taskPriorityColor(task.priority)),
+      this.taskTableCell(owner, layout.owner, ownerColor),
+      this.taskTableCell(titleText, layout.title, titleColor),
+      this.taskTableCell(due.text, layout.due, due.color),
+      this.taskTableCell(depsText, layout.deps, depsColor),
+      this.taskTableCell(String(task.notes.length), layout.notes, FG_META),
+      this.taskTableCell(updatedText, layout.updated, FG_META),
+    ]
+    return truncateAnsi(cells.join(sep), tableWidth)
+  }
+
+  private renderExpandedTaskRow(task: Task, taskById: Map<string, Task>, lineWidth: number): string[] {
+    const out: string[] = []
+    const textWidth = Math.max(12, lineWidth)
+    const pushLabeled = (label: string, value: string): void => {
+      out.push(`${FG_META}${label}${ANSI_RESET}`)
+      const wrapped = wrapPlain(value && value.length > 0 ? value : "none", textWidth)
+      for (let index = 0; index < wrapped.length; index++) {
+        out.push(wrapped[index] || "")
+      }
+      out.push("")
+    }
+
+    const description = task.description.trim() || "none"
+    pushLabeled("Description:", description)
+
+    const depCount = task.blockedBy?.length ?? 0
+    const unresolved = this.unresolvedDependencies(task, taskById)
+    const depLabel = depCount > 0 ? `${unresolved}/${depCount} unresolved` : "none"
+    pushLabeled("Dependencies:", depLabel)
+
+    if (depCount > 0 && task.blockedBy) {
+      const deps = task.blockedBy.map((id) => {
+        const dep = taskById.get(id)
+        const short = truncatePlain(id, 14)
+        return dep?.status === "completed" ? `${short} done` : `${short} pending`
+      }).join(", ")
+      pushLabeled("Blocked by:", deps)
+    }
+
+    if (task.blockedOn && task.status === "blocked") {
+      pushLabeled("Blocked reason:", task.blockedOn)
+    }
+
+    if (task.notes.length > 0) {
+      const lastNote = task.notes[task.notes.length - 1]!
+      const by = lastNote.byName || lastNote.by
+      const ago = this.elapsedSince(lastNote.at)
+      pushLabeled("Last note:", `${by} (${ago} ago): ${lastNote.text}`)
+    } else {
+      pushLabeled("Last note:", "none")
+    }
+
+    while (out.length > 0 && out[out.length - 1] === "") {
+      out.pop()
+    }
+
+    return out.map((line) => truncateAnsi(line, lineWidth))
+  }
+
+  private taskOwnerAgent(task: Task): AgentPresence | undefined {
+    const assigned = (task.assignedTo || "").trim()
+    if (assigned.length === 0) return undefined
+    const normalized = assigned.toLowerCase()
+    return this.snapshot.agents.find((agent) => (agent.slug || "").trim().toLowerCase() === normalized)
+      ?? this.snapshot.agents.find((agent) => agent.name.trim().toLowerCase() === normalized)
+  }
+
+  private taskOwnerDisplay(task: Task): string {
+    const assigned = (task.assignedTo || "").trim()
+    if (assigned.length === 0) {
+      return `${FG_META}unassigned${ANSI_RESET}`
+    }
+
+    const agent = this.taskOwnerAgent(task)
+    if (!agent) {
+      return `@${assigned}`
+    }
+
+    const chip = this.colorChipForDna(agent.dna)
+    const title = (agent.title_short || agent.title || "").trim()
+    const titleSuffix = title.length > 0 ? ` ${FG_META}${title}${ANSI_RESET}` : ""
+    return `${chip} ${agent.name}${titleSuffix}`
+  }
+
+  private renderTaskMetaLines(task: Task, taskById: Map<string, Task>, lineWidth: number): string[] {
+    const due = this.taskDueDisplay(task)
+    const depCount = task.blockedBy?.length ?? 0
+    const unresolved = this.unresolvedDependencies(task, taskById)
+    const depLabel = depCount > 0 ? `${unresolved}/${depCount}` : "-"
+    const depsColor = unresolved > 0 ? (task.status === "blocked" ? "\x1b[38;5;203m" : "\x1b[38;5;220m") : ""
+    const depsText = depsColor ? `${depsColor}${depLabel}${ANSI_RESET}` : depLabel
+    const ownerText = this.taskOwnerDisplay(task)
+    const updatedText = this.elapsedSince(task.updatedAt)
+    const labels = [
+      `${FG_META}Owner${ANSI_RESET}`,
+      `${FG_META}Due${ANSI_RESET}`,
+      `${FG_META}Deps${ANSI_RESET}`,
+      `${FG_META}Notes${ANSI_RESET}`,
+      `${FG_META}Updated${ANSI_RESET}`,
+    ]
+    const values = [
+      ownerText,
+      `${due.color}${due.text}${ANSI_RESET}`,
+      depsText,
+      String(task.notes.length),
+      updatedText,
+    ]
+    const gap = "  "
+
+    let dueWidth = 10
+    let depsWidth = 6
+    let notesWidth = 5
+    let updatedWidth = 8
+    let ownerWidth = lineWidth - (dueWidth + depsWidth + notesWidth + updatedWidth + gap.length * 4)
+    if (ownerWidth < 14) {
+      dueWidth = 8
+      depsWidth = 4
+      notesWidth = 5
+      updatedWidth = 7
+      ownerWidth = lineWidth - (dueWidth + depsWidth + notesWidth + updatedWidth + gap.length * 4)
+    }
+
+    if (ownerWidth < 8) {
+      const labelLine = labels.join(gap)
+      const valueLine = values.join(gap)
+      return [
+        truncateAnsi(labelLine, lineWidth),
+        truncateAnsi(valueLine, lineWidth),
+      ]
+    }
+
+    const widths = [ownerWidth, dueWidth, depsWidth, notesWidth, updatedWidth]
+    const renderColumns = (cells: string[]): string => cells
+      .map((cell, index) => padAnsi(truncateAnsi(cell, widths[index] || 0), widths[index] || 0))
+      .join(gap)
+
+    return [
+      truncateAnsi(renderColumns(labels), lineWidth),
+      truncateAnsi(renderColumns(values), lineWidth),
+    ]
+  }
+
+  private renderTaskListCard(
+    task: Task,
+    cardWidth: number,
+    taskById: Map<string, Task>,
+    selected: boolean,
+    expanded: boolean,
+  ): string[] {
+    const out: string[] = []
+    const borderColor = selected ? FG_SELECTED : FG_FRAME
+    const innerWidth = Math.max(12, cardWidth - 2)
+
+    const statusTag = `${this.taskStatusColor(task.status)}${statusIcon(task.status)} ${this.taskStatusLabel(task.status)}${ANSI_RESET}`
+    const priorityTag = `${this.taskPriorityColor(task.priority)}${this.taskPriorityLabel(task.priority)}${ANSI_RESET}`
+    const selectedTag = selected ? ` ${FG_SELECTED}●${ANSI_RESET}` : ""
+    const cardLabel = `${statusTag} ${FG_META}·${ANSI_RESET} ${priorityTag}${selectedTag}`
+    const labelUsed = visibleLength(cardLabel) + 2
+    const dashCount = Math.max(0, innerWidth - labelUsed)
+
+    out.push(`${borderColor}${FRAME_TL} ${ANSI_RESET}${cardLabel}${borderColor} ${FRAME_H.repeat(dashCount)}${FRAME_TR}${ANSI_RESET}`)
+
+    const title = task.title || "(untitled task)"
+    const titleColor = selected ? FG_SELECTED : "\x1b[1m"
+    const titleReset = selected ? ANSI_RESET : "\x1b[22m"
+    out.push(`${borderColor}${FRAME_V}${ANSI_RESET}${padAnsi(`${titleColor}${truncatePlain(title, innerWidth)}${titleReset}`, innerWidth)}${borderColor}${FRAME_V}${ANSI_RESET}`)
+
+    const metaLines = this.renderTaskMetaLines(task, taskById, innerWidth)
+    for (const metaLine of metaLines) {
+      out.push(`${borderColor}${FRAME_V}${ANSI_RESET}${padAnsi(truncateAnsi(metaLine, innerWidth), innerWidth)}${borderColor}${FRAME_V}${ANSI_RESET}`)
+    }
+
+    if (expanded) {
+      out.push(`${borderColor}${FRAME_V}${ANSI_RESET}${padAnsi(`${FG_FRAME}${FRAME_H.repeat(Math.max(1, innerWidth))}${ANSI_RESET}`, innerWidth)}${borderColor}${FRAME_V}${ANSI_RESET}`)
+      const expandedLines = this.renderExpandedTaskRow(task, taskById, innerWidth)
+      for (const line of expandedLines) {
+        out.push(`${borderColor}${FRAME_V}${ANSI_RESET}${padAnsi(truncateAnsi(line, innerWidth), innerWidth)}${borderColor}${FRAME_V}${ANSI_RESET}`)
+      }
+    }
+
+    out.push(`${borderColor}${FRAME_BL}${FRAME_H.repeat(innerWidth)}${FRAME_BR}${ANSI_RESET}`)
+    return out
+  }
+
+  private renderSelectedTaskDetails(task: Task, taskById: Map<string, Task>, tableWidth: number): string[] {
+    const out: string[] = []
+    const owner = this.taskOwnerDisplay(task)
+    const due = this.taskDueDisplay(task)
+    const depCount = task.blockedBy?.length ?? 0
+    const unresolved = this.unresolvedDependencies(task, taskById)
+
+    out.push(
+      truncateAnsi(
+        `${FG_META}Selected:${ANSI_RESET} ${task.id} ${FG_META}|${ANSI_RESET} ${this.taskStatusColor(task.status)}${task.status}${ANSI_RESET} ${FG_META}|${ANSI_RESET} ${this.taskPriorityColor(task.priority)}${task.priority}${ANSI_RESET}`,
+        tableWidth,
+      ),
+    )
+    out.push(
+      truncateAnsi(
+        `${FG_META}Owner:${ANSI_RESET} ${owner}  ${FG_META}Updated:${ANSI_RESET} ${this.elapsedSince(task.updatedAt)} ago  ${FG_META}Due:${ANSI_RESET} ${due.color}${due.text}${ANSI_RESET}`,
+        tableWidth,
+      ),
+    )
+
+    const description = task.description.trim() || "none"
+    const descWidth = Math.max(8, tableWidth - 6)
+    const descLines = wrapPlain(description, descWidth)
+    out.push(`${FG_META}Desc:${ANSI_RESET} ${truncatePlain(descLines[0] || "none", descWidth)}`)
+    if (descLines.length > 1) {
+      out.push(`      ${truncatePlain(descLines[1] || "", descWidth)}`)
+    }
+
+    const depLabel = depCount > 0 ? `${unresolved}/${depCount} unresolved` : "none"
+    out.push(`${FG_META}Deps:${ANSI_RESET} ${depLabel}  ${FG_META}Notes:${ANSI_RESET} ${task.notes.length}`)
+
+    if (task.blockedOn && task.status === "blocked") {
+      out.push(`${FG_META}Blocked:${ANSI_RESET} ${truncatePlain(task.blockedOn, Math.max(0, tableWidth - 9))}`)
+    }
+
+    if (depCount > 0 && task.blockedBy) {
+      const dependencies = task.blockedBy.map((id) => {
+        const dep = taskById.get(id)
+        const shortId = truncatePlain(id, 16)
+        return dep?.status === "completed" ? `${shortId}(done)` : shortId
+      }).join(", ")
+      out.push(`${FG_META}Depends on:${ANSI_RESET} ${truncatePlain(dependencies, Math.max(0, tableWidth - 13))}`)
+    }
+
+    if (task.notes.length > 0) {
+      const lastNote = task.notes[task.notes.length - 1]!
+      const by = lastNote.byName || lastNote.by
+      const preview = `${by}: ${lastNote.text}`
+      out.push(`${FG_META}Last note:${ANSI_RESET} ${truncatePlain(preview, Math.max(0, tableWidth - 11))}`)
+    }
+
+    return out.map(line => truncateAnsi(line, tableWidth))
+  }
+
   private renderHeaderFrame(lines: string[], width: number, label = ""): string[] {
     // Non-message views render through panelBodyLine(), which adds one leading cell.
     // Body render width is already reduced upstream, so expand header frames here to match
@@ -3487,7 +4042,7 @@ class WorkspaceTui {
     const innerWidth = Math.max(1, frameWidth - 4)
     const out: string[] = [boxTop(frameWidth, label)]
     for (const line of lines) {
-      out.push(boxAnsiLine(truncatePlain(line, innerWidth), frameWidth))
+      out.push(boxAnsiLine(truncateAnsi(line, innerWidth), frameWidth))
     }
     out.push(boxBottom(frameWidth))
     return out
@@ -3503,7 +4058,7 @@ class WorkspaceTui {
     const labelUsed = visibleLength(cardLabel) + 2
     const dashCount = Math.max(0, innerWidth - labelUsed)
 
-    out.push(` ${borderColor}${FRAME_TL} ${ANSI_RESET}${cardLabel}${borderColor} ${FRAME_H.repeat(dashCount)}${FRAME_TR}${ANSI_RESET}`)
+    out.push(`${borderColor}${FRAME_TL} ${ANSI_RESET}${cardLabel}${borderColor} ${FRAME_H.repeat(dashCount)}${FRAME_TR}${ANSI_RESET}`)
 
     const details: string[] = []
     details.push(`\x1b[1m${truncatePlain(task.title || "(untitled task)", innerWidth)}\x1b[22m`)
@@ -3554,13 +4109,11 @@ class WorkspaceTui {
 
   private renderTasksView(height: number, width: number): string[] {
     const out: string[] = []
-    const allTasks = [...this.snapshot.tasks].sort((a, b) => b.updatedAt - a.updatedAt)
+    const { allTasks, filters, safeFilterIndex, tasks } = this.taskViewData()
     const taskById = new Map(allTasks.map(task => [task.id, task]))
-    const filters = this.taskFilters()
-    const safeFilterIndex = Math.max(0, Math.min(this.taskFilterIndex, filters.length - 1))
-    this.taskFilterIndex = safeFilterIndex
-    const activeFilter = filters[safeFilterIndex] ?? filters[0]
-    const tasks = activeFilter ? allTasks.filter(activeFilter.predicate) : allTasks
+    if (this.taskExpandedId && !tasks.some(task => task.id === this.taskExpandedId)) {
+      this.taskExpandedId = ""
+    }
 
     if (allTasks.length === 0) {
       return this.renderHeaderFrame([`${FG_META}No tasks created.${ANSI_RESET}`], width)
@@ -3577,37 +4130,66 @@ class WorkspaceTui {
     out.push(
       ...this.renderHeaderFrame(
         [
-          this.renderFilterLine(filters, safeFilterIndex),
+          this.renderFilterLine(filters, safeFilterIndex, Math.max(16, width - 1)),
           `${FG_META}${summary}${ANSI_RESET}`,
           `${FG_META}Showing ${tasks.length}/${allTasks.length}${ANSI_RESET}`,
+          `${FG_SUBTLE_HINT}↑/↓ select · Enter expand · ←/→ filter · PgUp/PgDn jump · b bottom${ANSI_RESET}`,
         ],
         width,
       ),
     )
-    out.push("")
 
-    const cardWidth = Math.max(28, Math.min(width - 2, 96))
+    const cardWidth = Math.max(24, width + 3)
+    const bodyHeight = Math.max(1, height - out.length)
     const bodyLines: string[] = []
     if (tasks.length === 0) {
+      this.taskSelectionIndex = 0
+      this.taskSelectedId = ""
+      this.taskScrollOffset = 0
+      this.taskScrollMax = 0
+      this.taskExpandedId = ""
       bodyLines.push(`${FG_META}No tasks for this filter.${ANSI_RESET}`)
-    }
+    } else {
+      const selectedIndex = this.syncTaskSelection(tasks)
+      this.taskScrollMax = Math.max(0, tasks.length - 1)
+      if (this.taskScrollOffset > this.taskScrollMax) this.taskScrollOffset = this.taskScrollMax
+      if (this.taskScrollOffset < 0) this.taskScrollOffset = 0
 
-    for (const task of tasks) {
-      const cardLines = this.renderTaskCard(task, cardWidth, taskById)
-      bodyLines.push(...cardLines)
-      if (task !== tasks[tasks.length - 1]) {
-        bodyLines.push("")
+      const isSelectedVisibleFrom = (startIndex: number): boolean => {
+        let used = 0
+        for (let index = startIndex; index < tasks.length && used < bodyHeight; index++) {
+          const task = tasks[index]!
+          const expanded = index === selectedIndex && this.taskExpandedId === task.id
+          const cardLines = this.renderTaskListCard(task, cardWidth, taskById, index === selectedIndex, expanded)
+          const blockHeight = cardLines.length + (index < tasks.length - 1 ? 1 : 0)
+          if (index === selectedIndex) {
+            return true
+          }
+          used += blockHeight
+        }
+        return false
+      }
+
+      if (!isSelectedVisibleFrom(this.taskScrollOffset)) {
+        this.taskScrollOffset = selectedIndex
+      }
+
+      for (let index = this.taskScrollOffset; index < tasks.length && bodyLines.length < bodyHeight; index++) {
+        const task = tasks[index]!
+        const selected = index === selectedIndex
+        const expanded = selected && this.taskExpandedId === task.id
+        const cardLines = this.renderTaskListCard(task, cardWidth, taskById, selected, expanded)
+        for (const line of cardLines) {
+          if (bodyLines.length >= bodyHeight) break
+          bodyLines.push(line)
+        }
+        if (bodyLines.length < bodyHeight && index < tasks.length - 1) {
+          bodyLines.push("")
+        }
       }
     }
 
-    const bodyHeight = Math.max(1, height - out.length)
-    const maxOffset = Math.max(0, bodyLines.length - bodyHeight)
-    this.taskScrollMax = maxOffset
-    if (this.taskScrollOffset > maxOffset) this.taskScrollOffset = maxOffset
-    if (this.taskScrollOffset < 0) this.taskScrollOffset = 0
-    const start = Math.max(0, this.taskScrollOffset)
-    const end = Math.min(bodyLines.length, start + bodyHeight)
-    out.push(...bodyLines.slice(start, end))
+    out.push(...bodyLines.slice(0, bodyHeight))
 
     while (out.length < height) {
       out.push("")
@@ -3628,82 +4210,192 @@ class WorkspaceTui {
     return "monthly"
   }
 
-  private calendarTimelineLabel(event: CalendarEvent): string {
+  private calendarTimelineDisplay(event: CalendarEvent): { text: string; color: string } {
     const now = Date.now()
     if (now < event.startTime) {
-      return `${FG_META}Starts in ${this.durationLabel(event.startTime - now)}${ANSI_RESET}`
+      return { text: `starts in ${this.durationLabel(event.startTime - now)}`, color: "\x1b[38;5;220m" }
     }
     if (now <= event.endTime) {
-      return `\x1b[38;5;220mLive now · ends in ${this.durationLabel(event.endTime - now)}${ANSI_RESET}`
+      return { text: `live now · ends in ${this.durationLabel(event.endTime - now)}`, color: "\x1b[38;5;71m" }
     }
-    return `${FG_META}Ended ${this.durationLabel(now - event.endTime)} ago${ANSI_RESET}`
+    return { text: `ended ${this.durationLabel(now - event.endTime)} ago`, color: FG_META }
   }
 
-  private calendarNextNotificationLabel(event: CalendarEvent): string {
-    if (typeof event.nextNotification !== "number" || !Number.isFinite(event.nextNotification)) {
+  private calendarNextNotificationShort(event: CalendarEvent): string {
+    const ts = event.nextNotification
+    if (typeof ts !== "number" || !Number.isFinite(ts) || ts === Infinity) {
+      return "none"
+    }
+    if (ts <= Date.now()) {
+      return "due"
+    }
+    const delta = ts - Date.now()
+    if (delta <= 86_400_000) {
+      return `in ${this.durationLabel(delta)}`
+    }
+    return formatDateTime(ts)
+  }
+
+  private calendarNextNotificationFull(event: CalendarEvent): string {
+    const ts = event.nextNotification
+    if (typeof ts !== "number" || !Number.isFinite(ts) || ts === Infinity) {
+      return "none"
+    }
+    if (ts <= Date.now()) {
+      return formatDateTime(ts)
+    }
+    return `${formatDateTime(ts)} (in ${this.durationLabel(ts - Date.now())})`
+  }
+
+  private calendarAgentBySlug(slug: string): AgentPresence | undefined {
+    const normalized = slug.trim().toLowerCase()
+    if (!normalized) return undefined
+    return this.snapshot.agents.find((agent) => (agent.slug || "").trim().toLowerCase() === normalized)
+      ?? this.snapshot.agents.find((agent) => agent.name.trim().toLowerCase() === normalized)
+  }
+
+  private calendarAssignedCompact(event: CalendarEvent): string {
+    if (event.assignedAgents.length === 0) {
       return `${FG_META}none${ANSI_RESET}`
     }
-    const ts = event.nextNotification
-    if (ts <= Date.now()) {
-      return `${FG_META}${formatDateTime(ts)}${ANSI_RESET}`
+
+    if (event.assignedAgents.length === 1) {
+      const slug = event.assignedAgents[0]!
+      const agent = this.calendarAgentBySlug(slug)
+      if (!agent) return `@${slug}`
+      return `${this.colorChipForDna(agent.dna)} ${agent.name}`
     }
-    return `${FG_META}${formatDateTime(ts)} (in ${this.durationLabel(ts - Date.now())})${ANSI_RESET}`
+
+    return `${event.assignedAgents.length} agents`
   }
 
-  private renderCalendarCard(event: CalendarEvent, cardWidth: number): string[] {
+  private calendarAssignedFull(event: CalendarEvent): string {
+    if (event.assignedAgents.length === 0) return "none"
+    return event.assignedAgents.map((slug) => {
+      const agent = this.calendarAgentBySlug(slug)
+      return agent ? agent.name : `@${slug}`
+    }).join(", ")
+  }
+
+  private renderCalendarMetaLines(event: CalendarEvent, lineWidth: number): string[] {
+    const timeline = this.calendarTimelineDisplay(event)
+    const labels = [
+      `${FG_META}When${ANSI_RESET}`,
+      `${FG_META}Agents${ANSI_RESET}`,
+      `${FG_META}Repeats${ANSI_RESET}`,
+      `${FG_META}Notify${ANSI_RESET}`,
+      `${FG_META}Updated${ANSI_RESET}`,
+    ]
+    const values = [
+      `${timeline.color}${timeline.text}${ANSI_RESET}`,
+      this.calendarAssignedCompact(event),
+      this.calendarRecurrenceLabel(event.recurrence),
+      this.calendarNextNotificationShort(event),
+      this.elapsedSince(event.updatedAt),
+    ]
+    const gap = "  "
+
+    let whenWidth = 22
+    let agentsWidth = 16
+    let repeatsWidth = 8
+    let notifyWidth = 16
+    let updatedWidth = 8
+    let headroom = lineWidth - (whenWidth + agentsWidth + repeatsWidth + notifyWidth + updatedWidth + gap.length * 4)
+    if (headroom < 0) {
+      whenWidth = 16
+      agentsWidth = 12
+      repeatsWidth = 7
+      notifyWidth = 12
+      updatedWidth = 7
+      headroom = lineWidth - (whenWidth + agentsWidth + repeatsWidth + notifyWidth + updatedWidth + gap.length * 4)
+    }
+    if (headroom < 0) {
+      const labelLine = labels.join(gap)
+      const valueLine = values.join(gap)
+      return [
+        truncateAnsi(labelLine, lineWidth),
+        truncateAnsi(valueLine, lineWidth),
+      ]
+    }
+
+    whenWidth += headroom
+    const widths = [whenWidth, agentsWidth, repeatsWidth, notifyWidth, updatedWidth]
+    const renderColumns = (cells: string[]): string => cells
+      .map((cell, index) => padAnsi(truncateAnsi(cell, widths[index] || 0), widths[index] || 0))
+      .join(gap)
+
+    return [
+      truncateAnsi(renderColumns(labels), lineWidth),
+      truncateAnsi(renderColumns(values), lineWidth),
+    ]
+  }
+
+  private renderExpandedCalendarRow(event: CalendarEvent, lineWidth: number): string[] {
     const out: string[] = []
-    const borderColor = FG_FRAME
+    const textWidth = Math.max(12, lineWidth)
+    const pushLabeled = (label: string, value: string): void => {
+      out.push(`${FG_META}${label}${ANSI_RESET}`)
+      const wrapped = wrapPlain(value && value.length > 0 ? value : "none", textWidth)
+      for (let index = 0; index < wrapped.length; index++) {
+        out.push(wrapped[index] || "")
+      }
+      out.push("")
+    }
+
+    const schedule = `${formatDateTime(event.startTime)} -> ${formatDateTime(event.endTime)}`
+    pushLabeled("Schedule:", schedule)
+
+    pushLabeled("Timeline:", this.calendarTimelineDisplay(event).text)
+    pushLabeled("Recurrence:", this.calendarRecurrenceLabel(event.recurrence))
+    pushLabeled("Assigned:", this.calendarAssignedFull(event))
+    pushLabeled("Description:", event.description.trim() || "none")
+    pushLabeled("Next notify:", this.calendarNextNotificationFull(event))
+
+    while (out.length > 0 && out[out.length - 1] === "") {
+      out.pop()
+    }
+
+    return out.map((line) => truncateAnsi(line, lineWidth))
+  }
+
+  private renderCalendarListCard(
+    event: CalendarEvent,
+    cardWidth: number,
+    selected: boolean,
+    expanded: boolean,
+  ): string[] {
+    const out: string[] = []
+    const borderColor = selected ? FG_SELECTED : FG_FRAME
     const innerWidth = Math.max(12, cardWidth - 2)
     const statusText = event.enabled ? "✓ ENABLED" : "✕ DISABLED"
     const statusTag = `${this.calendarStatusColor(event.enabled)}${statusText}${ANSI_RESET}`
-    const recurrenceTag = `${FG_META}${this.calendarRecurrenceLabel(event.recurrence)}${ANSI_RESET}`
-    const cardLabel = `${statusTag} ${FG_META}|${ANSI_RESET} ${recurrenceTag}`
+    const recurrenceTag = `${FG_META}${this.calendarRecurrenceLabel(event.recurrence).toUpperCase()}${ANSI_RESET}`
+    const selectedTag = selected ? ` ${FG_SELECTED}●${ANSI_RESET}` : ""
+    const cardLabel = `${statusTag} ${FG_META}·${ANSI_RESET} ${recurrenceTag}${selectedTag}`
     const labelUsed = visibleLength(cardLabel) + 2
     const dashCount = Math.max(0, innerWidth - labelUsed)
 
     out.push(` ${borderColor}${FRAME_TL} ${ANSI_RESET}${cardLabel}${borderColor} ${FRAME_H.repeat(dashCount)}${FRAME_TR}${ANSI_RESET}`)
 
-    const details: string[] = []
-    details.push(`\x1b[1m${truncatePlain(event.title || "(untitled event)", innerWidth)}\x1b[22m`)
+    const title = event.title || "(untitled event)"
+    const titleColor = selected ? FG_SELECTED : "\x1b[1m"
+    const titleReset = selected ? ANSI_RESET : "\x1b[22m"
+    out.push(`${borderColor}${FRAME_V}${ANSI_RESET}${padAnsi(`${titleColor}${truncatePlain(title, innerWidth)}${titleReset}`, innerWidth)}${borderColor}${FRAME_V}${ANSI_RESET}`)
 
-    details.push(`${FG_META}${truncatePlain(`${formatDateTime(event.startTime)} -> ${formatDateTime(event.endTime)}`, innerWidth)}${ANSI_RESET}`)
-    details.push(this.calendarTimelineLabel(event))
-
-    const assignees = event.assignedAgents
-    if (assignees.length > 0) {
-      const shown = assignees.slice(0, 3).map(agent => `@${agent}`).join(", ")
-      const suffix = assignees.length > 3 ? ` (+${assignees.length - 3})` : ""
-      details.push(`${FG_META}Agents:${ANSI_RESET} ${truncatePlain(`${shown}${suffix}`, Math.max(0, innerWidth - 8))}`)
-    } else {
-      details.push(`${FG_META}Agents:${ANSI_RESET} ${FG_META}none${ANSI_RESET}`)
+    const metaLines = this.renderCalendarMetaLines(event, innerWidth)
+    for (const metaLine of metaLines) {
+      out.push(`${borderColor}${FRAME_V}${ANSI_RESET}${padAnsi(truncateAnsi(metaLine, innerWidth), innerWidth)}${borderColor}${FRAME_V}${ANSI_RESET}`)
     }
 
-    const description = event.description.trim()
-    if (description.length > 0) {
-      const wrapped = wrapPlain(description, innerWidth)
-      const firstPrefix = `${FG_META}Desc:${ANSI_RESET} `
-      const firstWidth = Math.max(0, innerWidth - visibleLength(firstPrefix))
-      const firstLine = wrapped[0] || ""
-      details.push(`${firstPrefix}${truncatePlain(firstLine, firstWidth)}`)
-      if (wrapped.length > 1) {
-        const hidden = Math.max(0, wrapped.length - 2)
-        const secondRaw = wrapped[1] || ""
-        const secondSuffix = hidden > 0 ? ` (+${hidden} more)` : ""
-        const secondWidth = Math.max(0, innerWidth - 6)
-        details.push(`      ${truncatePlain(`${secondRaw}${secondSuffix}`, secondWidth)}`)
+    if (expanded) {
+      out.push(`${borderColor}${FRAME_V}${ANSI_RESET}${padAnsi(`${FG_FRAME}${FRAME_H.repeat(Math.max(1, innerWidth))}${ANSI_RESET}`, innerWidth)}${borderColor}${FRAME_V}${ANSI_RESET}`)
+      const expandedLines = this.renderExpandedCalendarRow(event, innerWidth)
+      for (const line of expandedLines) {
+        out.push(`${borderColor}${FRAME_V}${ANSI_RESET}${padAnsi(truncateAnsi(line, innerWidth), innerWidth)}${borderColor}${FRAME_V}${ANSI_RESET}`)
       }
-    } else {
-      details.push(`${FG_META}Desc:${ANSI_RESET} ${FG_META}none${ANSI_RESET}`)
     }
 
-    details.push(`${FG_META}Next notify:${ANSI_RESET} ${this.calendarNextNotificationLabel(event)}`)
-
-    for (const line of details) {
-      const textPart = padAnsi(line, innerWidth)
-      out.push(` ${borderColor}${FRAME_V}${ANSI_RESET}${textPart}${borderColor}${FRAME_V}${ANSI_RESET}`)
-    }
-
-    out.push(` ${borderColor}${FRAME_BL}${FRAME_H.repeat(innerWidth)}${FRAME_BR}${ANSI_RESET}`)
+    out.push(`${borderColor}${FRAME_BL}${FRAME_H.repeat(innerWidth)}${FRAME_BR}${ANSI_RESET}`)
     return out
   }
 
@@ -3738,12 +4430,10 @@ class WorkspaceTui {
 
   private renderCalendarView(height: number, width: number): string[] {
     const out: string[] = []
-    const allEvents = [...this.snapshot.calendarEvents].sort((a, b) => a.startTime - b.startTime)
-    const filters = this.calendarFilters()
-    const safeFilterIndex = Math.max(0, Math.min(this.calendarFilterIndex, filters.length - 1))
-    this.calendarFilterIndex = safeFilterIndex
-    const activeFilter = filters[safeFilterIndex] ?? filters[0]
-    const events = activeFilter ? allEvents.filter(activeFilter.predicate) : allEvents
+    const { allEvents, filters, safeFilterIndex, events } = this.calendarViewData()
+    if (this.calendarExpandedId && !events.some(event => event.id === this.calendarExpandedId)) {
+      this.calendarExpandedId = ""
+    }
 
     if (allEvents.length === 0) {
       return this.renderHeaderFrame([`${FG_META}No calendar events scheduled.${ANSI_RESET}`], width)
@@ -3762,38 +4452,67 @@ class WorkspaceTui {
     out.push(
       ...this.renderHeaderFrame(
         [
-          this.renderFilterLine(filters, safeFilterIndex),
+          this.renderFilterLine(filters, safeFilterIndex, Math.max(16, width - 1)),
           schedulerLine,
           `${FG_META}${summary}${ANSI_RESET}`,
           `${FG_META}Showing ${events.length}/${allEvents.length}${ANSI_RESET}`,
+          `${FG_SUBTLE_HINT}↑/↓ select · Enter expand · ←/→ filter · PgUp/PgDn jump · b bottom${ANSI_RESET}`,
         ],
         width,
       ),
     )
-    out.push("")
 
-    const cardWidth = Math.max(28, Math.min(width - 2, 96))
+    const cardWidth = Math.max(24, width + 3)
+    const bodyHeight = Math.max(1, height - out.length)
     const bodyLines: string[] = []
     if (events.length === 0) {
+      this.calendarSelectionIndex = 0
+      this.calendarSelectedId = ""
+      this.calendarScrollOffset = 0
+      this.calendarScrollMax = 0
+      this.calendarExpandedId = ""
       bodyLines.push(`${FG_META}No events for this filter.${ANSI_RESET}`)
-    }
+    } else {
+      const selectedIndex = this.syncCalendarSelection(events)
+      this.calendarScrollMax = Math.max(0, events.length - 1)
+      if (this.calendarScrollOffset > this.calendarScrollMax) this.calendarScrollOffset = this.calendarScrollMax
+      if (this.calendarScrollOffset < 0) this.calendarScrollOffset = 0
 
-    for (const event of events) {
-      const cardLines = this.renderCalendarCard(event, cardWidth)
-      bodyLines.push(...cardLines)
-      if (event !== events[events.length - 1]) {
-        bodyLines.push("")
+      const isSelectedVisibleFrom = (startIndex: number): boolean => {
+        let used = 0
+        for (let index = startIndex; index < events.length && used < bodyHeight; index++) {
+          const event = events[index]!
+          const expanded = index === selectedIndex && this.calendarExpandedId === event.id
+          const cardLines = this.renderCalendarListCard(event, cardWidth, index === selectedIndex, expanded)
+          const blockHeight = cardLines.length + (index < events.length - 1 ? 1 : 0)
+          if (index === selectedIndex) {
+            return true
+          }
+          used += blockHeight
+        }
+        return false
+      }
+
+      if (!isSelectedVisibleFrom(this.calendarScrollOffset)) {
+        this.calendarScrollOffset = selectedIndex
+      }
+
+      for (let index = this.calendarScrollOffset; index < events.length && bodyLines.length < bodyHeight; index++) {
+        const event = events[index]!
+        const selected = index === selectedIndex
+        const expanded = selected && this.calendarExpandedId === event.id
+        const cardLines = this.renderCalendarListCard(event, cardWidth, selected, expanded)
+        for (const line of cardLines) {
+          if (bodyLines.length >= bodyHeight) break
+          bodyLines.push(line)
+        }
+        if (bodyLines.length < bodyHeight && index < events.length - 1) {
+          bodyLines.push("")
+        }
       }
     }
 
-    const bodyHeight = Math.max(1, height - out.length)
-    const maxOffset = Math.max(0, bodyLines.length - bodyHeight)
-    this.calendarScrollMax = maxOffset
-    if (this.calendarScrollOffset > maxOffset) this.calendarScrollOffset = maxOffset
-    if (this.calendarScrollOffset < 0) this.calendarScrollOffset = 0
-    const start = Math.max(0, this.calendarScrollOffset)
-    const end = Math.min(bodyLines.length, start + bodyHeight)
-    out.push(...bodyLines.slice(start, end))
+    out.push(...bodyLines.slice(0, bodyHeight))
 
     while (out.length < height) {
       out.push("")
@@ -4341,11 +5060,17 @@ class WorkspaceTui {
     }
 
     if (this.view === "tasks") {
-      return `${this.taskScrollOffset}/${this.taskScrollMax} ↑/↓`
+      const { tasks } = this.taskViewData()
+      const selectedIndex = this.syncTaskSelection(tasks)
+      const selected = selectedIndex >= 0 ? selectedIndex + 1 : 0
+      return `${selected}/${tasks.length} selected · Enter expand · ${this.taskScrollOffset}/${this.taskScrollMax} offset`
     }
 
     if (this.view === "calendar") {
-      return `${this.calendarScrollOffset}/${this.calendarScrollMax} ↑/↓`
+      const { events } = this.calendarViewData()
+      const selectedIndex = this.syncCalendarSelection(events)
+      const selected = selectedIndex >= 0 ? selectedIndex + 1 : 0
+      return `${selected}/${events.length} selected · Enter expand · ${this.calendarScrollOffset}/${this.calendarScrollMax} offset`
     }
 
     return ""
@@ -4392,24 +5117,26 @@ class WorkspaceTui {
 
     const width = Math.max(this.stdout.columns || 120, 40)
     const height = Math.max(this.stdout.rows || 30, 18)
+    const paintWidth = Math.max(1, width - 1)
+    const layoutWidth = paintWidth
 
-    const topPadRows = 1
+    const topPadRows = 0
     const headerLines: string[] = []
     for (let index = 0; index < topPadRows; index++) {
-      headerLines.push(" ".repeat(Math.max(0, width)))
+      headerLines.push(" ".repeat(Math.max(0, layoutWidth)))
     }
-    headerLines.push(this.renderBottomTabs(width))
+    headerLines.push(this.renderBottomTabs(layoutWidth))
 
     const showAgents = this.view === "messages"
-    let avatarContentLines = showAgents ? this.renderAvatarStrip(Math.max(0, width - 4)) : []
+    let avatarContentLines = showAgents ? this.renderAvatarStrip(Math.max(0, layoutWidth - 4)) : []
     const selectedDmThread = this.view === "messages" ? this.selectedDmThread() : null
     const showOfflineJoinHint = Boolean(selectedDmThread && !selectedDmThread.online)
     const showRequestsNavigator = this.view === "requests"
     const showScrollToBottomHint = this.view === "messages" && this.messageScrollOffset > 0
-    const showComposer = !showOfflineJoinHint && !showRequestsNavigator && this.view !== "settings"
-    const mentionSuggestionLines = showComposer ? this.renderMentionSuggestions(width) : []
-    const [promptLine, isPlaceholder] = this.renderPrompt(width)
-    const composerLines = showComposer ? this.renderComposerLines(width, promptLine, isPlaceholder) : []
+    const showComposer = this.view === "messages" && !showOfflineJoinHint
+    const mentionSuggestionLines = showComposer ? this.renderMentionSuggestions(layoutWidth) : []
+    const [promptLine, isPlaceholder] = this.renderPrompt(layoutWidth)
+    const composerLines = showComposer ? this.renderComposerLines(layoutWidth, promptLine, isPlaceholder) : []
     const showPromptArea = showOfflineJoinHint || showComposer
     const inputPadTopRows = showPromptArea ? (showRequestsNavigator ? 0 : 1) : 0
     const inputPadBottomRows = showPromptArea ? 1 : 0
@@ -4436,47 +5163,47 @@ class WorkspaceTui {
       height - headerLines.length - promptBoxHeight - agentsSectionHeight,
     )
     const bodyContentHeight = Math.max(1, bodyBoxHeight - 2)
-    const bodyLines = this.renderBody(bodyContentHeight, Math.max(0, width - 4))
+    const bodyLines = this.renderBody(bodyContentHeight, Math.max(0, layoutWidth - 4))
 
     const lines: string[] = []
     lines.push(...headerLines)
 
     if (showAgents) {
       if (!showAvatarCountHint) {
-        lines.push(boxTop(width, ""))
+        lines.push(boxTop(layoutWidth, ""))
       } else {
         const countHintText = `(${this.avatarVisibleAgentCount}/${this.avatarTotalAgentCount})`
         const hintText = `←/→ ${countHintText}`
         const hint = `${FG_SUBTLE_HINT}${hintText}${ANSI_RESET}`
         const hintLen = hintText.length
-        const innerWidth = Math.max(0, width - 2)
+        const innerWidth = Math.max(0, layoutWidth - 2)
         const dashLeft = Math.max(0, innerWidth - hintLen - 2)
         lines.push(`${FG_FRAME}${FRAME_TL}${FRAME_H.repeat(dashLeft)} ${ANSI_RESET}${hint}${FG_FRAME} ${FRAME_TR}${ANSI_RESET}`)
       }
       for (const avatarLine of avatarContentLines) {
-        lines.push(boxAnsiLine(avatarLine, width))
+        lines.push(boxAnsiLine(avatarLine, layoutWidth))
       }
-      lines.push(boxBottom(width))
+      lines.push(boxBottom(layoutWidth))
     }
 
     const trimmedBody = bodyLines.slice(-bodyContentHeight)
     const messageView = this.view === "messages"
     for (const line of trimmedBody) {
       if (messageView) {
-        lines.push(padAnsi(line, width))
+        lines.push(padAnsi(line, layoutWidth))
       } else {
-        lines.push(panelBodyLine(line, width))
+        lines.push(panelBodyLine(line, layoutWidth))
       }
     }
     const targetBodyEnd = headerLines.length + agentsSectionHeight + bodyContentHeight
     while (lines.length < targetBodyEnd) {
       if (messageView) {
-        lines.push(" ".repeat(Math.max(0, width)))
+        lines.push(" ".repeat(Math.max(0, layoutWidth)))
       } else {
-        lines.push(panelBodyLine("", width))
+        lines.push(panelBodyLine("", layoutWidth))
       }
     }
-    const dividerWidth = Math.max(0, width)
+    const dividerWidth = Math.max(0, layoutWidth)
     if (showScrollToBottomHint && dividerWidth > 0) {
       const hintPlain = "(b) Scroll to bottom"
       if (hintPlain.length <= dividerWidth) {
@@ -4493,21 +5220,21 @@ class WorkspaceTui {
     if (showPromptArea) {
       const promptBg = showOfflineJoinHint ? BG_OFFLINE_PANEL : BG_INPUT_PANEL
       for (let index = 0; index < inputPadTopRows; index++) {
-        lines.push(grayBar("", width, promptBg))
+        lines.push(grayBar("", layoutWidth, promptBg))
       }
       if (showOfflineJoinHint && selectedDmThread) {
-        lines.push(offlineBar(` ${selectedDmThread.label} is offline. Run \`termlings spawn\` in another terminal.`, width))
+        lines.push(offlineBar(` ${selectedDmThread.label} is offline. Run \`termlings spawn\` in another terminal.`, layoutWidth))
       } else if (showComposer) {
         lines.push(...composerLines)
         lines.push(...mentionSuggestionLines)
       }
       for (let index = 0; index < inputPadBottomRows; index++) {
-        lines.push(grayBar("", width, promptBg))
+        lines.push(grayBar("", layoutWidth, promptBg))
       }
     }
     for (let index = 0; index < inputMarginBottomRows; index++) {
       if (index === 0 && this.showStartupBanner()) {
-        lines.push(`${BG_INPUT_PANEL}\x1b[38;5;223m${fitPlain(` ${this.startupBanner}`, width)}${ANSI_RESET}`)
+        lines.push(`${BG_INPUT_PANEL}\x1b[38;5;223m${fitPlain(` ${this.startupBanner}`, layoutWidth)}${ANSI_RESET}`)
       } else {
         lines.push("")
       }
@@ -4516,13 +5243,12 @@ class WorkspaceTui {
       lines.push("")
     }
     if (height > 0) {
-      lines[height - 1] = this.renderFooterMetaBar(width)
+      lines[height - 1] = this.renderFooterMetaBar(layoutWidth)
     }
 
     // Overwrite in-place: move to home, write each line with clear-to-EOL.
     // This avoids the full screen clear that causes flicker.
     const frame = lines.slice(0, height)
-    const paintWidth = Math.max(1, width - 1)
     const buf: string[] = ["\x1b[H"] // cursor home
     for (let i = 0; i < frame.length; i++) {
       buf.push(truncateAnsi(frame[i]!, paintWidth))

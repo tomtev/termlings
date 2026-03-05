@@ -1,4 +1,4 @@
-// Workspace engine - sim engine removed
+// Workspace engine exports
 
 // Core types (used by objects.ts)
 export * from "./types.js"
@@ -11,6 +11,7 @@ export * from "./messaging-util.js"
 export * from "./tasks.js"
 export * from "./calendar.js"
 export * from "./calendar-scheduler.js"
+export * from "./task-scheduler.js"
 
 // Browser Automation
 export * from "./browser-types.js"
@@ -27,6 +28,3 @@ export * from "./query-patterns.js"
 export * from "./brand.js"
 export * from "./skills.js"
 export * from "./env.js"
-export * from "./email.js"
-export * from "./email-drafts.js"
-export * from "./email-scheduler.js"

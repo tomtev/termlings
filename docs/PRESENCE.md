@@ -67,4 +67,4 @@ If presence appears stuck or noisy:
 
 ## Legacy hooks
 
-Termlings no longer uses hooks for live presence. See `docs/HOOKS.md` only for cleanup of old hook installs.
+Termlings no longer uses hooks for live presence.

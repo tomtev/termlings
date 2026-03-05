@@ -1,6 +1,8 @@
 # Scheduler
 
-The scheduler automatically executes due calendar notifications and scheduled email drafts.
+The scheduler automatically executes:
+- due calendar notifications
+- due/overdue task reminders (for tasks with `dueDate`)
 
 ## Running the Scheduler
 
@@ -21,9 +23,9 @@ Runs continuously in the background, checking every 60 seconds for due work.
 ## How It Works
 
 1. **Checks calendar events** - Reads `.termlings/store/calendar/calendar.json`
-2. **Checks scheduled drafts** - Reads `.termlings/email/drafts/*.md` with `send_at`
-3. **Executes due items** - Sends event notifications and due drafts
-4. **Marks completed work** - Calendar marks notifications; drafts are marked `sent`
+2. **Checks task due dates** - Reads `.termlings/store/tasks/tasks.json` and tracks reminder state in `.termlings/store/tasks/scheduler-state.json`
+3. **Executes due items** - Sends event notifications and task reminders
+4. **Marks completed work** - Calendar marks notifications
 
 ## Calendar Agent Notification
 
@@ -40,6 +42,8 @@ They see this in:
 - `termlings list-agents` (recent activity)
 
 ## Setup (Recommended)
+
+If you launch the workspace with `termlings`, the scheduler daemon is auto-started for you.
 
 Add to your shell initialization file (`~/.bashrc`, `~/.zshrc`, etc.):
 
@@ -73,12 +77,12 @@ termlings scheduler --daemon
    termlings calendar show <event-id>
    ```
 
-4. **Scheduled email drafts are sent**
-   - Create a draft with `send_at` frontmatter via:
-   ```bash
-   termlings email draft new "Follow up" "Body..." --to "alice@example.com" --send-at "2026-03-05T18:00:00Z"
-   ```
-   - Scheduler sends it when due
+4. **Task reminders are checked**
+   - For tasks with `dueDate`, scheduler sends:
+   - One upcoming reminder in the 24h pre-due window
+   - One due-now reminder when due time is reached
+   - Overdue reminders every 24h while task remains incomplete
+   - Target is task assignee (`agent:<slug>`) when assigned, otherwise task creator
 
 ## Configuration
 
@@ -94,7 +98,7 @@ src/commands/scheduler.ts
 - Run scheduler daemon during work sessions
 - Use recurring events for regular meetings
 - Test calendar creation before relying on scheduler
-- Test scheduled drafts with near-future `send_at` timestamps
+- Use `dueDate` on tasks that need time-based reminders
 
 ❌ **DON'T:**
 - Create event times in the past (won't trigger)
@@ -125,10 +129,9 @@ src/commands/scheduler.ts
    termlings scheduler  # Runs once
    ```
 
-5. Verify scheduled drafts:
-   ```bash
-   termlings email draft list
-   ```
+5. Verify due task metadata:
+   - Task must include a valid `dueDate` timestamp
+   - Task status must not be `completed`
 
 **"Getting duplicate notifications"**
 
@@ -137,5 +140,4 @@ This shouldn't happen - notifications are tracked. If it does, check that `.term
 ## Related
 
 - [CALENDAR.md](CALENDAR.md) - Calendar event management
-- [EMAIL.md](EMAIL.md) - Email drafts/templates and wrapper
 - [MESSAGING.md](MESSAGING.md) - How notifications are sent
