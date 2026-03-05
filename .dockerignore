@@ -1,0 +1,8 @@
+.DS_Store
+.git
+.pi
+.claude
+.termlings
+node_modules
+project-termlings
+*.log

@@ -1,0 +1,29 @@
+services:
+  termlings:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    init: true
+    stdin_open: true
+    tty: true
+    working_dir: /workspaces
+    command: ["sleep", "infinity"]
+    environment:
+      HOME: /home/termlings
+      TERM: xterm-256color
+      COLORTERM: truecolor
+      BUN_INSTALL: /opt/bun
+      NPM_CONFIG_PREFIX: /home/termlings/.npm-global
+      AGENT_BROWSER_EXECUTABLE_PATH: /usr/bin/chromium
+    volumes:
+      - termlings-workspaces:/workspaces
+      - termlings-claude:/home/termlings/.claude
+      - termlings-codex:/home/termlings/.codex
+      - termlings-agent-browser:/home/termlings/.agent-browser
+    shm_size: "2gb"
+
+volumes:
+  termlings-workspaces:
+  termlings-claude:
+  termlings-codex:
+  termlings-agent-browser:
