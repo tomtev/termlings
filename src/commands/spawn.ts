@@ -659,9 +659,11 @@ NOTES:
         process.exit(1)
       }
 
+      const reset = "\x1b[0m"
+      const muted = "\x1b[38;5;245m"
       console.log("Warning: --spawn-all will launch agents with dangerous runtime flags:")
       for (const item of dangerousLaunches) {
-        console.log(`  - ${item.slug}: ${formatCommandPreview(item.command)}`)
+        console.log(`  - ${item.slug}: ${muted}${formatCommandPreview(item.command)}${reset}`)
       }
       const proceed = await confirm("Continue with spawn-all?", true)
       if (!proceed) {

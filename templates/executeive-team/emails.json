@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "himalaya": {
+    "binary": "himalaya",
+    "configPath": "~/.config/himalaya/config.toml"
+  },
+  "project": {
+    "account": "leadership",
+    "folder": "INBOX",
+    "from": "Leadership <leadership@example.com>",
+    "requiredEnv": [
+      "LEADERSHIP_EMAIL_PASSWORD"
+    ]
+  },
+  "agents": {}
+}

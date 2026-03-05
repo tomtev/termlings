@@ -36,7 +36,8 @@ Use `termlings request --help` if you need command details and examples.
 
 ```bash
 termlings request --help
-termlings request env VAR_NAME "why you need it" "where to get it"
+termlings request env VAR_NAME "why you need it" "where to get it" --scope project
+termlings request env VAR_NAME "internal termlings secret" --scope termlings
 termlings request confirm "yes/no question"
 termlings request choice "pick one" "option-a" "option-b"
 termlings request list
@@ -67,6 +68,7 @@ termlings message --help               # Messaging guide
 termlings conversation --help          # Read recent conversation history
 termlings request --help               # Request inputs/decisions/env vars
 termlings task --help                  # Task management
+termlings email --help                 # Email wrapper (Himalaya)
 termlings calendar --help              # Calendar events
 termlings skills --help                # Skills discovery/install/update (skills.sh wrapper)
 termlings brand --help                 # Brand CLI
@@ -83,7 +85,8 @@ termlings message agent:growth "hello"             # Message teammate by slug
 termlings conversation human:default --limit 120   # Human/operator DM thread
 termlings conversation recent --limit 120          # Cross-thread recent context (secondary)
 termlings message human:default "help needed"      # Message operator
-termlings request env VAR_NAME "reason" "url"      # Request env var from operator
+termlings request env VAR_NAME "reason" "url" --scope project  # App/runtime env var
+termlings request env VAR_NAME "reason" --scope termlings      # Termlings-internal env var
 termlings request confirm "Deploy to production?"  # Ask yes/no question
 termlings request choice "Framework?" "Svelte" "Next" # Ask operator to choose
 termlings request list                             # Check if your requests were answered
@@ -104,6 +107,18 @@ termlings task depends <id> --remove <dep-id>     # Remove dependency
 ```bash
 termlings calendar list                            # Your assigned events
 termlings calendar show <id>                       # Event details
+```
+
+**Email (Himalaya wrapper):**
+```bash
+termlings email accounts                            # Show active + configured accounts
+termlings email inbox --limit 20                    # List inbox envelopes
+termlings email read <id>                           # Read message by envelope id
+termlings email send "to@example.com" "Subject" "Body text"  # Send message
+termlings email setup <account>                     # Run Himalaya account wizard
+termlings email draft new "Subject" "Body..." --to "to@example.com"  # Save draft
+termlings email draft send <id>                     # Send draft
+termlings email config init                         # Create .termlings/emails.json
 ```
 
 **Brand profile:**

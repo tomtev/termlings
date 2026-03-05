@@ -7,6 +7,7 @@
 import { launchWorkspaceTui } from "./tui/tui.js";
 import { getUpdateNotice } from "./update-check.js";
 import { runSimCommand } from "./sim/index.js";
+import { loadTermlingsEnv } from "./engine/env.js";
 
 function tmuxInstallHint(): string {
   if (process.platform === "darwin") return "macOS: brew install tmux";
@@ -15,6 +16,7 @@ function tmuxInstallHint(): string {
 }
 
 const args = process.argv.slice(2);
+loadTermlingsEnv();
 const flags = new Set<string>();
 const opts: Record<string, string> = {};
 let input: string | undefined;
@@ -28,9 +30,10 @@ const VALUE_FLAGS = new Set([
   "port", "host", "color", "size", "padding", "bg", "fps", "duration", "out",
   "headed", "headless", "depth", "max-tokens", "maxTokens", "tab", "tab-id", "tabId", "limit",
   "from", "primary", "logo", "domain", "email", "website", "profile", "template",
+  "to", "cc", "bcc", "subject", "send-at", "send_at",
   "token", "cors-origin", "cors_origin", "allowed-projects", "allowed_projects",
   "max-body-kb", "max_body_kb", "rate-limit", "rate_limit", "sse-max", "sse_max",
-  "agent",
+  "agent", "account", "folder", "scope",
 ]);
 
 // Check if first arg is an agent name
@@ -123,7 +126,7 @@ try {
 
 Workspace:
   termlings                Start the terminal workspace UI
-  termlings --auto-spawn   Start tmux control panel and spawn all agents behind it
+  termlings --auto-spawn   Start tmux control panel, scheduler daemon, and all agent windows
   termlings init           Initialize .termlings in this project
   termlings --server       Run secure HTTP server mode
 
@@ -138,6 +141,7 @@ Agent System:
   termlings conversation <target>     Read message history
   termlings request <type> Request decision/env var from operator
   termlings task <cmd>     Task management
+  termlings email <cmd>    Email wrapper (Himalaya)
   termlings calendar <cmd> Calendar management
   termlings brand <cmd>    Brand profiles (colors/logo/voice/domain/email)
 
@@ -188,33 +192,67 @@ Sim (optional):
         console.error("Run: termlings --help");
         process.exit(1);
       }
+      const autoSpawn = flags.has("auto-spawn");
+      let autoSpawnEnabled = autoSpawn;
+      if (autoSpawn) {
+        const { isTmuxAvailable } = await import("./engine/tmux.js");
+        if (!isTmuxAvailable()) {
+          autoSpawnEnabled = false;
+          console.log("tmux not found. Starting workspace UI without auto-spawn.");
+          console.log("Start agents manually in another terminal: `termlings spawn`");
+          console.log("Optional scheduler daemon in another terminal: `termlings scheduler --daemon`");
+          console.log(`Install tmux for one-step auto-spawn. ${tmuxInstallHint()}`);
+        }
+      }
 
       // Show init banner if no workspace exists yet
       const { existsSync } = await import("fs");
       const { join } = await import("path");
       if (!existsSync(join(process.cwd(), ".termlings"))) {
         const { handleInit } = await import("./commands/init.js");
-        await handleInit(new Set(), ["init"], {});
-        process.exit(0);
+        const initExit = await handleInit(new Set(), ["init"], {}, { exitOnComplete: !autoSpawn });
+        if (!autoSpawn) {
+          process.exit(0);
+        }
+        if (typeof initExit === "number" && initExit !== 0) {
+          process.exit(initExit);
+        }
+        if (!existsSync(join(process.cwd(), ".termlings"))) {
+          console.error("Workspace setup was not completed; auto-spawn cancelled.");
+          process.exit(1);
+        }
       }
 
       const { discoverLocalAgents } = await import("./agents/discover.js");
-      const agents = discoverLocalAgents();
+      let agents = discoverLocalAgents();
       if (agents.length === 0) {
         const { handleInit } = await import("./commands/init.js");
-        await handleInit(new Set(["force"]), ["init"], {});
-        process.exit(0);
+        const initExit = await handleInit(new Set(["force"]), ["init"], {}, { exitOnComplete: !autoSpawn });
+        if (!autoSpawn) {
+          process.exit(0);
+        }
+        if (typeof initExit === "number" && initExit !== 0) {
+          process.exit(initExit);
+        }
+        agents = discoverLocalAgents();
       }
 
-      if (flags.has("auto-spawn")) {
-        const { attachControlSession, isTmuxAvailable } = await import("./engine/tmux.js");
-        if (!isTmuxAvailable()) {
-          console.error("`termlings --auto-spawn` requires tmux.");
-          console.error(`Install tmux first. ${tmuxInstallHint()}`);
+      if (autoSpawnEnabled) {
+        if (agents.length === 0) {
+          console.error("No agents found in .termlings/agents after setup.");
+          console.error("Add at least one agent, then run `termlings --auto-spawn` again.");
           process.exit(1);
         }
+        const { attachControlSession, openSchedulerWindow, projectTmuxSessionName } = await import("./engine/tmux.js");
         const { handleSpawn } = await import("./commands/spawn.js");
         await handleSpawn(new Set(["all", "detached", "quiet"]), ["spawn"], {});
+        const root = process.cwd();
+        const sessionName = projectTmuxSessionName(root);
+        const scheduler = openSchedulerWindow(sessionName, root);
+        if (!scheduler.ok) {
+          console.error(`Warning: failed to start scheduler daemon: ${scheduler.error || "unknown error"}`);
+          console.error("Run `termlings scheduler --daemon` manually in another terminal if needed.");
+        }
         const attached = attachControlSession(process.cwd());
         if (!attached.ok) {
           console.error(attached.error || "Failed to attach tmux control session.");

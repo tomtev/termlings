@@ -15,6 +15,7 @@ import { handleRequest } from "./request.js";
 import { handleOrgChart } from "./org-chart.js";
 import { handleBrief } from "./brief.js";
 import { handleBrand } from "./brand.js";
+import { handleEmail } from "./email.js";
 import { handleConversation } from "./conversation.js";
 import { handleSkills } from "./skills.js";
 import { handlePeek } from "./peek.js";
@@ -60,6 +61,10 @@ export async function routeCommand(
       await handleBrand(flags, positional, opts);
       return true;
 
+    case "email":
+      await handleEmail(flags, positional, opts);
+      return true;
+
     case "skills":
       await handleSkills(flags, positional);
       return true;
@@ -97,7 +102,7 @@ export async function routeCommand(
       return true;
 
     case "request":
-      await handleRequest(flags, positional);
+      await handleRequest(flags, positional, opts);
       return true;
   }
 

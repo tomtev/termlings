@@ -124,18 +124,19 @@ function loadManageAgentsContext(): string {
 }
 
 function parseSoul(): { name: string; dna: string } {
-  const agentsMdPath = resolvePath("AGENTS.md")
-  if (!existsSync(agentsMdPath)) return { name: "", dna: "" }
+  const slug = (process.env.TERMLINGS_AGENT_SLUG || "").trim()
+  if (!slug) return { name: "", dna: "" }
+  const soulPath = resolvePath(".termlings", "agents", slug, "SOUL.md")
+  if (!existsSync(soulPath)) return { name: "", dna: "" }
   try {
-    const content = readFileSync(agentsMdPath, "utf8")
-    const soulMatch = content.match(/<agent-soul>([\s\S]*?)<\/agent-soul>/)
-    if (!soulMatch) return { name: "", dna: "" }
-    const block = soulMatch[1]!
-    const nameMatch = block.match(/^Name:\s*(.+)/m)
-    const dnaMatch = block.match(/^DNA:\s*([0-9a-fA-F]+)/m)
+    const content = readFileSync(soulPath, "utf8")
+    const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+    const yaml = frontmatterMatch?.[1] ?? ""
+    const nameMatch = yaml.match(/^name:\s*(.+)$/m)
+    const dnaMatch = yaml.match(/^dna:\s*(.+)$/m)
     return {
-      name: nameMatch ? nameMatch[1]!.trim() : "",
-      dna: dnaMatch ? dnaMatch[1]!.trim() : "",
+      name: nameMatch ? nameMatch[1]!.trim().replace(/^['"]|['"]$/g, "") : "",
+      dna: dnaMatch ? dnaMatch[1]!.trim().replace(/^['"]|['"]$/g, "") : "",
     }
   } catch {
     return { name: "", dna: "" }

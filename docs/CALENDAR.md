@@ -187,4 +187,4 @@ Each event includes:
 ## Related
 
 - [MESSAGING.md](MESSAGING.md) - How agents receive event notifications
-- [../AGENTS.md](../AGENTS.md) - Agent coordination
+- [SOUL.md](SOUL.md) - Agent identity and reporting lines

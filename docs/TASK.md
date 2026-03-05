@@ -145,4 +145,4 @@ Each task includes:
 ## Related
 
 - [MESSAGING.md](MESSAGING.md) - Notify teammates about task progress
-- [../AGENTS.md](../AGENTS.md) - Agent coordination patterns
+- [SOUL.md](SOUL.md) - Agent identity and reporting lines

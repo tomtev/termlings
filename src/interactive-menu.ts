@@ -17,6 +17,11 @@ const ANSI_FOOTER = "\x1b[38;5;244m";
 const ANSI_HINT = "\x1b[38;5;242m";
 const ANSI_ESCAPE = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
 
+function supportsAnsi(output: Writable): boolean {
+  const stream = output as NodeJS.WriteStream;
+  return stream.isTTY === true;
+}
+
 function visibleLength(input: string): number {
   return input.replace(ANSI_ESCAPE, "").length;
 }
@@ -170,12 +175,19 @@ export async function confirm(
 
   return new Promise<boolean>((resolve) => {
     const defaultStr = defaultValue ? "Y/n" : "y/N";
-    rl.question(`${message} (${defaultStr}) `, (answer) => {
+    const decoratedDefault = supportsAnsi(output)
+      ? defaultValue
+        ? `${ANSI_FOOTER}Y${ANSI_RESET}/n`
+        : `y/${ANSI_FOOTER}N${ANSI_RESET}`
+      : defaultStr;
+
+    rl.question(`${message} [${decoratedDefault}] `, (answer) => {
       rl.close();
-      if (answer === "") {
+      const normalized = answer.trim().toLowerCase();
+      if (normalized === "") {
         resolve(defaultValue);
       } else {
-        resolve(answer.toLowerCase() === "y");
+        resolve(normalized === "y" || normalized === "yes");
       }
     });
   });

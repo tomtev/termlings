@@ -141,7 +141,7 @@ When an agent process exits:
 
 ## Related Docs
 
-- [../AGENTS.md](../AGENTS.md)
+- [SOUL.md](SOUL.md)
 - [TERMLINGS.md](TERMLINGS.md)
 - [INIT.md](INIT.md)
 - [PRESENCE.md](PRESENCE.md)

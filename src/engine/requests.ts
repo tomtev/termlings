@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 
 import { join } from "path"
 import { getTermlingsDir } from "./ipc.js"
 import { randomBytes } from "crypto"
+import { writeEnvVarForScope, type EnvScope } from "./env.js"
 
 export type RequestType = "env" | "confirm" | "choice"
 export type RequestStatus = "pending" | "resolved" | "dismissed"
@@ -26,6 +27,7 @@ export interface AgentRequest {
   varName?: string
   reason?: string
   url?: string
+  envScope?: EnvScope
 
   // confirm
   question?: string
@@ -151,7 +153,7 @@ export function getRequest(id: string): AgentRequest | null {
 
 /**
  * Resolve a request with a response.
- * For env requests, the value is written to .env and NOT stored in the request JSON.
+ * For env requests, the value is written to either project .env or .termlings/.env and NOT stored in the request JSON.
  */
 export function resolveRequest(id: string, response: string): AgentRequest | null {
   const outcome = mutateRequestWithRetry<{ request: AgentRequest; resolvedNow: boolean }>(
@@ -176,43 +178,12 @@ export function resolveRequest(id: string, response: string): AgentRequest | nul
   if (!outcome) return null
 
   if (outcome.resolvedNow && outcome.request.type === "env") {
-    // Write to .env file only after winning CAS write.
-    writeEnvVar(outcome.request.varName!, response)
+    // Write env value only after winning CAS write.
+    const scope: EnvScope = outcome.request.envScope === "termlings" ? "termlings" : "project"
+    writeEnvVarForScope(outcome.request.varName!, response, scope)
   }
 
   return outcome.request
-}
-
-/**
- * Write or update an env var in the project .env file.
- * Replaces existing value if key exists, appends if new.
- */
-function writeEnvVar(key: string, value: string): void {
-  const envPath = join(process.cwd(), ".env")
-  let content = ""
-
-  if (existsSync(envPath)) {
-    content = readFileSync(envPath, "utf-8")
-  }
-
-  // Escape value: wrap in quotes if it contains spaces or special chars
-  const needsQuotes = /[\s#"'\\$`!]/.test(value)
-  const escapedValue = needsQuotes ? `"${value.replace(/["\\$`]/g, "\\$&")}"` : value
-  const line = `${key}=${escapedValue}`
-
-  // Check if key already exists
-  const regex = new RegExp(`^${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}=.*$`, "m")
-  if (regex.test(content)) {
-    content = content.replace(regex, line)
-  } else {
-    // Append with newline
-    if (content.length > 0 && !content.endsWith("\n")) {
-      content += "\n"
-    }
-    content += line + "\n"
-  }
-
-  writeFileSync(envPath, content)
 }
 
 /**

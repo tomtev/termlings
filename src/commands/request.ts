@@ -5,14 +5,15 @@
  */
 
 import { createRequest, listRequests, getRequest } from "../engine/requests.js";
+import type { EnvScope } from "../engine/env.js";
 
-export async function handleRequest(flags: Set<string>, positional: string[]) {
+export async function handleRequest(flags: Set<string>, positional: string[], opts: Record<string, string> = {}) {
   if (flags.has("help") || !positional[1]) {
     console.log(`
 Request - Ask the operator for decisions, env vars, or approvals
 
 USAGE:
-  termlings request env <VAR_NAME> [reason] [url]
+  termlings request env <VAR_NAME> [reason] [url] [--scope project|termlings]
   termlings request confirm <question>
   termlings request choice <question> <option1> <option2> [option3...]
   termlings request list [--all]
@@ -26,7 +27,8 @@ SUBCOMMANDS:
   check    Check if a request was answered (prints response value)
 
 EXAMPLES:
-  termlings request env QUIVERAI_API_KEY "Needed for logo generation" "https://app.quiver.ai/settings/api-keys"
+  termlings request env OPENAI_API_KEY "Needed for app runtime" --scope project
+  termlings request env TEAM_EMAIL_PASSWORD "Needed by termlings email wrapper" --scope termlings
   termlings request confirm "Should we deploy to production?"
   termlings request choice "Which framework?" "SvelteKit" "Next.js" "Remix"
   termlings request list
@@ -38,7 +40,7 @@ EXAMPLES:
   const subcommand = positional[1];
 
   if (subcommand === "env") {
-    await handleRequestEnv(positional);
+    await handleRequestEnv(flags, positional, opts);
     return;
   }
 
@@ -81,12 +83,32 @@ function getAgentContext() {
   return { sessionId: sessionId!, agentName, agentDna, agentSlug };
 }
 
-async function handleRequestEnv(positional: string[]) {
+function parseScope(flags: Set<string>, opts: Record<string, string>): EnvScope {
+  if (flags.has("termlings") || flags.has("internal")) {
+    return "termlings";
+  }
+
+  const raw = (opts.scope || "").trim().toLowerCase();
+  if (!raw || raw === "project") return "project";
+  if (raw === "termlings" || raw === "internal") return "termlings";
+
+  console.error(`Invalid --scope value: ${opts.scope}`);
+  console.error("Expected one of: project, termlings");
+  process.exit(1);
+}
+
+function scopeFileLabel(scope: EnvScope): string {
+  return scope === "termlings" ? ".termlings/.env" : ".env";
+}
+
+async function handleRequestEnv(flags: Set<string>, positional: string[], opts: Record<string, string>) {
   const varName = positional[2];
   if (!varName) {
-    console.error("Usage: termlings request env <VAR_NAME> [reason] [url]");
+    console.error("Usage: termlings request env <VAR_NAME> [reason] [url] [--scope project|termlings]");
     process.exit(1);
   }
+
+  const scope = parseScope(flags, opts);
 
   // Check if already set
   if (process.env[varName]) {
@@ -107,10 +129,11 @@ async function handleRequestEnv(positional: string[]) {
     varName,
     reason: reason || undefined,
     url: url || undefined,
+    envScope: scope,
   });
 
   console.log(`Request submitted: ${request.id}`);
-  console.log(`Waiting for operator to set ${varName}`);
+  console.log(`Waiting for operator to set ${varName} in ${scopeFileLabel(scope)}`);
 }
 
 async function handleRequestConfirm(positional: string[]) {
@@ -175,7 +198,8 @@ function handleRequestList(flags: Set<string>) {
     const ago = Math.floor((Date.now() - req.ts) / 1000);
 
     if (req.type === "env") {
-      console.log(`  [${status}] ${req.id}  ${from}: env ${req.varName}${req.reason ? ` — ${req.reason}` : ""} (${ago}s ago)`);
+      const scope = req.envScope === "termlings" ? "termlings" : "project";
+      console.log(`  [${status}] ${req.id}  ${from}: env ${req.varName} [${scope}]${req.reason ? ` — ${req.reason}` : ""} (${ago}s ago)`);
     } else if (req.type === "confirm") {
       console.log(`  [${status}] ${req.id}  ${from}: ${req.question} (${ago}s ago)`);
     } else if (req.type === "choice") {
@@ -184,7 +208,7 @@ function handleRequestList(flags: Set<string>) {
 
     if (req.status === "resolved") {
       if (req.type === "env") {
-        console.log(`           → set in .env`);
+        console.log(`           → set in ${scopeFileLabel(req.envScope === "termlings" ? "termlings" : "project")}`);
       } else if (req.response) {
         console.log(`           → ${req.response}`);
       }
@@ -217,8 +241,9 @@ function handleRequestCheck(positional: string[]) {
 
   // Resolved
   if (req.type === "env") {
-    // Never print env var values — they are written to .env directly
-    console.log(`${req.varName}: set in .env`);
+    // Never print env var values — they are written to env files directly.
+    const scope = req.envScope === "termlings" ? "termlings" : "project";
+    console.log(`${req.varName}: set in ${scopeFileLabel(scope)}`);
   } else {
     console.log(req.response || "");
   }

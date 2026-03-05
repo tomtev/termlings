@@ -241,7 +241,13 @@ async function maybeAutoExtractShadcnBrand(root = process.cwd()): Promise<void> 
   }
 }
 
-export async function handleInit(flags: Set<string>, positional: string[], opts: Record<string, string>) {
+export async function handleInit(
+  flags: Set<string>,
+  positional: string[],
+  opts: Record<string, string>,
+  internal: { exitOnComplete?: boolean } = {},
+) {
+  const exitOnComplete = internal.exitOnComplete !== false;
   if (flags.has("help")) {
     console.log(`
 🚀 Init - Initialize Termlings workspace
@@ -295,6 +301,7 @@ NEXT STEPS:
   3. termlings spawn --all Spawn all agents (requires tmux)
   4. termlings org-chart   See team hierarchy
 `);
+    if (!exitOnComplete) return 0;
     return;
   }
 
@@ -305,6 +312,7 @@ NEXT STEPS:
     if (existsSync(join(process.cwd(), ".termlings"))) {
       console.log("Workspace already exists at .termlings");
       console.log("Run `termlings init --force` to re-run setup and template selection.");
+      if (!exitOnComplete) return 0;
       process.exit(0);
     }
   }
@@ -353,5 +361,6 @@ NEXT STEPS:
       restoreTmuxStatus?.();
     } catch {}
   }
+  if (!exitOnComplete) return exitCode;
   process.exit(exitCode);
 }

@@ -386,6 +386,7 @@ termlings create alice       # Random DNA assigned
 - [CLAUDE.md](CLAUDE.md) - Launching termlings with Claude Code
 - [MESSAGING.md](MESSAGING.md) - How termlings communicate
 - [TASK.md](TASK.md) - Termlings collaborating on tasks
+- [EMAIL.md](EMAIL.md) - Email wrapper and account mapping
 - [BROWSER.md](BROWSER.md) - Termlings automating the web
-- [../AGENTS.md](../AGENTS.md) - Agent system architecture
+- [SOUL.md](SOUL.md) - SOUL frontmatter and identity schema
 - [../src/termlings-system-message.md](../src/termlings-system-message.md) - In-session termling guide

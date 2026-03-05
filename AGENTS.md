@@ -26,11 +26,14 @@ termlings (CLI)
   ├─ termlings message ...    # direct messaging
   ├─ termlings conversation   # read conversation history
   ├─ termlings task ...       # task management
+  ├─ termlings email ...      # email workflow wrapper (Himalaya)
   ├─ termlings calendar ...   # calendar viewing
   ├─ termlings --server       # secure local HTTP API server
   └─ termlings                # terminal workspace UI (default)
 
 Workspace state: <project>/.termlings/
+  .env
+  emails.json
   sessions/*.json
   store/messages/*
   store/tasks/tasks.json
@@ -112,6 +115,19 @@ termlings task status <id> <status> [note]    # Update status
 termlings task note <id> <note>               # Add progress note
 termlings task depends <id> <dep-id>          # Add dependency
 termlings task depends <id> --remove <dep-id> # Remove dependency
+```
+
+### Email
+```bash
+termlings email accounts                        # Show active + configured email accounts
+termlings email inbox [--limit <n>]             # List inbox envelopes
+termlings email read <id>                       # Read message
+termlings email send <to> <subject> <body...>  # Send message
+termlings email setup <account>                 # Run Himalaya account setup wizard
+termlings email doctor                          # Diagnose email account
+termlings email config init                     # Create .termlings/emails.json
+termlings email draft new <title> ...           # Create markdown draft
+termlings email draft send <id>                 # Send draft now
 ```
 
 ### Calendar
@@ -201,6 +217,7 @@ bin/termlings.js              # Entry point
         ├── messaging.ts      # list-agents alias + message
         ├── org-chart.ts      # org structure + reporting lines
         ├── tasks.ts          # task commands
+        ├── email.ts          # email commands
         ├── calendar.ts       # calendar commands
         ├── browser.ts        # browser automation
         ├── scheduler.ts      # calendar scheduler
@@ -213,6 +230,7 @@ Each command has comprehensive `--help` documentation:
 ```bash
 termlings calendar --help      # Full calendar docs + examples
 termlings task --help          # Task management guide
+termlings email --help         # Email wrapper guide
 termlings browser --help       # Browser automation guide
 ```
 

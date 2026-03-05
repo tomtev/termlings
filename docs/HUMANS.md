@@ -181,7 +181,7 @@ You're responsible for:
 termlings message human:default "Need AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY for S3 access"
 
 # You respond
-termlings message agent:developer "Check your .env file, I've added the AWS credentials"
+termlings message agent:developer "Check project .env (or .termlings/.env for internal secrets), I've added the AWS credentials"
 
 # Agent can now access S3
 export AWS_ACCESS_KEY_ID=...
@@ -236,7 +236,7 @@ You're responsible for:
 termlings message human:default "Need to generate new GitHub token. Can you do this?"
 
 # You respond
-termlings message agent:designer "Token created: ghp_xxxx...., added to .env"
+termlings message agent:designer "Token created: ghp_xxxx...., added to project .env"
 ```
 
 ## Future: Multiple Humans & Access Control
@@ -430,11 +430,11 @@ A: Yes! Edit `.termlings/humans/default/SOUL.md` and change the `name:` field. A
 
 **Q: How do agents know I've added credentials?**
 
-A: Message them! `termlings message agent:<slug> "I've added AWS_KEY to your .env, you can now access S3"`. They can't detect environment changes automatically.
+A: Message them! `termlings message agent:<slug> "I've added AWS_KEY to project .env, you can now access S3"`. They can't detect environment changes automatically.
 
 **Q: What if I need to revoke an agent's access?**
 
-A: That's a future feature. For now, manually remove credentials from `.env` or change passwords in external services.
+A: That's a future feature. For now, manually remove credentials from project `.env` (or `.termlings/.env` for internal Termlings-only values) or change passwords in external services.
 
 **Q: Can multiple humans work in the same workspace?**
 
@@ -449,4 +449,4 @@ A: Just press Enter to use the auto-detected name, or re-run `termlings init --f
 - [TERMLINGS.md](TERMLINGS.md) - Agent identity and lifecycle
 - [MESSAGING.md](MESSAGING.md) - How humans and agents communicate
 - [TASK.md](TASK.md) - Task management and assignment
-- [../AGENTS.md](../AGENTS.md) - Agent system architecture
+- [SOUL.md](SOUL.md) - Shared SOUL frontmatter conventions

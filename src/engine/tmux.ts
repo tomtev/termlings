@@ -325,6 +325,35 @@ export function openAgentWindow(
   return { ok: true, created: true }
 }
 
+export function openSchedulerWindow(
+  sessionName: string,
+  root: string,
+): { ok: boolean; created: boolean; error?: string } {
+  const windowName = "scheduler"
+  const command = `cd ${shellQuote(root)} && termlings scheduler --daemon`
+
+  if (!tmuxHasSession(sessionName)) {
+    const createdSession = runTmux(["new-session", "-d", "-s", sessionName, "-n", windowName, "-c", root, command])
+    if (!createdSession.ok) {
+      return { ok: false, created: false, error: createdSession.error || `Failed to create session ${sessionName}.` }
+    }
+    return { ok: true, created: true }
+  }
+
+  const windows = listTmuxWindows(sessionName)
+  const existing = windows.find((window) => window.name === windowName)
+  if (existing) {
+    return { ok: true, created: false }
+  }
+
+  const created = runTmux(["new-window", "-d", "-t", sessionName, "-n", windowName, "-c", root, command])
+  if (!created.ok) {
+    return { ok: false, created: false, error: created.error || `Failed to open window ${windowName}.` }
+  }
+
+  return { ok: true, created: true }
+}
+
 export function killTmuxWindow(sessionName: string, target: string): { ok: boolean; error?: string } {
   const result = runTmux(["kill-window", "-t", `${sessionName}:${target}`], false)
   if (!result.ok) {

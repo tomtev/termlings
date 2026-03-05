@@ -9,7 +9,7 @@ export interface AgentAdapter {
   /** Binary / command name to spawn (for example "claude", "codex") */
   bin: string
 
-  /** Fallback display name when no --name or AGENTS.md name is found */
+  /** Fallback display name when no explicit name or SOUL.md name is found */
   defaultName: string
 
   /**

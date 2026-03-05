@@ -2350,7 +2350,8 @@ class WorkspaceTui {
         process.env[selected.varName!] = value
         this.requestInputMode = false
         this.requestInputDraft = ""
-        this.statusMessage = `Set ${selected.varName} in .env`
+        const envPath = selected.envScope === "termlings" ? ".termlings/.env" : ".env"
+        this.statusMessage = `Set ${selected.varName} in ${envPath}`
         await this.notifyRequestResolved(selected, "(set)")
       }
       return
@@ -2366,7 +2367,8 @@ class WorkspaceTui {
 
     let text: string
     if (req.type === "env") {
-      text = `${req.varName} has been set in the project .env file. Restart or re-source your environment to pick it up.`
+      const envPath = req.envScope === "termlings" ? ".termlings/.env" : ".env"
+      text = `${req.varName} has been set in ${envPath}. Restart or re-source your environment to pick it up.`
     } else if (req.type === "confirm") {
       text = `Your question "${req.question}" was answered: ${response}`
     } else if (req.type === "choice") {
@@ -3284,8 +3286,9 @@ class WorkspaceTui {
       if (req.type === "env") {
         if (req.reason) pushWrapped(asText(req.reason), { color: FG_META, prefix: "Reason: " })
         if (req.url) pushWrapped(asText(req.url), { color: FG_META })
+        const envPath = req.envScope === "termlings" ? ".termlings/.env" : ".env"
         if (selected && this.requestInputMode) {
-          pushWrapped(`Value (saved to .env): ${this.requestInputDraft}█`, { color: FG_SELECTED })
+          pushWrapped(`Value (saved to ${envPath}): ${this.requestInputDraft}█`, { color: FG_SELECTED })
         } else if (selected) {
           pushWrapped("Press Enter to set value", { color: FG_META })
         }
@@ -3986,7 +3989,9 @@ class WorkspaceTui {
         for (let i = 0; i < row.length; i++) {
           const block = row[i]!
           const labelText = fitPlain(truncatePlain(block.displayLabel, block.width), block.width)
-          const styled = block.selected ? `${FG_SELECTED}${labelText}${ANSI_RESET}` : labelText
+          const styled = block.selected
+            ? `${FG_SELECTED}${labelText}${ANSI_RESET}`
+            : `${FG_META}${labelText}${ANSI_RESET}`
           labelLine += padAnsi(styled, block.width)
           if (i < row.length - 1) labelLine += "  "
         }
@@ -4042,7 +4047,9 @@ class WorkspaceTui {
     for (let index = 0; index < shown.length; index++) {
       const block = shown[index]!
       const labelText = fitPlain(truncatePlain(block.displayLabel, block.width), block.width)
-      const styledLabel = block.selected ? `${FG_SELECTED}${labelText}${ANSI_RESET}` : labelText
+      const styledLabel = block.selected
+        ? `${FG_SELECTED}${labelText}${ANSI_RESET}`
+        : `${FG_META}${labelText}${ANSI_RESET}`
       labels += padAnsi(styledLabel, block.width)
       if (index < shown.length - 1) {
         labels += "  "

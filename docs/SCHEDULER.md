@@ -1,6 +1,6 @@
-# Task Scheduler
+# Scheduler
 
-The scheduler automatically notifies agents when calendar events start.
+The scheduler automatically executes due calendar notifications and scheduled email drafts.
 
 ## Running the Scheduler
 
@@ -9,23 +9,23 @@ The scheduler automatically notifies agents when calendar events start.
 termlings scheduler
 ```
 
-Checks for due events once and exits.
+Checks for due work once and exits.
 
 ### Daemon mode (background)
 ```bash
 termlings scheduler --daemon
 ```
 
-Runs continuously in the background, checking every 60 seconds for due events.
+Runs continuously in the background, checking every 60 seconds for due work.
 
 ## How It Works
 
 1. **Checks calendar events** - Reads `.termlings/store/calendar/calendar.json`
-2. **Finds due events** - Identifies events where start time ≤ now
-3. **Sends notifications** - Sends DM to each assigned agent
-4. **Marks as notified** - Records that notification was sent (no duplicate notifications)
+2. **Checks scheduled drafts** - Reads `.termlings/email/drafts/*.md` with `send_at`
+3. **Executes due items** - Sends event notifications and due drafts
+4. **Marks completed work** - Calendar marks notifications; drafts are marked `sent`
 
-## Agent Notification
+## Calendar Agent Notification
 
 When an event is due, agents receive a message:
 
@@ -73,12 +73,19 @@ termlings scheduler --daemon
    termlings calendar show <event-id>
    ```
 
+4. **Scheduled email drafts are sent**
+   - Create a draft with `send_at` frontmatter via:
+   ```bash
+   termlings email draft new "Follow up" "Body..." --to "alice@example.com" --send-at "2026-03-05T18:00:00Z"
+   ```
+   - Scheduler sends it when due
+
 ## Configuration
 
 Currently the scheduler checks every 60 seconds (hard-coded). To change, edit the scheduler code:
 
 ```
-src/engine/calendar-scheduler.ts
+src/commands/scheduler.ts
 ```
 
 ## Best Practices
@@ -87,6 +94,7 @@ src/engine/calendar-scheduler.ts
 - Run scheduler daemon during work sessions
 - Use recurring events for regular meetings
 - Test calendar creation before relying on scheduler
+- Test scheduled drafts with near-future `send_at` timestamps
 
 ❌ **DON'T:**
 - Create event times in the past (won't trigger)
@@ -117,6 +125,11 @@ src/engine/calendar-scheduler.ts
    termlings scheduler  # Runs once
    ```
 
+5. Verify scheduled drafts:
+   ```bash
+   termlings email draft list
+   ```
+
 **"Getting duplicate notifications"**
 
 This shouldn't happen - notifications are tracked. If it does, check that `.termlings/store/calendar/calendar.json` hasn't been corrupted.
@@ -124,4 +137,5 @@ This shouldn't happen - notifications are tracked. If it does, check that `.term
 ## Related
 
 - [CALENDAR.md](CALENDAR.md) - Calendar event management
+- [EMAIL.md](EMAIL.md) - Email drafts/templates and wrapper
 - [MESSAGING.md](MESSAGING.md) - How notifications are sent

@@ -114,4 +114,4 @@ termlings init --force
 termlings claude
 ```
 
-See [HOOKS.md](HOOKS.md) only for legacy cleanup of old hook installs and [../AGENTS.md](../AGENTS.md) for detailed agent documentation.
+See [HOOKS.md](HOOKS.md) only for legacy cleanup of old hook installs and [SOUL.md](SOUL.md) for identity and role configuration.
