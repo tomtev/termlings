@@ -34,6 +34,70 @@ DNA encodes:
 - Hair style
 - Two color hues
 
+## Framework Integrations
+
+You can render avatars directly in app code using framework exports from `termlings`.
+
+### React
+
+```tsx
+import { Avatar } from "termlings/react";
+
+export function TeamCard() {
+  return <Avatar dna="2c5f423" size="lg" talking />;
+}
+```
+
+### Svelte
+
+```svelte
+<script lang="ts">
+  import { Avatar } from "termlings/svelte";
+</script>
+
+<Avatar dna="2c5f423" size="lg" />
+```
+
+### Vue
+
+```vue
+<script setup lang="ts">
+import { Avatar } from "termlings/vue";
+</script>
+
+<template>
+  <Avatar dna="2c5f423" size="lg" />
+</template>
+```
+
+### Ink (terminal React)
+
+```tsx
+import React from "react";
+import { render } from "ink";
+import { Avatar } from "termlings/ink";
+
+render(<Avatar dna="2c5f423" compact />);
+```
+
+### Shared component props
+
+- `dna?: string` - explicit 7-char DNA
+- `name?: string` - deterministic DNA source when `dna` is not provided
+- `walking?: boolean`
+- `talking?: boolean`
+- `waving?: boolean`
+- `bw?: boolean`
+
+Web components (`react`, `svelte`, `vue`) also support:
+
+- `size?: "sm" | "lg" | "xl"`
+- `backside?: boolean`
+
+Ink component supports:
+
+- `compact?: boolean`
+
 ## Output Formats
 
 ### Terminal (default)

@@ -9,12 +9,6 @@ termlings org-chart
 termlings org-chart --json
 ```
 
-Legacy alias:
-
-```bash
-termlings list-agents
-```
-
 ## What It Shows
 
 - Humans from `.termlings/humans/*/SOUL.md`
