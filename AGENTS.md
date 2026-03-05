@@ -163,7 +163,6 @@ termlings create --dna <hex>        # Create with DNA
 termlings avatar [dna|name]         # Visualize avatar
 termlings avatar --svg              # SVG output
 termlings avatar --mp4 --walk       # Animated MP4
-termlings avatar object <type>      # Render object
 ```
 
 ### Message targets

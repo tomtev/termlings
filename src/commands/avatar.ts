@@ -1,13 +1,13 @@
 /**
- * Avatar command - visualize termling avatars and objects
+ * Avatar command - visualize termling avatars
  */
 
 export async function handleAvatar(flags: Set<string>, positional: string[], opts: Record<string, string>) {
   if (flags.has("help")) {
     console.log(`
-🎨 Avatar - Visualize termling avatars & objects
+🎨 Avatar - Visualize termling avatars
 
-Terminal rendering of termling avatars and world objects.
+Terminal rendering of termling avatars.
 
 AVATAR RENDERING:
   termlings avatar                          Render random avatar
@@ -25,12 +25,6 @@ AVATAR OPTIONS:
   --info                                    Show DNA traits
   --bw                                      Black & white mode
 
-OBJECT RENDERING:
-  termlings avatar object <type>            Render object type
-  termlings avatar object <type> --list     List all objects
-  termlings avatar object <type> --color R,G,B  Custom color
-  termlings avatar object <type> --debug-collision  Show collision
-
 EXAMPLES:
   $ termlings avatar 2c5f423
   alice [dna: 2c5f423]
@@ -41,11 +35,14 @@ EXAMPLES:
 
   $ termlings avatar alice --mp4 --walk
   (creates animated MP4 with walking)
-
-  $ termlings avatar object table
-  (renders table object)
 `);
     return;
+  }
+
+  if (positional.length > 2) {
+    console.error("Unexpected arguments for `termlings avatar`.")
+    console.error("Usage: termlings avatar [dna|name] [options]")
+    process.exit(1)
   }
 
   const {
@@ -54,58 +51,8 @@ EXAMPLES:
     traitsFromName, generateRandomDNA, generateGrid, hslToRgb, LEGS
   } = await import("../index.js");
 
-  let renderType = positional[1] === "object" ? "object" : "avatar";
-  let renderInput = renderType === "object" ? positional[2] : positional[1];
-
-  // Handle object rendering
-  if (renderType === "object") {
-    const { OBJECT_DEFS, renderObjectToTerminal } = await import("../engine/objects.js");
-
-    if (flags.has("list")) {
-      const { loadCustomObjects } = await import("../engine/object-loader.js");
-      const customObjects = loadCustomObjects("default");
-      const allObjects = { ...OBJECT_DEFS, ...customObjects };
-
-      console.log("\nAvailable object types:\n");
-      if (Object.keys(allObjects).length === 0) {
-        console.log("No objects yet.");
-      } else {
-        for (const [name, def] of Object.entries(allObjects)) {
-          console.log(`  • ${name.padEnd(15)} (${def.width}×${def.height})`);
-        }
-      }
-      console.log();
-      process.exit(0);
-    }
-
-    const objectType = renderInput;
-    const color = opts.color
-      ? opts.color.split(",").map((c: string) => parseInt(c.trim(), 10)) as [number, number, number]
-      : undefined;
-
-    const { loadCustomObjects } = await import("../engine/object-loader.js");
-    const customObjects = loadCustomObjects("default");
-    const allObjects = { ...OBJECT_DEFS, ...customObjects };
-
-    if (!allObjects[objectType]) {
-      console.error(`Unknown object type: ${objectType}`);
-      process.exit(1);
-    }
-
-    const debugCollision = flags.has("debug-collision");
-    console.log(`\n${objectType}${color ? ` [color: rgb(${color.join(", ")})]` : ""}\n`);
-
-    if (debugCollision) {
-      console.log("Collision legend: · = transparent, █ = blocking, ░ = walkable\n");
-    }
-
-    console.log(renderObjectToTerminal(objectType, color, allObjects, debugCollision));
-    console.log();
-    process.exit(0);
-  }
-
   // Avatar rendering
-  let input = renderInput;
+  let input = positional[1];
   if (flags.has("random") || !input) {
     input = generateRandomDNA();
   }

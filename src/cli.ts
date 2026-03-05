@@ -227,7 +227,6 @@ Scheduler:
 
 Avatar & Creation:
   termlings avatar <dna>   Visualize avatar
-  termlings avatar object <type>  Render object
   termlings create         Create new agent
 
 Spawn:

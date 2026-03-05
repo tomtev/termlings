@@ -1,6 +1,6 @@
 # Avatar Visualization
 
-Visualize termling avatars and world objects with the `avatar` command.
+Visualize termling avatars with the `avatar` command.
 
 ## Quick Start
 
@@ -186,22 +186,6 @@ termlings avatar alice --compact
 # Random DNA
 termlings avatar --random
 ```
-
-## Objects
-
-Render world objects:
-
-```bash
-termlings avatar object table                   # Render object
-termlings avatar object table --list            # List all objects
-termlings avatar object table --color 200,100,50  # Custom RGB color
-termlings avatar object table --debug-collision    # Show collision
-```
-
-Collision legend:
-- `.` = transparent
-- `█` = solid/blocking
-- `░` = walkable surface
 
 ## Creating Agents with Custom DNA
 
