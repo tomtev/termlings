@@ -264,7 +264,7 @@ describe("workspace tui render hot paths", () => {
     expect(lines).toContain("\x1b[38;5;75m[Create schedule]")
   })
 
-  it("asks for a target first on bare /schedule drafts in all activity", () => {
+  it("shows the default-target hint on bare /schedule drafts in all activity", () => {
     root = mkdtempSync(join(tmpdir(), "termlings-tui-render-test-"))
     const tui = new WorkspaceTui(root) as any
     tui.view = "messages"
@@ -274,7 +274,7 @@ describe("workspace tui render hot paths", () => {
 
     const lines = tui.renderComposerLines(80, tui.draft, false, tui.composerGhostHint()).join("\n")
     expect(lines).toContain(`${FG_COMMAND_TOKEN}/schedule`)
-    expect(lines).toContain("Mention @agent first. Press Enter for details.")
+    expect(lines).toContain("Scheduled message. Defaults to the first agent.")
   })
 
   it("shows a scheduled-message hint after a /schedule target is present", () => {

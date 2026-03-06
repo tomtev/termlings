@@ -48,13 +48,6 @@ const scheduleCommand: SlashCommandDefinition = {
       || ["everyone", "@everyone", "owner", "operator", "human"].includes(firstArg.toLowerCase())
     )
 
-    if (!selectedThreadTarget && args.length > 0 && !looksLikeTarget) {
-      return {
-        kind: "error",
-        message: "Use /schedule @agent ... in All activity, or open a DM thread first.",
-      }
-    }
-
     const target = looksLikeTarget ? firstArg : selectedThreadTarget
     const targetLocked = !looksLikeTarget && Boolean(selectedThreadTarget)
     const message = (looksLikeTarget ? args.slice(1) : args).join(" ").trim()

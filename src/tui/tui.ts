@@ -216,6 +216,7 @@ interface ScheduleComposerForm {
   date: string
   weekday: MessageScheduleWeekday
   time: string
+  timeEditing: boolean
   timezone: string
   timeSegment: ScheduleTimeSegment
   enteredFieldBySubmit: boolean
@@ -1838,13 +1839,21 @@ export class WorkspaceTui {
     )
   }
 
+  private setScheduleTimeEditing(editing: boolean): void {
+    if (!this.composerForm) return
+    this.composerForm.timeEditing = editing
+    if (editing) {
+      this.composerForm.enteredFieldBySubmit = false
+    }
+  }
+
   private composerFieldDisplayValue(field: ComposerFormField, selected: boolean): string {
     const hasValue = field.value.trim().length > 0
     const rawValue = hasValue
       ? field.value
       : `<${field.placeholder || "value"}>`
 
-    const valueDisplay = selected && field.kind === "segments" && field.key === "time"
+    const valueDisplay = selected && field.kind === "segments" && field.key === "time" && this.composerForm?.timeEditing
       ? (() => {
           const { hour, minute } = this.scheduleTimeParts()
           const hourText = String(hour).padStart(2, "0")
@@ -1901,14 +1910,16 @@ export class WorkspaceTui {
     const fields = this.scheduleFormFields()
     if (fields.length === 0) {
       this.composerForm.selectedFieldIndex = 0
+      this.composerForm.timeEditing = false
       return
     }
     if (this.composerForm.selectedFieldIndex < 0) {
       this.composerForm.selectedFieldIndex = 0
-      return
-    }
-    if (this.composerForm.selectedFieldIndex >= fields.length) {
+    } else if (this.composerForm.selectedFieldIndex >= fields.length) {
       this.composerForm.selectedFieldIndex = fields.length - 1
+    }
+    if ((fields[this.composerForm.selectedFieldIndex]?.key || "") !== "time") {
+      this.composerForm.timeEditing = false
     }
   }
 
@@ -1940,6 +1951,7 @@ export class WorkspaceTui {
       date: this.defaultScheduleDate(),
       weekday: "mon",
       time: "09:00",
+      timeEditing: false,
       timezone: this.defaultScheduleTimezone(),
       timeSegment: "hour",
       enteredFieldBySubmit: false,
@@ -1971,6 +1983,9 @@ export class WorkspaceTui {
     const nextField = fields[this.composerForm.selectedFieldIndex]
     if (previousField && nextField && previousField.key !== nextField.key && previousField.kind === "search") {
       this.closeComposerSearchField(previousField.key)
+    }
+    if (!nextField || nextField.key !== "time") {
+      this.composerForm.timeEditing = false
     }
   }
 
@@ -2137,6 +2152,35 @@ export class WorkspaceTui {
     return true
   }
 
+  private async handleComposerFormEnter(): Promise<void> {
+    const activeField = this.selectedComposerFormField()
+    if (!activeField || !this.composerForm) return
+
+    if (activeField.key === "time") {
+      this.setScheduleTimeEditing(!this.composerForm.timeEditing)
+      return
+    }
+
+    if (activeField.kind === "search" && !this.isComposerSearchOpen(activeField.key) && this.composerForm.enteredFieldBySubmit) {
+      this.stepComposerFormField(1, "enter")
+      return
+    }
+    if (activeField.kind === "search" && !this.isComposerSearchOpen(activeField.key)) {
+      this.openComposerSearchField(activeField.key)
+      this.composerForm.enteredFieldBySubmit = false
+      return
+    }
+    if (activeField.kind === "search" && this.acceptComposerSearchSelection(activeField)) {
+      this.stepComposerFormField(1, "enter")
+      return
+    }
+    if (activeField.key === "submit") {
+      await this.submitComposerForm()
+      return
+    }
+    this.stepComposerFormField(1, "enter")
+  }
+
   private handleComposerFormShortcut(ch: string): boolean {
     const field = this.selectedComposerFormField()
     if (!field || !this.composerForm) return false
@@ -2234,7 +2278,9 @@ export class WorkspaceTui {
     }
     const selectedField = this.selectedComposerFormField()
     const helpLine = selectedField?.key === "time"
-      ? `${FG_SUBTLE_HINT}Tab next · Shift+Tab prev · ←/→ hour/minute · ↑/↓ change · Shift+↑/↓ ±10m · Esc cancel${ANSI_RESET}`
+      ? this.composerForm.timeEditing
+        ? `${FG_SUBTLE_HINT}Enter done · ←/→ hour/minute · ↑/↓ change · Shift+↑/↓ ±10m · Tab next · Esc back${ANSI_RESET}`
+        : `${FG_SUBTLE_HINT}Enter edit time · ↑/↓ move · Tab next · Shift+Tab prev · Esc cancel${ANSI_RESET}`
       : selectedField?.kind === "search" && this.isComposerSearchOpen(selectedField.key)
         ? `${FG_SUBTLE_HINT}Type to search · ↑/↓ results · Enter select/next · Tab next · Esc cancel${ANSI_RESET}`
         : selectedField?.kind === "search"
@@ -2441,7 +2487,7 @@ export class WorkspaceTui {
       return
     }
 
-    if (field?.key === "time") {
+    if (field?.key === "time" && this.composerForm.timeEditing) {
       if (isArrowLeft || isArrowRight) {
         this.moveScheduleTimeSegment(isArrowLeft ? -1 : 1)
         this.render()
@@ -2475,6 +2521,11 @@ export class WorkspaceTui {
     }
 
     if (input === "\u001b") {
+      if (field?.key === "time" && this.composerForm.timeEditing) {
+        this.setScheduleTimeEditing(false)
+        this.render()
+        return
+      }
       if (field?.kind === "search" && this.isComposerSearchOpen(field.key)) {
         this.closeComposerSearchField(field.key)
         this.render()
@@ -2491,19 +2542,7 @@ export class WorkspaceTui {
     }
 
     if (input === "\r" || input === "\n") {
-      const activeField = this.selectedComposerFormField()
-      if (activeField?.kind === "search" && !this.isComposerSearchOpen(activeField.key) && this.composerForm.enteredFieldBySubmit) {
-        this.stepComposerFormField(1, "enter")
-      } else if (activeField?.kind === "search" && !this.isComposerSearchOpen(activeField.key)) {
-        this.openComposerSearchField(activeField.key)
-        this.composerForm.enteredFieldBySubmit = false
-      } else if (activeField?.kind === "search" && this.acceptComposerSearchSelection(activeField)) {
-        this.stepComposerFormField(1, "enter")
-      } else if (activeField?.key === "submit") {
-        await this.submitComposerForm()
-      } else {
-        this.stepComposerFormField(1, "enter")
-      }
+      await this.handleComposerFormEnter()
       this.render()
       return
     }
@@ -2524,19 +2563,7 @@ export class WorkspaceTui {
         return
       }
       if (ch === "\r" || ch === "\n") {
-        const activeField = this.selectedComposerFormField()
-        if (activeField?.kind === "search" && !this.isComposerSearchOpen(activeField.key) && this.composerForm.enteredFieldBySubmit) {
-          this.stepComposerFormField(1, "enter")
-        } else if (activeField?.kind === "search" && !this.isComposerSearchOpen(activeField.key)) {
-          this.openComposerSearchField(activeField.key)
-          this.composerForm.enteredFieldBySubmit = false
-        } else if (activeField?.kind === "search" && this.acceptComposerSearchSelection(activeField)) {
-          this.stepComposerFormField(1, "enter")
-        } else if (activeField?.key === "submit") {
-          await this.submitComposerForm()
-        } else {
-          this.stepComposerFormField(1, "enter")
-        }
+        await this.handleComposerFormEnter()
         continue
       }
       if (ch === "\x7f") {
@@ -6578,14 +6605,14 @@ export class WorkspaceTui {
     const remainder = trimmed.slice("/schedule".length).trim()
     if (remainder.length === 0) {
       return this.selectedThreadId === "activity"
-        ? "Mention @agent first. Press Enter for details."
+        ? "Scheduled message. Defaults to the first agent. Press Enter for details."
         : "Scheduled message. Press Enter for details."
     }
 
     const [firstToken = ""] = remainder.split(/\s+/, 1)
     const looksLikeTarget = firstToken === "@everyone" || firstToken.startsWith("@") || firstToken.startsWith("agent:")
     if (!looksLikeTarget) {
-      return ""
+      return "Scheduled message. Press Enter for details."
     }
 
     const messageText = remainder.slice(firstToken.length).trim()

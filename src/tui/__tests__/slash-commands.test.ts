@@ -120,6 +120,69 @@ describe("workspace tui slash commands", () => {
     expect(tui.composerForm.recurrence).toBe("once")
   })
 
+  it("treats /schedule text in activity as the initial message draft", async () => {
+    root = mkdtempSync(join(tmpdir(), "termlings-slash-command-test-"))
+    const tui = new WorkspaceTui(root) as any
+    setSnapshot(tui, {
+      agents: [
+        {
+          slug: "alex",
+          dna: "alex001",
+          name: "Alex",
+          title: "Developer",
+          sort_order: 20,
+          online: true,
+          typing: false,
+        },
+        {
+          slug: "jordan",
+          dna: "jord001",
+          name: "Jordan",
+          title: "CEO",
+          sort_order: 10,
+          online: true,
+          typing: false,
+        },
+      ],
+      dmThreads: [
+        {
+          id: "agent:alex",
+          slug: "alex",
+          dna: "alex001",
+          label: "Alex",
+          online: true,
+          typing: false,
+          sort_order: 20,
+        },
+        {
+          id: "agent:jordan",
+          slug: "jordan",
+          dna: "jord001",
+          label: "Jordan",
+          online: true,
+          typing: false,
+          sort_order: 10,
+        },
+      ],
+    })
+    tui.selectedThreadId = "activity"
+
+    const result = executeSlashCommand("/schedule Check in on blockers", { selectedThreadId: "activity" }, BUILTIN_WORKSPACE_APPS)
+    expect(result).toMatchObject({
+      kind: "open-form",
+      form: "schedule",
+      message: "Check in on blockers",
+      targetLocked: false,
+    })
+
+    const handled = await tui.openSlashCommand("/schedule Check in on blockers")
+
+    expect(handled).toBe(true)
+    expect(tui.composerForm.target).toBe("agent:jordan")
+    expect(tui.composerForm.targetLocked).toBe(false)
+    expect(tui.composerForm.message).toBe("Check in on blockers")
+  })
+
   it("creates a scheduled message from the /schedule form", async () => {
     root = mkdtempSync(join(tmpdir(), "termlings-slash-command-test-"))
     const tui = new WorkspaceTui(root) as any
@@ -219,7 +282,7 @@ describe("workspace tui slash commands", () => {
     expect(tui.tabViews()).toEqual(["messages"])
   })
 
-  it("uses segmented arrow controls for the time field", async () => {
+  it("enters time editing explicitly before using segmented arrow controls", async () => {
     root = mkdtempSync(join(tmpdir(), "termlings-slash-command-test-"))
     const tui = new WorkspaceTui(root) as any
     setSnapshot(tui, {
@@ -244,6 +307,13 @@ describe("workspace tui slash commands", () => {
     await tui.openSlashCommand("/schedule agent:ceo")
     tui.composerForm.selectedFieldIndex = 4
 
+    await tui.handleComposerFormInput("\u001b[B", false)
+    expect(tui.composerForm.selectedFieldIndex).toBe(5)
+
+    tui.composerForm.selectedFieldIndex = 4
+    await tui.handleComposerFormInput("\r", false)
+    expect(tui.composerForm.timeEditing).toBe(true)
+
     await tui.handleComposerFormInput("\u001b[C", false)
     await tui.handleComposerFormInput("\u001b[A", false)
     await tui.handleComposerFormInput("\u001b[1;2A", false)
@@ -251,7 +321,10 @@ describe("workspace tui slash commands", () => {
     expect(tui.composerForm.timeSegment).toBe("minute")
     expect(tui.composerForm.time).toBe("09:11")
 
-    await tui.handleComposerFormInput("\t", false)
+    await tui.handleComposerFormInput("\r", false)
+    expect(tui.composerForm.timeEditing).toBe(false)
+
+    await tui.handleComposerFormInput("\u001b[B", false)
     expect(tui.composerForm.selectedFieldIndex).toBe(5)
   })
 
