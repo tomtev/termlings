@@ -4,7 +4,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, rea
 import { homedir } from "os"
 import { resolve as resolvePath, join as joinPath } from "path"
 import { readMessages, getIpcDir } from "../engine/ipc.js"
-import { resolveWorkspaceFeaturesForAgent } from "../engine/features.js"
+import { resolveWorkspaceAppsForAgent } from "../engine/apps.js"
 import { sanitizeManagedRuntimeEnv } from "../engine/runtime-processes.js"
 import { renderManageAgentsContext, renderSystemContext } from "../system-context.js"
 import {
@@ -339,7 +339,7 @@ export async function launchAgent(
     || soul.description
     || process.env.TERMLINGS_DESCRIPTION
     || "You are an autonomous agent exploring and interacting with the world."
-  const workspaceFeatures = resolveWorkspaceFeaturesForAgent(agentSlug || undefined)
+  const workspaceApps = resolveWorkspaceAppsForAgent(agentSlug || undefined)
 
   let finalContext = renderSystemContext({
     name: agentName,
@@ -348,7 +348,7 @@ export async function launchAgent(
     titleShort: agentTitleShort,
     role: agentRole,
     description: agentDescription,
-    features: workspaceFeatures,
+    apps: workspaceApps,
   })
 
   if (agentCanManageAgents) {

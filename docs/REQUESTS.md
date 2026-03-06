@@ -85,17 +85,17 @@ This is useful for scripts/agents polling decision state.
 
 ## Related
 
-- [FEATURES.md](FEATURES.md)
+- [APPS.md](APPS.md)
 - [HUMANS.md](HUMANS.md)
 - [INIT.md](INIT.md)
 
-## Disable This Feature
+## Disable This App
 
 Disable `requests` for all agents in `.termlings/workspace.json`:
 
 ```json
 {
-  "features": {
+  "apps": {
     "defaults": {
       "requests": false
     }
@@ -103,4 +103,4 @@ Disable `requests` for all agents in `.termlings/workspace.json`:
 }
 ```
 
-You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).
+You can override that for a specific agent under `apps.agents.<slug>`. See [APPS.md](APPS.md).

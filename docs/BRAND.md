@@ -101,13 +101,13 @@ termlings brand set colors.palette '["#111111","#FFFFFF"]' --json-value
 termlings brand validate --strict
 ```
 
-## Disable This Feature
+## Disable This App
 
 Disable `brand` for all agents in `.termlings/workspace.json`:
 
 ```json
 {
-  "features": {
+  "apps": {
     "defaults": {
       "brand": false
     }
@@ -115,4 +115,4 @@ Disable `brand` for all agents in `.termlings/workspace.json`:
 }
 ```
 
-You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).
+You can override that for a specific agent under `apps.agents.<slug>`. See [APPS.md](APPS.md).

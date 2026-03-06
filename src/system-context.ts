@@ -1,4 +1,4 @@
-import type { ResolvedWorkspaceFeatures } from "./engine/features.js"
+import type { ResolvedWorkspaceApps } from "./engine/apps.js"
 
 interface RenderSystemContextInput {
   name: string
@@ -7,7 +7,7 @@ interface RenderSystemContextInput {
   titleShort?: string
   role?: string
   description?: string
-  features: ResolvedWorkspaceFeatures
+  apps: ResolvedWorkspaceApps
 }
 
 function codeBlock(lines: string[]): string {
@@ -18,7 +18,7 @@ function section(title: string, body: string): string {
   return `## ${title}\n\n${body.trim()}`
 }
 
-function withFeature(enabled: boolean, body: string): string {
+function withApp(enabled: boolean, body: string): string {
   return enabled ? body.trim() : ""
 }
 
@@ -50,35 +50,35 @@ export function renderSystemContext(input: RenderSystemContextInput): string {
   const titleShort = input.titleShort || ""
   const role = input.role || ""
   const description = input.description || "You are an autonomous agent exploring and interacting with the world."
-  const features = input.features
+  const apps = input.apps
 
   const quickReference = [
     "termlings --help                       # Full CLI reference",
-    features["brief"] ? "termlings brief                        # Session startup snapshot" : "",
-    features["org-chart"] ? "termlings org-chart --help             # Team discovery" : "",
-    features["messaging"] ? "termlings message --help               # Messaging guide" : "",
-    features["messaging"] ? "termlings conversation --help          # Read recent conversation history" : "",
-    features["requests"] ? "termlings request --help               # Request inputs/decisions/env vars" : "",
-    features["workflows"] ? "termlings workflow --help              # Workflow checklists" : "",
-    features["task"] ? "termlings task --help                  # Task management" : "",
-    features["calendar"] ? "termlings calendar --help              # Calendar events" : "",
-    features["crm"] ? "termlings crm --help                   # External relationship records + follow-ups" : "",
-    features["skills"] ? "termlings skills --help                # Skills discovery/install/update" : "",
-    features["brand"] ? "termlings brand --help                 # Brand CLI" : "",
-    features["browser"] ? "termlings browser --help               # Browser automation" : "",
+    apps["brief"] ? "termlings brief                        # Session startup snapshot" : "",
+    apps["org-chart"] ? "termlings org-chart --help             # Team discovery" : "",
+    apps["messaging"] ? "termlings message --help               # Messaging guide" : "",
+    apps["messaging"] ? "termlings conversation --help          # Read recent conversation history" : "",
+    apps["requests"] ? "termlings request --help               # Request inputs/decisions/env vars" : "",
+    apps["workflows"] ? "termlings workflow --help              # Workflow checklists" : "",
+    apps["task"] ? "termlings task --help                  # Task management" : "",
+    apps["calendar"] ? "termlings calendar --help              # Calendar events" : "",
+    apps["crm"] ? "termlings crm --help                   # External relationship records + follow-ups" : "",
+    apps["skills"] ? "termlings skills --help                # Skills discovery/install/update" : "",
+    apps["brand"] ? "termlings brand --help                 # Brand CLI" : "",
+    apps["browser"] ? "termlings browser --help               # Browser automation" : "",
   ].filter(Boolean)
 
   const discoveryCommands = [
-    features["brief"] ? "termlings brief                                    # First command at session start" : "",
-    features["org-chart"] ? "termlings org-chart                                # See team hierarchy + status" : "",
-    features["messaging"] ? "termlings message agent:growth \"hello\"             # Message teammate by slug" : "",
-    features["messaging"] ? "termlings conversation human:default --limit 120   # Human/operator DM thread" : "",
-    features["messaging"] ? "termlings conversation recent --limit 120          # Cross-thread recent context" : "",
-    features["messaging"] ? "termlings message human:default \"help needed\"      # Message operator" : "",
-    features["requests"] ? "termlings request env VAR_NAME \"reason\" \"url\" --scope project" : "",
-    features["requests"] ? "termlings request confirm \"Deploy to production?\"" : "",
-    features["requests"] ? "termlings request choice \"Framework?\" \"Svelte\" \"Next\"" : "",
-    features["requests"] ? "termlings request list                             # Check pending requests" : "",
+    apps["brief"] ? "termlings brief                                    # First command at session start" : "",
+    apps["org-chart"] ? "termlings org-chart                                # See team hierarchy + status" : "",
+    apps["messaging"] ? "termlings message agent:growth \"hello\"             # Message teammate by slug" : "",
+    apps["messaging"] ? "termlings conversation human:default --limit 120   # Human/operator DM thread" : "",
+    apps["messaging"] ? "termlings conversation recent --limit 120          # Cross-thread recent context" : "",
+    apps["messaging"] ? "termlings message human:default \"help needed\"      # Message operator" : "",
+    apps["requests"] ? "termlings request env VAR_NAME \"reason\" \"url\" --scope project" : "",
+    apps["requests"] ? "termlings request confirm \"Deploy to production?\"" : "",
+    apps["requests"] ? "termlings request choice \"Framework?\" \"Svelte\" \"Next\"" : "",
+    apps["requests"] ? "termlings request list                             # Check pending requests" : "",
   ].filter(Boolean)
 
   const taskCommands = [
@@ -178,34 +178,34 @@ ${codeBlock([
     "",
     section("Operating Model", `
 - Tasks are the primary unit of work.
-${features["crm"] ? "- CRM is the system of record for external relationships." : ""}
+${apps["crm"] ? "- CRM is the system of record for external relationships." : ""}
 - Collaborate through DMs, tasks, workflows, and calendar.
 - Keep humans and managers updated through the reporting chain.
     `),
     "",
     section("Quick Reference", codeBlock(quickReference)),
     "",
-    withFeature(
-      features["messaging"] || features["requests"] || features["org-chart"] || features["brief"],
+    withApp(
+      apps["messaging"] || apps["requests"] || apps["org-chart"] || apps["brief"],
       section("Discovery And Coordination", codeBlock(discoveryCommands)),
     ),
     "",
-    withFeature(features["task"], section("Task Management", `${codeBlock(taskCommands)}
+    withApp(apps["task"], section("Task Management", `${codeBlock(taskCommands)}
 
 Tasks are the shared source of truth. Claim tasks before starting, add notes every 15-30 minutes on long work, and mark them complete when finished.`)),
     "",
-    withFeature(features["workflows"], section("Workflow Checklists", codeBlock(workflowCommands))),
+    withApp(apps["workflows"], section("Workflow Checklists", codeBlock(workflowCommands))),
     "",
-    withFeature(features["calendar"], section("Calendar", codeBlock(calendarCommands))),
+    withApp(apps["calendar"], section("Calendar", codeBlock(calendarCommands))),
     "",
-    withFeature(features["crm"], section("CRM", `${codeBlock(crmCommands)}
+    withApp(apps["crm"], section("CRM", `${codeBlock(crmCommands)}
 
 Use CRM for prospects, customers, partners, contacts, deals, relationship notes, and next follow-ups.
 Use tasks for execution work that comes out of those relationships.`)),
     "",
-    withFeature(features["brand"], section("Brand Profile", codeBlock(brandCommands))),
+    withApp(apps["brand"], section("Brand Profile", codeBlock(brandCommands))),
     "",
-    withFeature(features["skills"], section("Skills", `${codeBlock(skillCommands)}
+    withApp(apps["skills"], section("Skills", `${codeBlock(skillCommands)}
 
 Workflow:
 1. Run \`termlings skills list\`
@@ -214,7 +214,7 @@ Workflow:
 4. Install selected skills
 5. Re-check workspace-visible skills`)),
     "",
-    withFeature(features["browser"], section("Browser", `${codeBlock(browserCommands)}
+    withApp(apps["browser"], section("Browser", `${codeBlock(browserCommands)}
 
 Policy:
 - Headed mode is the default for human-in-the-loop work.

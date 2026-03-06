@@ -1,24 +1,24 @@
-# Features
+# Apps
 
-Termlings feature flags control which capability areas appear in agent system context and which agent-facing commands are allowed at runtime.
+Termlings apps control which capability areas appear in agent system context, top-level CLI help, and agent-facing runtime access.
 
-This is not markdown-tag parsing. The feature model is structured and code-driven.
+This is not markdown-tag parsing. The app model is structured and code-driven.
 
 ## Mental Model
 
 There are three layers:
 
-1. Built-in feature defaults in code.
-2. Workspace overrides in `.termlings/workspace.json`.
-3. Agent-specific overrides in `.termlings/workspace.json.features.agents.<slug>`.
+1. Built-in core apps in code.
+2. Workspace overrides in `.termlings/workspace.json.apps`.
+3. Agent-specific overrides in `.termlings/workspace.json.apps.agents.<slug>`.
 
-The launcher resolves the final feature set for the current agent before building the injected system context.
+The launcher resolves the final app set for the current agent before building the injected system context.
 
-If `.termlings/workspace.json` has no `features` key, every feature defaults to `true`.
+If `.termlings/workspace.json` has no `apps` key, every core app defaults to `true`.
 
-## Feature Keys
+## Core Apps
 
-Current togglable feature keys:
+Current core app keys:
 
 - `messaging`
 - `requests`
@@ -32,11 +32,11 @@ Current togglable feature keys:
 - `brand`
 - `crm`
 
-These are capability areas, not arbitrary markdown sections.
+These are built-in apps, not arbitrary markdown sections.
 
 ## Workspace Config
 
-Feature flags live in `.termlings/workspace.json`:
+App availability lives in `.termlings/workspace.json`:
 
 ```json
 {
@@ -47,7 +47,7 @@ Feature flags live in `.termlings/workspace.json`:
   "settings": {
     "avatarSize": "large"
   },
-  "features": {
+  "apps": {
     "defaults": {
       "crm": false,
       "browser": true
@@ -67,24 +67,24 @@ Feature flags live in `.termlings/workspace.json`:
 Resolution order:
 
 1. Built-in defaults
-2. `features.defaults`
-3. `features.agents.<slug>`
+2. `apps.defaults`
+3. `apps.agents.<slug>`
 
 Example behavior:
 
-- no `features` object: all features enabled
-- `features.defaults.crm = false`: CRM disabled for everyone
-- `features.agents.growth.crm = true`: CRM re-enabled for `growth`
+- no `apps` object: all core apps enabled
+- `apps.defaults.crm = false`: CRM disabled for everyone
+- `apps.agents.growth.crm = true`: CRM re-enabled for `growth`
 
 ## Injection Path
 
-Feature-aware context injection works like this:
+App-aware context injection works like this:
 
 1. `termlings spawn` resolves the target agent and runtime.
 2. The launcher reads identity from `.termlings/agents/<slug>/SOUL.md`.
-3. The launcher resolves workspace features for that agent.
+3. The launcher resolves workspace apps for that agent.
 4. The launcher renders the system context from structured code sections.
-5. Disabled features are omitted from the rendered prompt.
+5. Disabled apps are omitted from the rendered prompt.
 6. The final prompt is injected into the runtime:
    - Claude: `--append-system-prompt "<context>"`
    - Codex: trailing injected prompt argument
@@ -92,38 +92,41 @@ Feature-aware context injection works like this:
 
 Current implementation points:
 
-- feature resolution: `src/engine/features.ts`
-- workspace feature storage: `src/workspace/state.ts`
+- app resolution: `src/engine/apps.ts`
+- workspace app storage: `src/workspace/state.ts`
 - system context rendering: `src/system-context.ts`
 - runtime injection: `src/agents/launcher.ts`
 
 ## What Gets Hidden
 
-When a feature is disabled for an agent:
+When an app is disabled for an agent:
 
 - the corresponding capability guidance is omitted from injected system context
 - related command examples are omitted from quick reference sections
+- `termlings --help` omits the disabled top-level commands when the current agent slug is available in `TERMLINGS_AGENT_SLUG`
 - the command can also be guarded at runtime
 
 Current enforced example:
 
 - `crm` is hidden from context when disabled
-- `termlings crm ...` exits with a disabled-by-feature-flags error for that agent
+- `termlings crm ...` exits with a disabled-by-workspace-app-settings error for that agent
 
-## Why This Design
+## Why Apps
 
 This design avoids:
 
-- parsing markdown for feature sections
+- parsing markdown for app sections
 - custom `<tags>` inside docs
 - prompt-only hiding without runtime enforcement
 
-It keeps feature gating:
+It keeps app availability:
 
 - structured
 - testable
 - workspace-configurable
 - agent-specific
+
+This also leaves room for future per-app feature flags later without overloading the meaning of "feature" now.
 
 ## Related Files
 

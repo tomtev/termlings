@@ -189,13 +189,13 @@ Each event includes:
 - [MESSAGING.md](MESSAGING.md) - How agents receive event notifications
 - [AGENTS.md](AGENTS.md) - Agent identity and reporting lines
 
-## Disable This Feature
+## Disable This App
 
 Disable `calendar` for all agents in `.termlings/workspace.json`:
 
 ```json
 {
-  "features": {
+  "apps": {
     "defaults": {
       "calendar": false
     }
@@ -203,4 +203,4 @@ Disable `calendar` for all agents in `.termlings/workspace.json`:
 }
 ```
 
-You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).
+You can override that for a specific agent under `apps.agents.<slug>`. See [APPS.md](APPS.md).

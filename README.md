@@ -9,7 +9,9 @@ Every agent gets access to these tools (via termlings CLI):
 - **Messaging** — DMs to teammates and the human operator
 - **Requests** — ask a human for decisions, credentials, or env vars
 - **Tasks** — claim, update status, add notes, set dependencies
+- **Workflows** — reusable checklist workflows with per-agent running copies
 - **Calendar** — view events, scheduling, and recurring meetings
+- **CRM** — file-based CRM records, timelines, and follow-up tracking
 - **Org chart** — see who's online, titles, and reporting lines
 - **Brief** — full workspace snapshot on session start
 - **Brand** — shared brand profile (colors, voice, logos, domains)
@@ -88,7 +90,7 @@ The built-in terminal UI is like an AI-native Slack: chat with your agents, trac
 | `termlings --server` | Run secure HTTP API server [WIP] | [docs/SERVER.md](docs/SERVER.md) |
 | `termlings scheduler --daemon` | Run scheduler daemon (calendar/messages/tasks) | [docs/SCHEDULER.md](docs/SCHEDULER.md) |
 
-### Agent Features
+### Agent Apps
 These are primarily for agents running inside sessions. You can run them manually when needed.
 You should not run these commands since they mostly work inside a agent session.
 
@@ -161,7 +163,7 @@ What each file/folder is for:
 
 - `.termlings/VISION.md` - simple project vision injected into every agent context.
 - `.termlings/.env` - Termlings-internal environment values resolved from scoped requests.
-- `.termlings/workspace.json` - workspace metadata and TUI settings (`avatarSize`, `showBrowserActivity`).
+- `.termlings/workspace.json` - workspace metadata, TUI settings, and app availability.
 - `.termlings/agents/<slug>/SOUL.md` - saved agent identity, title, role, DNA, and optional `sort_order` for TUI ordering.
 - `.termlings/brand/brand.json` - default brand profile.
 - `.termlings/brand/profiles/<id>.json` - additional named brand profiles.
@@ -188,7 +190,7 @@ What each file/folder is for:
 
 For runtime internals (env vars, context injection, session lifecycle), see:
 
-- [docs/FEATURES.md](docs/FEATURES.md) - feature flags, prompt injection, and capability visibility
+- [docs/APPS.md](docs/APPS.md) - core apps, app injection, and agent app availability
 - [docs/LIFECYCLE.md](docs/LIFECYCLE.md)
 
 This is intentionally separated so operator docs stay short.
@@ -200,7 +202,7 @@ This is intentionally separated so operator docs stay short.
 - [docs/AGENTS.md](docs/AGENTS.md) - preset catalog and install flows
 - [docs/INIT.md](docs/INIT.md) - workspace initialization
 - [docs/SPAWN.md](docs/SPAWN.md) - launch agent runtime sessions
-- [docs/FEATURES.md](docs/FEATURES.md) - feature flags, injection, and capability visibility
+- [docs/APPS.md](docs/APPS.md) - core apps, injection, and app availability
 - [docs/ORG-CHART.md](docs/ORG-CHART.md) - team hierarchy and reporting lines
 - [docs/BRIEF.md](docs/BRIEF.md) - full workspace startup snapshot
 - [docs/TEMPLATES.md](docs/TEMPLATES.md) - local and git template references

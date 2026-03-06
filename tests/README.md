@@ -21,7 +21,7 @@ Test scripts for the Termlings project.
 | `test-large-project-stress.sh` | Large projects with many messages | 10K-50K messages, 150+ channels |
 | `test-task-stress.sh` | Task-heavy projects | 1K-5K tasks, 8000 updates/sec |
 
-### Features
+### Apps
 
 | Test | Purpose |
 |------|---------|

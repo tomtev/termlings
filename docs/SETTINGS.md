@@ -23,11 +23,11 @@ There is no Settings tab in the TUI. Edit this file directly when you need to ch
 }
 ```
 
-Feature flags can also live in the same file:
+App availability can also live in the same file:
 
 ```json
 {
-  "features": {
+  "apps": {
     "defaults": {
       "crm": false,
       "browser": true
@@ -51,11 +51,11 @@ If a setting is missing or invalid, Termlings falls back to defaults:
 - `avatarSize`: `small`
 - `showBrowserActivity`: `true`
 
-## `features` fields
+## `apps` fields
 
-Feature flags control which capability areas are injected into agent system context and which agent-facing commands can be enforced at runtime.
+Apps control which capability areas are injected into agent system context and which agent-facing commands are available at runtime.
 
-Current feature keys:
+Current core app keys:
 
 - `messaging`
 - `requests`
@@ -72,16 +72,16 @@ Current feature keys:
 Resolution order:
 
 1. built-in defaults in code
-2. `features.defaults`
-3. `features.agents.<slug>`
+2. `apps.defaults`
+3. `apps.agents.<slug>`
 
-If `workspace.json` has no `features` object, all features default to `true`.
+If `workspace.json` has no `apps` object, all core apps default to `true`.
 
 Example:
 
 ```json
 {
-  "features": {
+  "apps": {
     "defaults": {
       "crm": false
     },
@@ -123,6 +123,6 @@ Use tiny avatar mode in the TUI:
 
 ## Related
 
-- [FEATURES.md](FEATURES.md)
+- [APPS.md](APPS.md)
 - [browser.md](browser.md)
 - [LIFECYCLE.md](LIFECYCLE.md)

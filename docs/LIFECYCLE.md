@@ -2,7 +2,7 @@
 
 This document is for debugging and implementation context.
 Operators usually do not need this day-to-day.
-For the higher-level operator view, see [FEATURES.md](FEATURES.md).
+For the higher-level operator view, see [APPS.md](APPS.md).
 
 ## Scope
 
@@ -93,6 +93,8 @@ TERMLINGS_AGENT_ROLE="Owns roadmap and priorities"
 TERMLINGS_CONTEXT_PROFILE=default
 ```
 
+`TERMLINGS_AGENT_SLUG` is also used by app resolution paths, including top-level `termlings --help`, so agent sessions only see commands enabled for that agent in `.termlings/workspace.json`.
+
 ## Context Assembly
 
 Base context comes from:
@@ -158,7 +160,7 @@ When an agent process exits:
 
 ## Related Docs
 
-- [FEATURES.md](FEATURES.md)
+- [APPS.md](APPS.md)
 - [AGENTS.md](AGENTS.md)
 - [TERMLINGS.md](TERMLINGS.md)
 - [INIT.md](INIT.md)

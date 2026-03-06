@@ -16,7 +16,7 @@ export * from "./message-schedules.js"
 export * from "./message-scheduler.js"
 export * from "./task-scheduler.js"
 export * from "./crm.js"
-export * from "./features.js"
+export * from "./apps.js"
 
 // Browser Automation
 export * from "./browser-types.js"

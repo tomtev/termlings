@@ -232,13 +232,13 @@ termlings browser status
 
 Use headed mode (default) and complete login manually in the visible browser, then continue automation.
 
-## Disable This Feature
+## Disable This App
 
 Disable `browser` for all agents in `.termlings/workspace.json`:
 
 ```json
 {
-  "features": {
+  "apps": {
     "defaults": {
       "browser": false
     }
@@ -246,4 +246,4 @@ Disable `browser` for all agents in `.termlings/workspace.json`:
 }
 ```
 
-You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).
+You can override that for a specific agent under `apps.agents.<slug>`. See [APPS.md](APPS.md).

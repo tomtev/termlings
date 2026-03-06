@@ -164,17 +164,17 @@ See [TASK.md](TASK.md) for task management.
 
 ## Related
 
-- [FEATURES.md](FEATURES.md)
+- [APPS.md](APPS.md)
 - [REQUESTS.md](REQUESTS.md)
 - [TASK.md](TASK.md)
 
-## Disable This Feature
+## Disable This App
 
 Disable `messaging` for all agents in `.termlings/workspace.json`:
 
 ```json
 {
-  "features": {
+  "apps": {
     "defaults": {
       "messaging": false
     }
@@ -182,4 +182,4 @@ Disable `messaging` for all agents in `.termlings/workspace.json`:
 }
 ```
 
-You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).
+You can override that for a specific agent under `apps.agents.<slug>`. See [APPS.md](APPS.md).

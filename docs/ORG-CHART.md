@@ -55,13 +55,13 @@ termlings org-chart --json | jq '.nodes[] | {id, reportsTo, online}'
 - [BRIEF.md](BRIEF.md)
 - [PRESENCE.md](PRESENCE.md)
 
-## Disable This Feature
+## Disable This App
 
 Disable `org-chart` for all agents in `.termlings/workspace.json`:
 
 ```json
 {
-  "features": {
+  "apps": {
     "defaults": {
       "org-chart": false
     }
@@ -69,4 +69,4 @@ Disable `org-chart` for all agents in `.termlings/workspace.json`:
 }
 ```
 
-You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).
+You can override that for a specific agent under `apps.agents.<slug>`. See [APPS.md](APPS.md).

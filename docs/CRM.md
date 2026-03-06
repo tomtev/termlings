@@ -138,13 +138,13 @@ Immutable fields:
 - Treat the activity timeline as append-only.
 - Use existing `task`, `calendar`, and `message` commands for execution workflows instead of rebuilding them inside CRM.
 
-## Disable This Feature
+## Disable This App
 
 Disable `crm` for all agents in `.termlings/workspace.json`:
 
 ```json
 {
-  "features": {
+  "apps": {
     "defaults": {
       "crm": false
     }
@@ -152,4 +152,4 @@ Disable `crm` for all agents in `.termlings/workspace.json`:
 }
 ```
 
-You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).
+You can override that for a specific agent under `apps.agents.<slug>`. See [APPS.md](APPS.md).

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "bun:test"
 
-import { BUILTIN_WORKSPACE_FEATURES } from "../src/engine/features.js"
+import { BUILTIN_WORKSPACE_APPS } from "../src/engine/apps.js"
 import { renderSystemContext } from "../src/system-context.js"
 
 describe("renderSystemContext", () => {
-  it("omits crm guidance when crm feature is disabled", () => {
+  it("omits crm guidance when crm app is disabled", () => {
     const context = renderSystemContext({
       name: "Growth",
       sessionId: "tl-test",
@@ -12,8 +12,8 @@ describe("renderSystemContext", () => {
       titleShort: "Growth",
       role: "Own customer discovery",
       description: "Growth agent",
-      features: {
-        ...BUILTIN_WORKSPACE_FEATURES,
+      apps: {
+        ...BUILTIN_WORKSPACE_APPS,
         crm: false,
       },
     })
@@ -23,7 +23,7 @@ describe("renderSystemContext", () => {
     expect(context.includes("system of record for external relationships")).toBe(false)
   })
 
-  it("includes crm guidance when crm feature is enabled", () => {
+  it("includes crm guidance when crm app is enabled", () => {
     const context = renderSystemContext({
       name: "Growth",
       sessionId: "tl-test",
@@ -31,7 +31,7 @@ describe("renderSystemContext", () => {
       titleShort: "Growth",
       role: "Own customer discovery",
       description: "Growth agent",
-      features: BUILTIN_WORKSPACE_FEATURES,
+      apps: BUILTIN_WORKSPACE_APPS,
     })
 
     expect(context.includes("termlings crm --help")).toBe(true)

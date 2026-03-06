@@ -7,6 +7,7 @@
 import { launchWorkspaceTui } from "./tui/tui.js";
 import { getUpdateNotice } from "./update-check.js";
 import { loadTermlingsEnv } from "./engine/env.js";
+import { renderTopLevelHelp } from "./help.js";
 
 async function ensureSchedulerDaemon(root: string): Promise<void> {
   const { ensureManagedRuntimeProcess } = await import("./engine/runtime-processes.js");
@@ -171,59 +172,9 @@ try {
     }
 
     if (flags.has("help") || flags.has("h")) {
-      const { resolveWorkspaceFeaturesForAgent } = await import("./engine/features.js");
-      const visibleFeatures = resolveWorkspaceFeaturesForAgent(process.env.TERMLINGS_AGENT_SLUG || undefined);
-      console.log(`Usage: termlings [options]
-       termlings avatar [dna|name] [options]
-       termlings <agent> [options]
-
-Workspace:
-  termlings                Start the terminal workspace UI (auto-starts scheduler daemon)
-  termlings --spawn        Open workspace immediately, then spawn all agents in background
-  termlings init           Initialize .termlings in this project
-  termlings --server       Run secure HTTP server mode
-
-Agent System:
-  termlings brief          Full workspace snapshot (run at session start)
-  termlings org-chart      Show org chart (list-agents alias)
-  termlings list-agents    Legacy alias for org-chart
-  termlings skills <cmd>   List/install/update skills (skills.sh wrapper)
-  termlings agents <cmd>   Browse/install predefined teams and termlings
-  termlings message <target> <text>  Send DM
-  termlings conversation <target>     Read message history
-  termlings request <type> Request decision/env var from operator
-  termlings task <cmd>     Task management
-  termlings workflow <cmd> Workflow checklists
-  termlings calendar <cmd> Calendar management
-  termlings brand <cmd>    Brand profiles (colors/logo/voice/domain/email)
-${visibleFeatures.crm ? "  termlings crm <cmd>      File-based CRM records and timelines\n" : ""}
-
-Browser Automation:
-  termlings browser --help Show browser commands
-
-Server:
-  termlings --server [--host <host>] [--port <port>]
-  --token <token>           API token (or TERMLINGS_API_TOKEN)
-  --cors-origin <origin>    Allow browser origin (repeat via CSV)
-
-Scheduler:
-  termlings scheduler      Run scheduled work checks (calendar/tasks)
-  termlings scheduler --daemon  Run as background daemon
-
-Avatar & Creation:
-  termlings avatar <dna>   Visualize avatar
-  termlings create         Create new agent
-
-Spawn:
-  termlings spawn                      Interactive spawn picker (run in another terminal)
-  termlings spawn --all                Spawn all agents
-  termlings spawn --agent=<slug> ...   Spawn one agent
-  termlings spawn ... --inline         Run one agent in current terminal
-
-Upgrade:
-  npm install -g termlings@latest
-  bun add -g termlings@latest
-`);
+      const { resolveWorkspaceAppsForAgent } = await import("./engine/apps.js");
+      const visibleApps = resolveWorkspaceAppsForAgent(process.env.TERMLINGS_AGENT_SLUG || undefined);
+      console.log(renderTopLevelHelp(visibleApps));
       process.exit(0);
     }
 

@@ -48,7 +48,7 @@ export interface WorkspaceSettings {
   showBrowserActivity?: boolean
 }
 
-export type WorkspaceFeatureKey =
+export type WorkspaceAppKey =
   | "messaging"
   | "requests"
   | "org-chart"
@@ -61,11 +61,11 @@ export type WorkspaceFeatureKey =
   | "brand"
   | "crm"
 
-export type WorkspaceFeatureFlags = Partial<Record<WorkspaceFeatureKey, boolean>>
+export type WorkspaceAppStates = Partial<Record<WorkspaceAppKey, boolean>>
 
-export interface WorkspaceFeatures {
-  defaults?: WorkspaceFeatureFlags
-  agents?: Record<string, WorkspaceFeatureFlags>
+export interface WorkspaceApps {
+  defaults?: WorkspaceAppStates
+  agents?: Record<string, WorkspaceAppStates>
 }
 
 interface WorkspaceMeta {
@@ -74,7 +74,7 @@ interface WorkspaceMeta {
   createdAt: number
   updatedAt: number
   settings?: WorkspaceSettings
-  features?: WorkspaceFeatures
+  apps?: WorkspaceApps
 }
 
 const WORKSPACE_VERSION = 1
@@ -138,7 +138,7 @@ function isValidAvatarSize(value: unknown): value is AvatarSizeMode {
   return value === "large" || value === "small" || value === "tiny"
 }
 
-function isWorkspaceFeatureKey(value: unknown): value is WorkspaceFeatureKey {
+function isWorkspaceAppKey(value: unknown): value is WorkspaceAppKey {
   return value === "messaging"
     || value === "requests"
     || value === "org-chart"
@@ -165,34 +165,34 @@ function sanitizeWorkspaceSettings(raw: unknown): WorkspaceSettings {
   return out
 }
 
-function sanitizeWorkspaceFeatureFlags(raw: unknown): WorkspaceFeatureFlags {
+function sanitizeWorkspaceAppStates(raw: unknown): WorkspaceAppStates {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
   const input = raw as Record<string, unknown>
-  const out: WorkspaceFeatureFlags = {}
+  const out: WorkspaceAppStates = {}
   for (const [key, value] of Object.entries(input)) {
-    if (!isWorkspaceFeatureKey(key)) continue
+    if (!isWorkspaceAppKey(key)) continue
     if (typeof value !== "boolean") continue
     out[key] = value
   }
   return out
 }
 
-function sanitizeWorkspaceFeatures(raw: unknown): WorkspaceFeatures {
+function sanitizeWorkspaceApps(raw: unknown): WorkspaceApps {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
   const input = raw as Record<string, unknown>
-  const out: WorkspaceFeatures = {}
-  const defaults = sanitizeWorkspaceFeatureFlags(input.defaults)
+  const out: WorkspaceApps = {}
+  const defaults = sanitizeWorkspaceAppStates(input.defaults)
   if (Object.keys(defaults).length > 0) {
     out.defaults = defaults
   }
 
   if (input.agents && typeof input.agents === "object" && !Array.isArray(input.agents)) {
     const agentsInput = input.agents as Record<string, unknown>
-    const agents: Record<string, WorkspaceFeatureFlags> = {}
-    for (const [agentSlug, agentFlags] of Object.entries(agentsInput)) {
+    const agents: Record<string, WorkspaceAppStates> = {}
+    for (const [agentSlug, agentApps] of Object.entries(agentsInput)) {
       const slug = agentSlug.trim()
       if (!slug) continue
-      const sanitized = sanitizeWorkspaceFeatureFlags(agentFlags)
+      const sanitized = sanitizeWorkspaceAppStates(agentApps)
       if (Object.keys(sanitized).length <= 0) continue
       agents[slug] = sanitized
     }
@@ -214,7 +214,7 @@ function ensureWorkspaceMeta(root: string): WorkspaceMeta {
       createdAt: now,
       updatedAt: now,
       settings: {},
-      features: {},
+      apps: {},
     }
   }
 
@@ -228,8 +228,8 @@ function ensureWorkspaceMeta(root: string): WorkspaceMeta {
         : basename(root)
     const version = typeof parsed.version === "number" ? parsed.version : WORKSPACE_VERSION
     const settings = sanitizeWorkspaceSettings(parsed.settings)
-    const features = sanitizeWorkspaceFeatures(parsed.features)
-    return { version, projectName, createdAt, updatedAt, settings, features }
+    const apps = sanitizeWorkspaceApps(parsed.apps)
+    return { version, projectName, createdAt, updatedAt, settings, apps }
   } catch {
     return {
       version: WORKSPACE_VERSION,
@@ -237,7 +237,7 @@ function ensureWorkspaceMeta(root: string): WorkspaceMeta {
       createdAt: now,
       updatedAt: now,
       settings: {},
-      features: {},
+      apps: {},
     }
   }
 }
@@ -248,10 +248,10 @@ export function readWorkspaceSettings(root = process.cwd()): WorkspaceSettings {
   return sanitizeWorkspaceSettings(meta.settings)
 }
 
-export function readWorkspaceFeatures(root = process.cwd()): WorkspaceFeatures {
+export function readWorkspaceApps(root = process.cwd()): WorkspaceApps {
   ensureWorkspaceDirs(root)
   const meta = ensureWorkspaceMeta(root)
-  return sanitizeWorkspaceFeatures(meta.features)
+  return sanitizeWorkspaceApps(meta.apps)
 }
 
 export function updateWorkspaceSettings(
@@ -273,29 +273,29 @@ export function updateWorkspaceSettings(
   return merged
 }
 
-export function updateWorkspaceFeatures(
-  patch: Partial<WorkspaceFeatures>,
+export function updateWorkspaceApps(
+  patch: Partial<WorkspaceApps>,
   root = process.cwd(),
-): WorkspaceFeatures {
+): WorkspaceApps {
   ensureWorkspaceDirs(root)
   const now = Date.now()
   const meta = ensureWorkspaceMeta(root)
-  const current = sanitizeWorkspaceFeatures(meta.features)
-  const defaults = sanitizeWorkspaceFeatureFlags({
+  const current = sanitizeWorkspaceApps(meta.apps)
+  const defaults = sanitizeWorkspaceAppStates({
     ...(current.defaults || {}),
     ...((patch.defaults && typeof patch.defaults === "object") ? patch.defaults : {}),
   })
-  const nextAgents: Record<string, WorkspaceFeatureFlags> = {
+  const nextAgents: Record<string, WorkspaceAppStates> = {
     ...(current.agents || {}),
   }
 
   if (patch.agents && typeof patch.agents === "object" && !Array.isArray(patch.agents)) {
-    for (const [agentSlug, agentFlags] of Object.entries(patch.agents)) {
+    for (const [agentSlug, agentApps] of Object.entries(patch.agents)) {
       const slug = agentSlug.trim()
       if (!slug) continue
-      const merged = sanitizeWorkspaceFeatureFlags({
+      const merged = sanitizeWorkspaceAppStates({
         ...(nextAgents[slug] || {}),
-        ...(agentFlags && typeof agentFlags === "object" ? agentFlags : {}),
+        ...(agentApps && typeof agentApps === "object" ? agentApps : {}),
       })
       if (Object.keys(merged).length > 0) {
         nextAgents[slug] = merged
@@ -305,7 +305,7 @@ export function updateWorkspaceFeatures(
     }
   }
 
-  const merged: WorkspaceFeatures = {}
+  const merged: WorkspaceApps = {}
   if (Object.keys(defaults).length > 0) {
     merged.defaults = defaults
   }
@@ -316,7 +316,7 @@ export function updateWorkspaceFeatures(
   writeWorkspaceMeta(root, {
     ...meta,
     updatedAt: now,
-    features: merged,
+    apps: merged,
   })
 
   return merged
@@ -345,7 +345,7 @@ function touchWorkspace(root: string): void {
       projectName: basename(root),
       createdAt: now,
       updatedAt: now,
-      features: {},
+      apps: {},
     })
   }
 }
