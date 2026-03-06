@@ -242,18 +242,18 @@ CREATES:
 
 TEMPLATES:
   Currently available:
-  • default - Corporate setting (PM, Designer, Developer, Growth, Support)
-  • executeive-team - Executive leadership team (CEO, CTO, CPO, CMO, CFO)
-  • personal-assistant - Single assistant that can create/manage agents
+  • startup-team - PM-led startup team (PM, Designer, Developer, Growth, Support)
+  • executive-team - C-suite executive team (CEO, CTO, CPO, CMO, CFO)
+  • personal-assistant - Single personal assistant that can create/manage agents
 
 EXAMPLES:
   $ termlings init
   🚀 Initializing Termlings workspace
-  Select a template: default
+  Select a template: startup-team
   ✓ Workspace created
 
-  $ termlings init --template default
-  ✓ Initialized .termlings using template: default
+  $ termlings init --template startup-team
+  ✓ Initialized .termlings using template: startup-team
 
   $ termlings init --template https://github.com/org/template-repo.git#main
   ✓ Initialized .termlings using template: https://github.com/org/template-repo.git#main

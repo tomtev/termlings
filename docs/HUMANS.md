@@ -69,7 +69,7 @@ When you initialize a Termlings workspace with `termlings init`, you'll be promp
 $ termlings init
 🚀 Initializing Termlings workspace
 Select template [1]: 1
-✓ Initialized .termlings using template: default
+✓ Initialized .termlings using template: startup-team
 What's your name? [tommy]
 ✓ Your name: Tommy
 ```

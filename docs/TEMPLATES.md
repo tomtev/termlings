@@ -5,9 +5,12 @@ Termlings templates define the initial `.termlings/` content copied during `term
 ## Usage
 
 ```bash
+# One-command bootstrap into a fresh workspace
+termlings --spawn --template personal-assistant
+
 # Local bundled template
-termlings init --template default
-termlings init --template executeive-team
+termlings init --template startup-team
+termlings init --template executive-team
 termlings init --template personal-assistant
 
 # Git template (branch/tag via #ref)
@@ -19,7 +22,7 @@ termlings init --template git+https://github.com/your-org/termlings-template.git
 
 ## Supported Template References
 
-- Local name: `default`, `executeive-team`, `personal-assistant`
+- Local name: `startup-team`, `executive-team`, `personal-assistant`
 - Git URL: `https://...`, `git+https://...`, `ssh://...`, `git@...`, `file://...`
 - Optional branch or tag: append `#<ref>`
 

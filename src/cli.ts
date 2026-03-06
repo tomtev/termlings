@@ -8,6 +8,7 @@ import { launchWorkspaceTui } from "./tui/tui.js";
 import { getUpdateNotice } from "./update-check.js";
 import { loadTermlingsEnv } from "./engine/env.js";
 import { renderTopLevelHelp } from "./help.js";
+import { getTopLevelInitOptions, listUnsupportedTopLevelFlags } from "./top-level-startup.js";
 
 async function ensureSchedulerDaemon(root: string): Promise<void> {
   const { ensureManagedRuntimeProcess } = await import("./engine/runtime-processes.js");
@@ -179,21 +180,21 @@ try {
     }
 
     if (!positional[0]) {
-      const allowedTopLevelFlags = new Set(["help", "h", "server", "spawn"]);
-      const unsupportedFlags = Array.from(flags).filter((flag) => !allowedTopLevelFlags.has(flag));
+      const unsupportedFlags = listUnsupportedTopLevelFlags(flags);
       if (unsupportedFlags.length > 0) {
         console.error(`Unknown option(s): ${unsupportedFlags.map((flag) => `--${flag}`).join(", ")}`);
         console.error("Run: termlings --help");
         process.exit(1);
       }
       const spawnStartup = flags.has("spawn");
+      const initOptions = getTopLevelInitOptions(flags, opts);
 
       // Show init banner if no workspace exists yet
       const { existsSync } = await import("fs");
       const { join } = await import("path");
       if (!existsSync(join(process.cwd(), ".termlings"))) {
         const { handleInit } = await import("./commands/init.js");
-        const initExit = await handleInit(new Set(), ["init"], {}, { exitOnComplete: !spawnStartup });
+        const initExit = await handleInit(new Set(), ["init"], initOptions, { exitOnComplete: !spawnStartup });
         if (!spawnStartup) {
           process.exit(0);
         }
@@ -210,7 +211,7 @@ try {
       let agents = discoverLocalAgents();
       if (agents.length === 0) {
         const { handleInit } = await import("./commands/init.js");
-        const initExit = await handleInit(new Set(["force"]), ["init"], {}, { exitOnComplete: !spawnStartup });
+        const initExit = await handleInit(new Set(["force"]), ["init"], initOptions, { exitOnComplete: !spawnStartup });
         if (!spawnStartup) {
           process.exit(0);
         }

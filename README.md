@@ -28,6 +28,8 @@ Apps can be disabled globally per workspace or per agent.
 ```bash
 # Instant start
 npx termlings@latest --spawn 
+# Instant start with a specific template
+npx termlings@latest --spawn --template personal-assistant
 # Manual
 bun add -g termlings@latest
 # or
@@ -46,6 +48,9 @@ termlings init
 
 # 2A) One-terminal startup
 termlings --spawn
+
+# 2A alt) One-terminal startup with a specific template on first run
+termlings --spawn --template personal-assistant
 
 # 2B) Or: keep workspace and spawning separate
 termlings

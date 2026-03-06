@@ -289,11 +289,11 @@ async function setupGitIgnore(
 }
 
 function templateDescription(template: string): string {
-  if (template === "default") {
+  if (template === "startup-team") {
     return "PM-led startup team: PM, Designer, Developer, Growth, Support."
   }
-  if (template === "executeive-team") {
-    return "Owner-led executive team: CEO, CTO, CPO, CMO, CFO."
+  if (template === "executive-team") {
+    return "C-suite executive team: CEO, CTO, CPO, CMO, CFO."
   }
   if (template === "personal-assistant") {
     return "Single Personal Assistant focused on execution and agent operations."
@@ -501,8 +501,12 @@ export async function ensureWorkspaceInitialized(
   }
 
   const templates = listWorkspaceTemplates()
-  const templateOptions = templates.length > 0 ? templates : ["default"]
-  const defaultTemplate = templateOptions[0] || "default"
+  const RECOMMENDED = "startup-team"
+  const sorted = templates.includes(RECOMMENDED)
+    ? [RECOMMENDED, ...templates.filter((t) => t !== RECOMMENDED)]
+    : templates
+  const templateOptions = sorted.length > 0 ? sorted : [RECOMMENDED]
+  const defaultTemplate = templateOptions[0] || RECOMMENDED
   const templateFromOption = preferredTemplate?.trim() || ""
   const selectedTemplate = templateFromOption || defaultTemplate
 
@@ -514,7 +518,7 @@ export async function ensureWorkspaceInitialized(
       updateSpawnDefaults(projectRoot, selectedRuntime)
     }
     let randomized = 0
-    if (!hadAgentsBefore && result.templateName === "default") {
+    if (!hadAgentsBefore && result.templateName === "startup-team") {
       randomized = randomizeDefaultTeamIdentities(projectRoot)
       if (randomized > 0) {
         console.log(`Randomized ${randomized} team identities (name + dna).`)
@@ -548,7 +552,7 @@ export async function ensureWorkspaceInitialized(
         updateSpawnDefaults(projectRoot, selectedRuntime)
       }
       let randomized = 0
-      if (!hadAgentsBefore && result.templateName === "default") {
+      if (!hadAgentsBefore && result.templateName === "startup-team") {
         randomized = randomizeDefaultTeamIdentities(projectRoot)
         if (randomized > 0) {
           console.log(`Randomized ${randomized} team identities (name + dna).`)
@@ -618,7 +622,7 @@ export async function ensureWorkspaceInitialized(
 
     const result = initializeWorkspaceFromTemplate(template, projectRoot)
     let randomized = 0
-    if (!hadAgentsBefore && result.templateName === "default") {
+    if (!hadAgentsBefore && result.templateName === "startup-team") {
       randomized = randomizeDefaultTeamIdentities(projectRoot)
       if (randomized > 0) {
         console.log(`✓ Randomized ${randomized} team identities`)

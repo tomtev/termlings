@@ -1,21 +1,13 @@
 # Personal Assistant Template
 
-Single-agent setup focused on founder support, coordination, and agent operations.
+Single personal assistant focused on execution and agent operations.
 
-## Contents
+## Agent
 
-- **Agent**: 1 personal assistant (`agent:personal-assistant`)
-- **Human owner**: Owner profile (`human:default`)
-- **VISION.md**: Assistant operating direction
-- **spawn.json**: Runtime defaults for the assistant
+- **Personal Assistant** — Execution partner that can create and manage specialist agents as needed
 
 ## Usage
 
 ```bash
 termlings init --template personal-assistant
 ```
-
-## Highlights
-
-The personal assistant is explicitly instructed to create, configure, and manage agents as needed for your goals.
-`agent:personal-assistant` has `manage_agents: true` by default.

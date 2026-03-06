@@ -18,7 +18,7 @@ export function renderTopLevelHelp(apps: ResolvedWorkspaceApps): string {
 
 Workspace:
   termlings                Start the terminal workspace UI (auto-starts scheduler daemon)
-  termlings --spawn        Open workspace immediately, then spawn all agents in background
+  termlings --spawn [--template <name|git-url>]  Open workspace immediately, then spawn all agents in background
   termlings init           Initialize .termlings in this project
   termlings --server       Run secure HTTP server mode
 
