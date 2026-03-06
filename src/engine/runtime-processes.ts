@@ -1,4 +1,4 @@
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "fs"
+import { existsSync, readFileSync, rmSync, writeFileSync } from "fs"
 import { join, resolve } from "path"
 import { spawn } from "child_process"
 import { ensureWorkspaceDirs } from "../workspace/state.js"
@@ -17,7 +17,6 @@ export interface ManagedRuntimeProcess {
   agentSlug?: string
   runtimeName?: string
   presetName?: string
-  logPath?: string
 }
 
 interface ManagedRuntimeProcessState {
@@ -73,19 +72,8 @@ function statePath(root: string): string {
   return join(root, ".termlings", "store", "runtime-processes.json")
 }
 
-function runtimeLogDir(root: string): string {
+function legacyRuntimeLogDir(root: string): string {
   return join(root, ".termlings", "store", "runtime-logs")
-}
-
-function sanitizeLogLabel(label: string): string {
-  const normalized = label.trim().replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-")
-  return normalized || "runtime"
-}
-
-function createRuntimeLogPath(root: string, key: string): string {
-  const dir = runtimeLogDir(root)
-  mkdirSync(dir, { recursive: true })
-  return join(dir, `${sanitizeLogLabel(key)}-${Date.now()}.log`)
 }
 
 function emptyState(): ManagedRuntimeProcessState {
@@ -128,21 +116,6 @@ function buildDetachedEnv(): Record<string, string> {
   return sanitizeManagedRuntimeEnv()
 }
 
-function readLogTail(logPath: string, maxBytes = 4096, maxLines = 24): string {
-  if (!existsSync(logPath)) return ""
-  try {
-    const content = readFileSync(logPath, "utf8")
-    const sliced = content.length > maxBytes ? content.slice(content.length - maxBytes) : content
-    const lines = sliced
-      .split(/\r?\n/)
-      .map((line) => line.trimEnd())
-      .filter((line) => line.length > 0)
-    return lines.slice(-maxLines).join("\n")
-  } catch {
-    return ""
-  }
-}
-
 function normalizeProcess(raw: unknown): ManagedRuntimeProcess | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
   const data = raw as Record<string, unknown>
@@ -171,12 +144,18 @@ function normalizeProcess(raw: unknown): ManagedRuntimeProcess | null {
     agentSlug: asString(data.agentSlug).trim() || undefined,
     runtimeName: asString(data.runtimeName).trim() || undefined,
     presetName: asString(data.presetName).trim() || undefined,
-    logPath: asString(data.logPath).trim() || undefined,
   }
+}
+
+function cleanupLegacyRuntimeLogs(root: string): void {
+  try {
+    rmSync(legacyRuntimeLogDir(root), { recursive: true, force: true })
+  } catch {}
 }
 
 function loadState(root: string): ManagedRuntimeProcessState {
   ensureWorkspaceDirs(root)
+  cleanupLegacyRuntimeLogs(root)
   const path = statePath(root)
   if (!existsSync(path)) return emptyState()
 
@@ -185,7 +164,16 @@ function loadState(root: string): ManagedRuntimeProcessState {
     const version = asNumber(raw.version) || STATE_VERSION
     const rawProcesses = Array.isArray(raw.processes) ? raw.processes : []
     const processes = rawProcesses.map((entry) => normalizeProcess(entry)).filter((entry): entry is ManagedRuntimeProcess => Boolean(entry))
-    return { version, processes }
+    const hadLegacyLogPath = rawProcesses.some((entry) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false
+      const candidate = entry as Record<string, unknown>
+      return typeof candidate.logPath === "string" && candidate.logPath.trim().length > 0
+    })
+    const normalizedState = { version, processes }
+    if (hadLegacyLogPath || processes.length !== rawProcesses.length) {
+      saveState(root, normalizedState)
+    }
+    return normalizedState
   } catch {
     return emptyState()
   }
@@ -193,6 +181,7 @@ function loadState(root: string): ManagedRuntimeProcessState {
 
 function saveState(root: string, state: ManagedRuntimeProcessState): void {
   ensureWorkspaceDirs(root)
+  cleanupLegacyRuntimeLogs(root)
   writeFileSync(statePath(root), JSON.stringify(state, null, 2) + "\n")
 }
 
@@ -296,18 +285,13 @@ function detachedInvocation(args: string[], root: string): {
 function launchDetachedTermlings(
   args: string[],
   root: string,
-  key: string,
-): { ok: boolean; pid?: number; error?: string; commandLine?: string; logPath?: string } {
+): { ok: boolean; pid?: number; error?: string; commandLine?: string } {
   const invocation = detachedInvocation(args, root)
-  const logPath = createRuntimeLogPath(root, key)
-  let logFd: number | null = null
   try {
-    appendFileSync(logPath, `[${new Date().toISOString()}] launching: ${invocation.commandLine}\n`)
-    logFd = openSync(logPath, "a")
     const child = spawn(invocation.command, invocation.commandArgs, {
       cwd: root,
       detached: true,
-      stdio: ["ignore", logFd, logFd],
+      stdio: "ignore",
       env: buildDetachedEnv(),
     })
 
@@ -315,27 +299,15 @@ function launchDetachedTermlings(
 
     const pid = child.pid
     if (!Number.isFinite(pid) || (pid ?? 0) <= 0) {
-      appendFileSync(logPath, `[${new Date().toISOString()}] launch failed: missing child pid\n`)
-      return { ok: false, error: `Failed to start detached process. Log: ${logPath}`, logPath }
+      return { ok: false, error: "Failed to start detached process." }
     }
 
-    appendFileSync(logPath, `[${new Date().toISOString()}] started pid=${pid}\n`)
-    return { ok: true, pid: pid as number, commandLine: invocation.commandLine, logPath }
+    return { ok: true, pid: pid as number, commandLine: invocation.commandLine }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    try {
-      appendFileSync(logPath, `[${new Date().toISOString()}] launch exception: ${message}\n`)
-    } catch {}
     return {
       ok: false,
-      error: `${message}. Log: ${logPath}`,
-      logPath,
-    }
-  } finally {
-    if (logFd !== null) {
-      try {
-        closeSync(logFd)
-      } catch {}
+      error: message,
     }
   }
 }
@@ -357,7 +329,7 @@ export async function ensureManagedRuntimeProcess(
     removeManagedRuntimeProcess(existing.key, root)
   }
 
-  const launched = launchDetachedTermlings(options.args, root, options.key)
+  const launched = launchDetachedTermlings(options.args, root)
   if (!launched.ok || !launched.pid) {
     return { ok: false, created: false, respawned: false, error: launched.error || "failed to launch process" }
   }
@@ -369,14 +341,7 @@ export async function ensureManagedRuntimeProcess(
   if (startupProbeMs > 0) {
     await delay(startupProbeMs)
     if (!isRuntimeProcessAlive(launched.pid)) {
-      const tail = launched.logPath ? readLogTail(launched.logPath) : ""
-      const details = [
-        `Process exited immediately after launch (pid ${launched.pid}).`,
-        launched.logPath ? `Log: ${launched.logPath}` : "",
-        tail ? `Last output:\n${tail}` : "",
-      ]
-        .filter(Boolean)
-        .join("\n")
+      const details = `Process exited immediately after launch (pid ${launched.pid}).`
       return { ok: false, created: false, respawned: false, error: details }
     }
   }
@@ -395,7 +360,6 @@ export async function ensureManagedRuntimeProcess(
       agentSlug: options.agentSlug,
       runtimeName: options.runtimeName,
       presetName: options.presetName,
-      logPath: launched.logPath,
     },
     root,
   )

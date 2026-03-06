@@ -234,7 +234,6 @@ USAGE:
 CREATES:
   .termlings/
   ├── agents/                Saved agents (avatar + metadata)
-  ├── sessions/              Active agent sessions
   ├── store/                 Persistent data
   ├── brand/                 Brand profile data
   ├── browser/               Browser runtime state (history, process, config)

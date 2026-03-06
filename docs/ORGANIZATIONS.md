@@ -9,7 +9,7 @@ An organization in Termlings is:
 - A set of humans (`.termlings/humans/*/SOUL.md`)
 - A set of agents (`.termlings/agents/*/SOUL.md`)
 - Reporting links between them
-- Live online/offline state from `.termlings/sessions/*.json`
+- Live online/offline state from `.termlings/store/sessions/*.json`
 
 The model is local-first and deterministic: edit files, then inspect with CLI.
 

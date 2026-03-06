@@ -124,7 +124,7 @@ All operations map directly to files under `.termlings/`:
 
 ```text
 .termlings/
-  sessions/*.json
+  store/sessions/*.json
   store/messages/*
   store/tasks/tasks.json
   store/calendar/calendar.json

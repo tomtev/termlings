@@ -19,7 +19,7 @@ echo "Setting up complete workspace..."
 mkdir -p test-project/.termlings/store/messages/{channels,dms}
 mkdir -p test-project/.termlings/store/tasks
 mkdir -p test-project/.termlings/store/calendar
-mkdir -p test-project/.termlings/sessions
+mkdir -p test-project/.termlings/store/sessions
 
 cd test-project
 
@@ -35,7 +35,7 @@ const sessions = [
   { sessionId: 'dave-session', name: 'Dave', dna: 'dave-dna-004', joinedAt: Date.now() - 300000, lastSeenAt: Date.now() }
 ]
 
-fs.writeFileSync('.termlings/sessions/meta.json', JSON.stringify({
+fs.writeFileSync('.termlings/store/sessions/meta.json', JSON.stringify({
   projectId: 'e2e-test-project',
   projectName: 'E2E Test Project',
   root: '.',

@@ -151,7 +151,7 @@ These are automatically passed to Claude Code when using `termlings claude`.
 
 When a termling launches:
 
-1. **Session created**: `.termlings/sessions/tl-abc123def456.json` records:
+1. **Session created**: `.termlings/store/sessions/tl-abc123def456.json` records:
    ```json
    {
      "sessionId": "tl-abc123def456",
@@ -318,7 +318,7 @@ termlings create alice
 ```bash
 termlings claude
 # Sets TERMLINGS_* env vars
-# Creates runtime session: .termlings/sessions/tl-<random>.json
+# Creates runtime session: .termlings/store/sessions/tl-<random>.json
 ```
 
 ### Collaboration

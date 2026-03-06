@@ -57,8 +57,9 @@ termlings spawn
 ```
 .termlings/
 ├── VISION.md                     # Project vision (template-provided)
-├── sessions/                     # Active agent sessions
 ├── store/
+│   ├── sessions/                # Active agent sessions
+│   ├── message-queue/           # Transient live inboxes + offline queues
 │   ├── messages/                # Message history (channels/dms/system + index)
 │   ├── presence/                # Terminal typing/activity state
 │   ├── tasks/
@@ -134,7 +135,7 @@ Available local templates:
 To clear stale runtime presence without touching tasks/calendar/agents:
 
 ```bash
-rm -f .termlings/sessions/*.json
+rm -f .termlings/store/sessions/*.json
 rm -f .termlings/store/presence/*.typing.json
 ```
 
@@ -175,10 +176,10 @@ You only need one of Claude or Codex installed and logged in.
 .termlings/
 ├── VISION.md             # Project vision for agent context
 ├── .gitignore            # Git ignore rules (generated)
-├── message-queue/        # Transient live inboxes + offline queues
-├── sessions/
-│   └── [sessionId].json  # Per-agent session state
 ├── store/
+│   ├── sessions/
+│   │   └── [sessionId].json  # Per-agent session state
+│   ├── message-queue/   # Transient live inboxes + offline queues
 │   ├── messages/         # Chat/DM/system history
 │   ├── presence/         # Session typing/activity state
 │   ├── tasks/

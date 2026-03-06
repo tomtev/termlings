@@ -18,7 +18,7 @@ Covers what happens when an agent is launched via `termlings claude`, `termlings
 
 1. Resolve agent identity from `.termlings/agents/<slug>/SOUL.md` (name, dna, title, role).
 2. Allocate a runtime session ID (`tl-...`).
-3. Write/update session metadata in `.termlings/sessions/*.json`.
+3. Write/update session metadata in `.termlings/store/sessions/*.json`.
 4. Build final system context for the agent process.
 5. Inject context into Claude launch args and env.
 6. Spawn Claude process and start message/session heartbeat loops.
@@ -117,10 +117,10 @@ Workspace state is file-backed under `.termlings/`:
 
 ```text
 .termlings/
-  message-queue/
+  store/sessions/*.json
+  store/message-queue/
     tl-*.msg.json
     *.queue.jsonl
-  sessions/*.json
   store/messages/
     channels/*.jsonl
     dms/*.jsonl
@@ -134,8 +134,8 @@ Workspace state is file-backed under `.termlings/`:
 
 Runtime behavior:
 
-- live runtime delivery uses `message-queue/tl-*.msg.json`
-- offline agent delivery uses `message-queue/*.queue.jsonl`
+- live runtime delivery uses `store/message-queue/tl-*.msg.json`
+- offline agent delivery uses `store/message-queue/*.queue.jsonl`
 - messaging appends to `store/messages/*`
 - task/calendar commands update JSON stores
 - browser actions log into `.termlings/browser/history/all.jsonl` and `.termlings/browser/history/agent/*.jsonl`

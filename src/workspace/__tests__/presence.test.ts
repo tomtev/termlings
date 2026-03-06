@@ -112,8 +112,8 @@ describe("presence state", () => {
     ensureWorkspaceDirs(root)
     const base = join(root, ".termlings")
     const presence = join(base, "store", "presence")
-    const sessions = join(base, "sessions")
-    const queueDir = join(base, "message-queue")
+    const sessions = join(base, "store", "sessions")
+    const queueDir = join(base, "store", "message-queue")
     const queuePath = join(queueDir, "tl-queue.queue.jsonl")
 
     writeFileSync(join(presence, "tl-a.typing.json"), '{"typing":true,"source":"terminal","updatedAt":1}\n', "utf8")
@@ -123,16 +123,44 @@ describe("presence state", () => {
 
     clearWorkspaceRuntime(root)
 
-    const presenceFiles = readdirSync(presence).filter((file) => file.endsWith(".typing.json"))
-    const sessionFiles = readdirSync(sessions).filter((file) => file.endsWith(".json"))
+    const presenceFiles = existsSync(presence)
+      ? readdirSync(presence).filter((file) => file.endsWith(".typing.json"))
+      : []
+    const sessionFiles = existsSync(sessions)
+      ? readdirSync(sessions).filter((file) => file.endsWith(".json"))
+      : []
     expect(presenceFiles).toHaveLength(0)
     expect(sessionFiles).toHaveLength(0)
     expect(existsSync(queuePath)).toBe(false)
   })
 
+  it("migrates legacy session files into store/sessions", () => {
+    const legacyDir = join(root, ".termlings", "sessions")
+    mkdirSync(legacyDir, { recursive: true })
+    const sessionId = "tl-legacy-session"
+    const legacyPath = join(legacyDir, `${sessionId}.json`)
+    writeFileSync(
+      legacyPath,
+      JSON.stringify({
+        sessionId,
+        name: "Legacy",
+        dna: "1111111",
+        joinedAt: 1,
+        lastSeenAt: 1,
+      }) + "\n",
+      "utf8",
+    )
+
+    ensureWorkspaceDirs(root)
+
+    const migratedPath = join(root, ".termlings", "store", "sessions", `${sessionId}.json`)
+    expect(existsSync(migratedPath)).toBe(true)
+    expect(existsSync(legacyPath)).toBe(false)
+  })
+
   it("prunes stale sessions when listing", () => {
     ensureWorkspaceDirs(root)
-    const sessions = join(root, ".termlings", "sessions")
+    const sessions = join(root, ".termlings", "store", "sessions")
     const now = Date.now()
     const staleId = "tl-stale-1"
     const freshId = "tl-fresh-1"

@@ -61,7 +61,7 @@ Termlings adds an agent coordination layer in `.termlings/` on top of your exist
 2. Termlings injects workspace + role context into the runtime session.
 3. The runtime starts with that context:
    - Claude Code (`termlings claude`) via `--append-system-prompt "<termlings context>"`
-   - Codex CLI (`termlings codex`) via `-i "<termlings context>"`
+   - Codex CLI (`termlings codex`) via a trailing prompt argument
 4. Agents coordinate through `termlings` commands (`message`, `task`, `calendar`, `request`, etc.), while shared state in `.termlings/store/*` keeps TUI + CLI in sync across terminals.
 
 Each Termling agent gets role-specific context derived from its `SOUL.md` plus shared workspace context.
@@ -112,8 +112,6 @@ You should not run these commands since they mostly work inside a agent session.
   VISION.md
   .env
   workspace.json
-  sessions/
-    tl-*.json
   agents/
     <slug>/
       SOUL.md
@@ -121,10 +119,12 @@ You should not run these commands since they mostly work inside a agent session.
     brand.json
     profiles/
       <id>.json
-  message-queue/
-    tl-*.msg.json
-    *.queue.jsonl
   store/
+    sessions/
+      tl-*.json
+    message-queue/
+      tl-*.msg.json
+      *.queue.jsonl
     messages/
       channels/*.jsonl
       dms/*.jsonl
@@ -149,11 +149,11 @@ What each file/folder is for:
 - `.termlings/VISION.md` - simple project vision injected into every agent context.
 - `.termlings/.env` - Termlings-internal environment values resolved from scoped requests.
 - `.termlings/workspace.json` - workspace metadata and TUI settings (`avatarSize`, `showBrowserActivity`).
-- `.termlings/sessions/tl-*.json` - live session presence and metadata.
 - `.termlings/agents/<slug>/SOUL.md` - saved agent identity, title, role, DNA, and optional `sort_order` for TUI ordering.
 - `.termlings/brand/brand.json` - default brand profile.
 - `.termlings/brand/profiles/<id>.json` - additional named brand profiles.
-- `.termlings/message-queue/` - transient live inboxes (`tl-*.msg.json`) and offline agent queues (`*.queue.jsonl`).
+- `.termlings/store/sessions/tl-*.json` - live session presence and metadata.
+- `.termlings/store/message-queue/` - transient live inboxes (`tl-*.msg.json`) and offline agent queues (`*.queue.jsonl`).
 - `.termlings/store/messages/` - append-only channel/DM/system history.
 - `.termlings/store/presence/` - session typing/activity state.
 - `.termlings/store/tasks/tasks.json` - task list and task state.

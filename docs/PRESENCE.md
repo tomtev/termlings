@@ -4,7 +4,7 @@ Termlings presence is terminal-first and file-backed.
 
 ## What presence means
 
-- `online`: Agent session exists in `.termlings/sessions/<sessionId>.json`.
+- `online`: Agent session exists in `.termlings/store/sessions/<sessionId>.json`.
 - `typing/working`: Agent has recent terminal activity written to `.termlings/store/presence/<sessionId>.typing.json` with `source: "terminal"`.
 
 ## Source of truth
@@ -57,11 +57,11 @@ If presence appears stuck or noisy:
    ```
 3. Confirm sessions:
    ```bash
-   ls .termlings/sessions
+   ls .termlings/store/sessions
    ```
 4. Remove stale runtime files if needed:
    ```bash
-   rm -f .termlings/sessions/*.json
+   rm -f .termlings/store/sessions/*.json
    rm -f .termlings/store/presence/*.typing.json
    ```
 

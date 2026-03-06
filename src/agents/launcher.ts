@@ -247,6 +247,23 @@ function isUuidLike(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim())
 }
 
+export function composeLaunchArgs(
+  adapter: AgentAdapter,
+  context: string,
+  runtimeSessionArgs: string[],
+  passthroughArgs: string[],
+): string[] {
+  const contextArgs = adapter.contextArgs(context)
+
+  // Codex accepts the initial prompt as a trailing positional argument.
+  // Keeping it at the end lets preset flags and `resume --last` stay valid.
+  if (adapter.bin === "codex") {
+    return [...runtimeSessionArgs, ...passthroughArgs, ...contextArgs]
+  }
+
+  return [...contextArgs, ...runtimeSessionArgs, ...passthroughArgs]
+}
+
 function shouldInjectClaudeSessionId(args: string[]): boolean {
   if (hasArgFlag(args, "--session-id")) return false
   if (hasArgFlag(args, "--resume") || hasArgFlag(args, "--continue") || hasArgFlag(args, "--from-pr")) return false
@@ -383,7 +400,6 @@ export async function launchAgent(
     ? `${finalContext}\n\n<TERMLINGS-RUNTIME-MARKER>${runtimeDiscoveryMarker}</TERMLINGS-RUNTIME-MARKER>\n`
     : `<TERMLINGS-RUNTIME-MARKER>${runtimeDiscoveryMarker}</TERMLINGS-RUNTIME-MARKER>\n`
 
-  const contextArgs = adapter.contextArgs(finalContext)
   const requestedClaudeSessionRef = adapter.bin === "claude"
     ? extractClaudeSessionRefFromArgs(passthroughArgs)
     : ""
@@ -393,7 +409,7 @@ export async function launchAgent(
       : ""
   const runtimeSessionRefSeed = autoClaudeSessionId || requestedClaudeSessionRef
   const runtimeSessionArgs = autoClaudeSessionId ? ["--session-id", autoClaudeSessionId] : []
-  const finalArgs = [...contextArgs, ...runtimeSessionArgs, ...passthroughArgs]
+  const finalArgs = composeLaunchArgs(adapter, finalContext, runtimeSessionArgs, passthroughArgs)
 
   // Remove legacy Claude hook registration so terminal activity remains authoritative.
   if (adapter.bin === "claude") {

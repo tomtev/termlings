@@ -22,7 +22,7 @@ Typical launch path:
 3. Shared workspace context is loaded from:
    - `src/termlings-system-message.md`
    - `.termlings/VISION.md` when present
-4. A runtime session ID is created and written to `.termlings/sessions/<session-id>.json`.
+4. A runtime session ID is created and written to `.termlings/store/sessions/<session-id>.json`.
 5. Termlings starts the runtime and injects the final context:
    - Claude: `--append-system-prompt "<context>"`
    - Codex: `-i "<context>"`
@@ -85,8 +85,8 @@ Message targets:
 
 Delivery model:
 
-- Online session: delivered immediately through `.termlings/message-queue/tl-*.msg.json`
-- Offline agent: queued in `.termlings/message-queue/*.queue.jsonl`
+- Online session: delivered immediately through `.termlings/store/message-queue/tl-*.msg.json`
+- Offline agent: queued in `.termlings/store/message-queue/*.queue.jsonl`
 - Durable history: appended to `.termlings/store/messages/*`
 
 The launcher polls for inbound messages and injects them into the agent terminal so they show up inside the runtime session.
@@ -126,15 +126,15 @@ The TUI and CLI stay consistent because they read and write the same files:
   VISION.md
   workspace.json
   spawn.json
-  sessions/*.json
+  store/sessions/*.json
   agents/<slug>/SOUL.md
   store/messages/*
   store/tasks/tasks.json
   store/calendar/calendar.json
   store/requests/*.json
   store/presence/*.typing.json
-  message-queue/*.msg.json
-  message-queue/*.queue.jsonl
+  store/message-queue/*.msg.json
+  store/message-queue/*.queue.jsonl
 ```
 
 Practical meaning:

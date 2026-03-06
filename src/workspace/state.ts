@@ -63,16 +63,24 @@ function termlingsDir(root: string): string {
   return join(root, ".termlings")
 }
 
-function sessionsDir(root: string): string {
-  return join(termlingsDir(root), "sessions")
-}
-
 function storeDir(root: string): string {
   return join(termlingsDir(root), "store")
 }
 
+function sessionsDir(root: string): string {
+  return join(storeDir(root), "sessions")
+}
+
+function legacySessionsDir(root: string): string {
+  return join(termlingsDir(root), "sessions")
+}
+
 function presenceDir(root: string): string {
   return join(storeDir(root), "presence")
+}
+
+function messageQueueDir(root: string): string {
+  return join(storeDir(root), "message-queue")
 }
 
 function workspaceMetaPath(root: string): string {
@@ -247,6 +255,38 @@ function migrateLegacyTypingFiles(root: string): void {
   }
 }
 
+function migrateLegacySessionFiles(root: string): void {
+  const sourceDir = legacySessionsDir(root)
+  const targetDir = sessionsDir(root)
+
+  let entries: string[] = []
+  try {
+    entries = readdirSync(sourceDir)
+  } catch {
+    return
+  }
+
+  for (const entry of entries) {
+    if (!entry.endsWith(".json")) continue
+    const from = join(sourceDir, entry)
+    const to = join(targetDir, entry)
+    try {
+      if (!existsSync(to)) {
+        renameSync(from, to)
+      } else {
+        rmSync(from, { force: true })
+      }
+    } catch {}
+  }
+
+  try {
+    const remaining = readdirSync(sourceDir)
+    if (remaining.length === 0) {
+      rmSync(sourceDir, { recursive: true, force: true })
+    }
+  } catch {}
+}
+
 function normalizeSession(raw: any, fallbackSessionId: string): WorkspaceSession | null {
   if (!raw || typeof raw !== "object") return null
   const hasPresenceTimestamps = typeof raw.joinedAt === "number" || typeof raw.lastSeenAt === "number"
@@ -293,11 +333,12 @@ export function ensureWorkspaceDirs(root = process.cwd()): void {
   mkdirSync(base, { recursive: true })
   mkdirSync(join(base, "agents"), { recursive: true })
   mkdirSync(join(base, "humans"), { recursive: true })
-  mkdirSync(sessionsDir(root), { recursive: true })
   mkdirSync(storeDir(root), { recursive: true })
+  mkdirSync(sessionsDir(root), { recursive: true })
   mkdirSync(presenceDir(root), { recursive: true })
   mkdirSync(join(base, "browser"), { recursive: true })
   migrateLegacyTypingFiles(root)
+  migrateLegacySessionFiles(root)
   msgStorage.initializeMessageDirs(root)
 }
 
@@ -313,12 +354,17 @@ export function clearWorkspaceRuntime(root = process.cwd()): void {
       || entry === "state.json"
       || entry === "message-queue"
       || entry === "messages"
+      || entry === "sessions"
     ) {
       try {
         rmSync(join(base, entry), { recursive: true, force: true })
       } catch {}
     }
   }
+
+  try {
+    rmSync(messageQueueDir(root), { recursive: true, force: true })
+  } catch {}
 
   try {
     const presenceEntries = readdirSync(presenceDir(root))
@@ -329,11 +375,7 @@ export function clearWorkspaceRuntime(root = process.cwd()): void {
   } catch {}
 
   try {
-    const sessions = readdirSync(sessionsDir(root))
-    for (const file of sessions) {
-      if (!file.endsWith(".json")) continue
-      unlinkSync(join(sessionsDir(root), file))
-    }
+    rmSync(sessionsDir(root), { recursive: true, force: true })
   } catch {}
 }
 

@@ -13,7 +13,7 @@ termlings org-chart --json
 
 - Humans from `.termlings/humans/*/SOUL.md`
 - Agents from `.termlings/agents/*/SOUL.md`
-- Online/offline status from `.termlings/sessions/*.json`
+- Online/offline status from `.termlings/store/sessions/*.json`
 - Reporting relationships from `reports_to`
 - Direct report counts (`Leads` column)
 

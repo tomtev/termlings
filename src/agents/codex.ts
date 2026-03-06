@@ -6,7 +6,9 @@ const codex: AgentAdapter = {
 
   contextArgs(context) {
     if (!context) return []
-    return ["-i", context]
+    // Codex expects the initial prompt as a trailing positional argument.
+    // `-i` / `--image` is reserved for local image attachments.
+    return [context]
   },
 }
 

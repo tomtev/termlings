@@ -23,16 +23,11 @@ async function ensureSchedulerDaemon(root: string): Promise<void> {
   }
 }
 
-async function startSpawnAllInBackground(root: string): Promise<{ ok: boolean; pid?: number; logPath?: string; error?: string }> {
-  const [{ appendFileSync, closeSync, mkdirSync, openSync }, { join, resolve }, { spawn }] = await Promise.all([
-    import("fs"),
+async function startSpawnAllInBackground(root: string): Promise<{ ok: boolean; pid?: number; error?: string }> {
+  const [{ join, resolve }, { spawn }] = await Promise.all([
     import("path"),
     import("child_process"),
   ]);
-
-  const logDir = join(root, ".termlings", "store", "runtime-logs");
-  mkdirSync(logDir, { recursive: true });
-  const logPath = join(logDir, `startup-spawn-${Date.now()}.log`);
 
   const cliEntry = (process.argv[1] || "").trim().length > 0
     ? resolve(process.argv[1]!)
@@ -55,38 +50,24 @@ async function startSpawnAllInBackground(root: string): Promise<{ ok: boolean; p
     env[key] = value;
   }
 
-  let logFd: number | null = null;
   try {
-    appendFileSync(logPath, `[${new Date().toISOString()}] launching: ${command} ${commandArgs.join(" ")}\n`);
-    logFd = openSync(logPath, "a");
     const child = spawn(command, commandArgs, {
       cwd: root,
       detached: true,
-      stdio: ["ignore", logFd, logFd],
+      stdio: "ignore",
       env,
     });
     child.unref();
 
     const pid = child.pid;
     if (!Number.isFinite(pid) || (pid ?? 0) <= 0) {
-      appendFileSync(logPath, `[${new Date().toISOString()}] failed: missing child pid\n`);
-      return { ok: false, error: "failed to launch spawn worker", logPath };
+      return { ok: false, error: "failed to launch spawn worker" };
     }
 
-    appendFileSync(logPath, `[${new Date().toISOString()}] started pid=${pid}\n`);
-    return { ok: true, pid: pid as number, logPath };
+    return { ok: true, pid: pid as number };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    try {
-      appendFileSync(logPath, `[${new Date().toISOString()}] launch exception: ${message}\n`);
-    } catch {}
-    return { ok: false, error: message, logPath };
-  } finally {
-    if (logFd !== null) {
-      try {
-        closeSync(logFd);
-      } catch {}
-    }
+    return { ok: false, error: message };
   }
 }
 
@@ -302,9 +283,7 @@ Upgrade:
             text: "Spawning agents in background...",
           }, root);
         } else {
-          const detail = startupSpawn.logPath
-            ? `${startupSpawn.error || "unknown error"} (log: ${startupSpawn.logPath})`
-            : startupSpawn.error || "unknown error";
+          const detail = startupSpawn.error || "unknown error";
           appendWorkspaceMessage({
             kind: "system",
             from: "system",

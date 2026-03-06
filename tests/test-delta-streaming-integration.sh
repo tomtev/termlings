@@ -20,6 +20,7 @@ echo "------------------------------------"
 mkdir -p test-delta-project/.termlings/store/messages/channels
 mkdir -p test-delta-project/.termlings/store/tasks
 mkdir -p test-delta-project/.termlings/store/calendar
+mkdir -p test-delta-project/.termlings/store/sessions
 
 cd test-delta-project
 
@@ -28,8 +29,8 @@ bun -e "
 import * as fs from 'fs'
 
 // Create minimal sessions directory
-fs.mkdirSync('.termlings/sessions', { recursive: true })
-fs.writeFileSync('.termlings/sessions/meta.json', JSON.stringify({
+fs.mkdirSync('.termlings/store/sessions', { recursive: true })
+fs.writeFileSync('.termlings/store/sessions/meta.json', JSON.stringify({
   projectId: 'test-project',
   projectName: 'Test Delta Project',
   root: '.',

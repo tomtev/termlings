@@ -82,7 +82,7 @@ Backed by workspace files:
 
 ```text
 .termlings/
-  sessions/
+  store/sessions/
   store/messages/
   store/tasks/tasks.json
   store/calendar/calendar.json

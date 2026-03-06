@@ -157,7 +157,7 @@ export async function selectLocalAgentWithRoom(localAgents: LocalAgent[]): Promi
 
   // Get active agents from sessions directory
   const activeAgentDnas = new Set<string>();
-  const sessionsDir = join(process.cwd(), ".termlings", "sessions");
+  const sessionsDir = join(process.cwd(), ".termlings", "store", "sessions");
   if (existsSync(sessionsDir)) {
     try {
       const sessionFiles = readdirSync(sessionsDir);

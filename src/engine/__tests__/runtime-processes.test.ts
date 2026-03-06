@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest"
-import { sanitizeManagedRuntimeEnv } from "../runtime-processes.js"
+import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs"
+import { join } from "path"
+import { tmpdir } from "os"
+import { listManagedRuntimeProcesses, sanitizeManagedRuntimeEnv } from "../runtime-processes.js"
 
 describe("sanitizeManagedRuntimeEnv", () => {
   it("removes inherited runtime session control vars but preserves user auth", () => {
@@ -39,5 +42,56 @@ describe("sanitizeManagedRuntimeEnv", () => {
     expect(sanitized.SUPERSET_TAB_ID).toBeUndefined()
     expect(sanitized.TERM_SESSION_ID).toBeUndefined()
     expect(sanitized.ITERM_SESSION_ID).toBeUndefined()
+  })
+
+  let root = ""
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), "termlings-runtime-processes-test-"))
+  })
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it("drops legacy runtime log metadata and removes runtime-logs directory", () => {
+    const storeDir = join(root, ".termlings", "store")
+    const logsDir = join(storeDir, "runtime-logs")
+    mkdirSync(logsDir, { recursive: true })
+    writeFileSync(join(logsDir, "agent-dev.log"), "sensitive output\n", "utf8")
+    writeFileSync(
+      join(storeDir, "runtime-processes.json"),
+      JSON.stringify({
+        version: 1,
+        processes: [
+          {
+            key: "agent:developer",
+            kind: "agent",
+            pid: 12345,
+            command: "termlings spawn claude default --agent=developer --inline",
+            args: ["spawn", "claude"],
+            cwd: root,
+            startedAt: 1,
+            updatedAt: 1,
+            agentSlug: "developer",
+            runtimeName: "claude",
+            presetName: "default",
+            logPath: join(logsDir, "agent-dev.log"),
+          },
+        ],
+      }, null, 2) + "\n",
+      "utf8",
+    )
+
+    const processes = listManagedRuntimeProcesses(root)
+    expect(processes).toHaveLength(1)
+    expect("logPath" in processes[0]!).toBe(false)
+    expect(existsSync(logsDir)).toBe(false)
+
+    const state = JSON.parse(readFileSync(join(storeDir, "runtime-processes.json"), "utf8")) as {
+      processes?: Array<Record<string, unknown>>
+    }
+    expect(state.processes).toHaveLength(1)
+    expect(state.processes?.[0]?.logPath).toBeUndefined()
   })
 })

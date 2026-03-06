@@ -49,7 +49,7 @@ describe("message delivery paths", () => {
 
     await sendMessage("agent:alex", "hello", "tl-river", "River", "03b00ce")
 
-    const mailbox = join(root, ".termlings", "message-queue", "tl-alex.msg.json")
+    const mailbox = join(root, ".termlings", "store", "message-queue", "tl-alex.msg.json")
     expect(existsSync(mailbox)).toBe(true)
     expect(existsSync(join(root, ".termlings", "tl-alex.msg.json"))).toBe(false)
 
@@ -68,8 +68,8 @@ describe("message delivery paths", () => {
 
     await sendMessage("agent:alex", "status update", "tl-river", "River", "03b00ce")
 
-    const canonicalQueue = join(root, ".termlings", "message-queue", "dev-pagefun.queue.jsonl")
-    const legacyQueue = join(root, ".termlings", "message-queue", "alex.queue.jsonl")
+    const canonicalQueue = join(root, ".termlings", "store", "message-queue", "dev-pagefun.queue.jsonl")
+    const legacyQueue = join(root, ".termlings", "store", "message-queue", "alex.queue.jsonl")
     expect(existsSync(canonicalQueue)).toBe(true)
     expect(existsSync(legacyQueue)).toBe(false)
 
@@ -90,6 +90,7 @@ describe("message delivery paths", () => {
   it("repairs legacy display-name queue files to the agent slug before delivery", () => {
     writeSoul(root, "dev-pagefun", { name: "Alex", dna: "08c883a" })
     const queueDir = join(root, ".termlings", "message-queue")
+    const canonicalDir = join(root, ".termlings", "store", "message-queue")
     mkdirSync(queueDir, { recursive: true })
     writeFileSync(
       join(queueDir, "alex.queue.jsonl"),
@@ -101,5 +102,6 @@ describe("message delivery paths", () => {
     expect(queued).toHaveLength(1)
     expect(queued[0]?.text).toBe("legacy")
     expect(existsSync(join(queueDir, "alex.queue.jsonl"))).toBe(false)
+    expect(existsSync(join(canonicalDir, "alex.queue.jsonl"))).toBe(false)
   })
 })

@@ -56,12 +56,28 @@ export function ensureDataDir(): void {
   mkdirSync(getDataDir(), { recursive: true })
 }
 
+function storeDir(): string {
+  return join(IPC_DIR, "store")
+}
+
 function messageQueueDir(): string {
+  return join(storeDir(), "message-queue")
+}
+
+function legacyMessageQueueDir(): string {
   return join(IPC_DIR, "message-queue")
 }
 
 function legacyMessagesDir(): string {
   return join(IPC_DIR, "messages")
+}
+
+function sessionsDir(): string {
+  return join(storeDir(), "sessions")
+}
+
+function legacySessionsDir(): string {
+  return join(IPC_DIR, "sessions")
 }
 
 function liveMessagePath(sessionId: string): string {
@@ -139,6 +155,7 @@ function repairQueueDirectory(queueDir: string): void {
 }
 
 function migrateLegacyMessageIpc(): void {
+  mkdirSync(storeDir(), { recursive: true })
   mkdirSync(messageQueueDir(), { recursive: true })
 
   try {
@@ -147,6 +164,22 @@ function migrateLegacyMessageIpc(): void {
       mergeJsonArrayFile(join(IPC_DIR, entry), liveMessagePath(entry.slice(0, -".msg.json".length)))
     }
   } catch {}
+
+  const oldQueueDir = legacyMessageQueueDir()
+  if (existsSync(oldQueueDir)) {
+    try {
+      for (const entry of readdirSync(oldQueueDir)) {
+        if (entry.endsWith(".msg.json")) {
+          mergeJsonArrayFile(join(oldQueueDir, entry), liveMessagePath(entry.slice(0, -".msg.json".length)))
+          continue
+        }
+        if (!entry.endsWith(".queue.jsonl")) continue
+        const canonicalTarget = canonicalQueueTargetId(entry.slice(0, -".queue.jsonl".length))
+        mergeJsonlFile(join(oldQueueDir, entry), queuedMessagePath(canonicalTarget))
+      }
+      rmSync(oldQueueDir, { recursive: true, force: true })
+    } catch {}
+  }
 
   const oldMessagesDir = legacyMessagesDir()
   if (existsSync(oldMessagesDir)) {
@@ -178,6 +211,35 @@ function migrateLegacyMessageIpc(): void {
 function ensureMessageIpcDirs(): void {
   ensureIpcDir()
   migrateLegacyMessageIpc()
+}
+
+function migrateLegacySessionIpc(): void {
+  mkdirSync(storeDir(), { recursive: true })
+  mkdirSync(sessionsDir(), { recursive: true })
+
+  const oldDir = legacySessionsDir()
+  if (!existsSync(oldDir)) return
+
+  try {
+    for (const entry of readdirSync(oldDir)) {
+      if (!entry.endsWith(".json")) continue
+      const from = join(oldDir, entry)
+      const to = join(sessionsDir(), entry)
+      try {
+        if (!existsSync(to)) {
+          const data = readFileSync(from, "utf8")
+          writeFileSync(to, data)
+        }
+      } catch {}
+      try { unlinkSync(from) } catch {}
+    }
+    rmSync(oldDir, { recursive: true, force: true })
+  } catch {}
+}
+
+function ensureSessionIpcDir(): void {
+  ensureIpcDir()
+  migrateLegacySessionIpc()
 }
 
 // --- Command IPC ---
@@ -350,9 +412,9 @@ export interface SessionState {
 }
 
 export function writeSessionState(sessionId: string, state: Omit<SessionState, 'sessionId'>): void {
-  const file = join(IPC_DIR, `sessions`, `${sessionId}.json`)
+  ensureSessionIpcDir()
+  const file = join(sessionsDir(), `${sessionId}.json`)
   try {
-    mkdirSync(join(IPC_DIR, `sessions`), { recursive: true })
     let existing: Record<string, unknown> = {}
     try {
       const data = readFileSync(file, "utf8")
@@ -368,7 +430,8 @@ export function writeSessionState(sessionId: string, state: Omit<SessionState, '
 }
 
 export function readSessionState(sessionId: string): SessionState | null {
-  const file = join(IPC_DIR, `sessions`, `${sessionId}.json`)
+  ensureSessionIpcDir()
+  const file = join(sessionsDir(), `${sessionId}.json`)
   try {
     const data = readFileSync(file, "utf8")
     return JSON.parse(data) as SessionState
@@ -379,11 +442,13 @@ export function readSessionState(sessionId: string): SessionState | null {
 
 export function cleanupIpc(): void {
   if (!existsSync(IPC_DIR)) return
+  try { rmSync(messageQueueDir(), { recursive: true, force: true }) } catch {}
+  try { rmSync(sessionsDir(), { recursive: true, force: true }) } catch {}
   try {
     const files = readdirSync(IPC_DIR)
     for (const file of files) {
       if (PERSIST_FILES.has(file)) continue
-      if (file === "messages" || file === "message-queue") {
+      if (file === "messages" || file === "message-queue" || file === "sessions") {
         try { rmSync(join(IPC_DIR, file), { recursive: true, force: true }) } catch {}
         continue
       }
