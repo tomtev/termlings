@@ -1,20 +1,15 @@
-import { readWorkspaceApps, type WorkspaceAppKey } from "../workspace/state.js"
+import { CORE_APP_DEFINITIONS } from "../apps/registry.js"
+import {
+  readWorkspaceApps,
+  type WorkspaceAppKey,
+} from "../workspace/state.js"
 
 export type ResolvedWorkspaceApps = Record<WorkspaceAppKey, boolean>
 
-export const BUILTIN_WORKSPACE_APPS: ResolvedWorkspaceApps = {
-  "messaging": true,
-  "requests": true,
-  "org-chart": true,
-  "brief": true,
-  "task": true,
-  "workflows": true,
-  "calendar": true,
-  "browser": true,
-  "skills": true,
-  "brand": true,
-  "crm": true,
-}
+export const BUILTIN_WORKSPACE_APPS: ResolvedWorkspaceApps = CORE_APP_DEFINITIONS.reduce((acc, app) => {
+  acc[app.id] = true
+  return acc
+}, {} as ResolvedWorkspaceApps)
 
 export function resolveWorkspaceAppsForAgent(
   agentSlug?: string,
@@ -39,6 +34,12 @@ export function resolveWorkspaceAppsForAgent(
       if (typeof value === "boolean") {
         resolved[key] = value
       }
+    }
+  }
+
+  for (const app of CORE_APP_DEFINITIONS) {
+    if (app.required) {
+      resolved[app.id] = true
     }
   }
 

@@ -124,4 +124,3 @@ Provide strategic direction while the agent team executes autonomously.
 - [TERMLINGS.md](TERMLINGS.md)
 - [HUMANS.md](HUMANS.md)
 - [LIFECYCLE.md](LIFECYCLE.md)
-- [INIT.md](INIT.md)

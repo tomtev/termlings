@@ -4,7 +4,9 @@
 
 Termlings turns your terminal into a live AI startup: a full agent team building and marketing products around the clock, coordinating work in real time, running browser workflows, and shipping outcomes end to end from one shared command center.
 
-Every agent gets access to these tools (via termlings CLI):
+The core model is agent-native file-based apps: local workspace apps exposed consistently through CLI, TUI, and injected agent context.
+
+Every agent gets access to these core apps (via termlings CLI):
 
 - **Messaging** — DMs to teammates and the human operator
 - **Requests** — ask a human for decisions, credentials, or env vars
@@ -17,6 +19,9 @@ Every agent gets access to these tools (via termlings CLI):
 - **Brand** — shared brand profile (colors, voice, logos, domains)
 - **Browser** — shared browser for web interaction and automation (powered by [agent-browser.dev](https://agent-browser.dev) + Chrome CDP)
 - **Skills** — installable skill packs for extended capabilities (powered by skills.sh)
+
+Apps can be disabled globally per workspace or per agent.
+`messaging` is required and always stays enabled.
 
 ## Install
 
@@ -79,12 +84,12 @@ The built-in terminal UI is like an AI-native Slack: chat with your agents, trac
 
 | Command | What it does | Docs |
 | --- | --- | --- |
-| `termlings` | Start workspace UI + auto-start scheduler daemon | [docs/INIT.md](docs/INIT.md) |
-| `termlings --spawn` | Open workspace UI immediately + start scheduler daemon + background spawn startup | [docs/INIT.md](docs/INIT.md) |
+| `termlings` | Start workspace UI + auto-start scheduler daemon | README |
+| `termlings --spawn` | Open workspace UI immediately + start scheduler daemon + background spawn startup | README |
 | `termlings spawn` | Pick an agent + launch preset | [docs/AGENTS.md](docs/AGENTS.md) |
 | `termlings create` | Create a new agent in .termlings/agents | [docs/AGENTS.md](docs/AGENTS.md) |
 | `termlings agents <cmd>` | Browse/install predefined teams and agent presets | [docs/AGENTS.md](docs/AGENTS.md) |
-| `termlings init` | Initialize `.termlings/` in current project | [docs/INIT.md](docs/INIT.md) |
+| `termlings init` | Initialize `.termlings/` in current project | README |
 | `termlings avatar <dna|name>` | Render avatar identity | [docs/AVATARS.md](docs/AVATARS.md) |
 | `termlings --help` | Full command reference | CLI help |
 | `termlings --server` | Run secure HTTP API server [WIP] | [docs/SERVER.md](docs/SERVER.md) |
@@ -200,7 +205,6 @@ This is intentionally separated so operator docs stay short.
 - [docs/TERMLINGS.md](docs/TERMLINGS.md) - termling identity and concepts
 - [docs/AGENTS.md](docs/AGENTS.md) - SOUL frontmatter and identity conventions
 - [docs/AGENTS.md](docs/AGENTS.md) - preset catalog and install flows
-- [docs/INIT.md](docs/INIT.md) - workspace initialization
 - [docs/SPAWN.md](docs/SPAWN.md) - launch agent runtime sessions
 - [docs/APPS.md](docs/APPS.md) - core apps, injection, and app availability
 - [docs/ORG-CHART.md](docs/ORG-CHART.md) - team hierarchy and reporting lines
@@ -209,6 +213,7 @@ This is intentionally separated so operator docs stay short.
 - [docs/MESSAGING.md](docs/MESSAGING.md) - messaging model
 - [docs/SKILLS.md](docs/SKILLS.md) - skills.sh wrapper behavior and agent workflow
 - [docs/WORKFLOWS.md](docs/WORKFLOWS.md) - workflow checklist system
+- [docs/PLANS.md](docs/PLANS.md) - planning model and future direction
 - [docs/TASK.md](docs/TASK.md) - task system
 - [docs/CALENDAR.md](docs/CALENDAR.md) - calendar system
 - [docs/CRM.md](docs/CRM.md) - file-based CRM records and timelines

@@ -61,6 +61,7 @@ describe("workspace settings", () => {
 
     const apps = updateWorkspaceApps({
       defaults: {
+        messaging: false,
         crm: false,
         browser: true,
       },
@@ -71,12 +72,14 @@ describe("workspace settings", () => {
       },
     }, root)
 
+    expect(apps.defaults?.messaging).toBeUndefined()
     expect(apps.defaults?.crm).toBe(false)
     expect(apps.agents?.growth?.crm).toBe(true)
 
     updateWorkspaceSettings({ showBrowserActivity: false }, root)
 
     const reread = readWorkspaceApps(root)
+    expect(reread.defaults?.messaging).toBeUndefined()
     expect(reread.defaults?.crm).toBe(false)
     expect(reread.agents?.growth?.crm).toBe(true)
   })

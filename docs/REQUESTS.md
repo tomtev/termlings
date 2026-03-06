@@ -87,7 +87,6 @@ This is useful for scripts/agents polling decision state.
 
 - [APPS.md](APPS.md)
 - [HUMANS.md](HUMANS.md)
-- [INIT.md](INIT.md)
 
 ## Disable This App
 

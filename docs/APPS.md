@@ -1,6 +1,6 @@
 # Apps
 
-Termlings apps control which capability areas appear in agent system context, top-level CLI help, and agent-facing runtime access.
+Termlings apps are agent-native file-based apps. They control which capability areas appear in agent system context, top-level CLI help, the TUI, slash commands, and agent-facing runtime access.
 
 This is not markdown-tag parsing. The app model is structured and code-driven.
 
@@ -8,13 +8,13 @@ This is not markdown-tag parsing. The app model is structured and code-driven.
 
 There are three layers:
 
-1. Built-in core apps in code.
+1. Built-in core apps in JSON-backed code manifests.
 2. Workspace overrides in `.termlings/workspace.json.apps`.
 3. Agent-specific overrides in `.termlings/workspace.json.apps.agents.<slug>`.
 
 The launcher resolves the final app set for the current agent before building the injected system context.
 
-If `.termlings/workspace.json` has no `apps` key, every core app defaults to `true`.
+If `.termlings/workspace.json` has no `apps` key, every toggleable core app defaults to `true`.
 
 ## Core Apps
 
@@ -33,6 +33,8 @@ Current core app keys:
 - `crm`
 
 These are built-in apps, not arbitrary markdown sections.
+
+`messaging` is required. It cannot be disabled in `workspace.json`.
 
 ## Workspace Config
 
@@ -92,6 +94,8 @@ App-aware context injection works like this:
 
 Current implementation points:
 
+- core app manifests: `src/apps/core-apps.json`
+- core app registry: `src/apps/registry.ts`
 - app resolution: `src/engine/apps.ts`
 - workspace app storage: `src/workspace/state.ts`
 - system context rendering: `src/system-context.ts`
@@ -104,12 +108,17 @@ When an app is disabled for an agent:
 - the corresponding capability guidance is omitted from injected system context
 - related command examples are omitted from quick reference sections
 - `termlings --help` omits the disabled top-level commands when the current agent slug is available in `TERMLINGS_AGENT_SLUG`
-- the command can also be guarded at runtime
+- direct CLI commands for that app are blocked at runtime
+- TUI tabs contributed by that app are omitted
+- slash commands contributed by that app are omitted
+- app-specific activity feed entries can be omitted
 
 Current enforced example:
 
-- `crm` is hidden from context when disabled
-- `termlings crm ...` exits with a disabled-by-workspace-app-settings error for that agent
+- `crm` is hidden from context, help, and runtime access when disabled
+- `requests`, `task`, and `calendar` tabs disappear from the TUI when disabled
+- `browser` activity entries are hidden from the activity feed when the browser app is disabled
+- `messaging` always stays enabled because it is a required app
 
 ## Why Apps
 
@@ -126,7 +135,7 @@ It keeps app availability:
 - workspace-configurable
 - agent-specific
 
-This also leaves room for future per-app feature flags later without overloading the meaning of "feature" now.
+This also leaves room for future per-app feature flags later without overloading the meaning of "app" now.
 
 ## Related Files
 

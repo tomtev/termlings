@@ -1,0 +1,187 @@
+[
+  {
+    "id": "brief",
+    "title": "Brief",
+    "helpOrder": 10,
+    "commands": [
+      {
+        "name": "brief",
+        "usage": "termlings brief",
+        "summary": "Full workspace snapshot (run at session start)"
+      }
+    ]
+  },
+  {
+    "id": "org-chart",
+    "title": "Org Chart",
+    "helpOrder": 20,
+    "commands": [
+      {
+        "name": "org-chart",
+        "usage": "termlings org-chart",
+        "summary": "Show org chart"
+      },
+      {
+        "name": "list-agents",
+        "usage": "termlings list-agents",
+        "summary": "Legacy alias for org-chart"
+      }
+    ]
+  },
+  {
+    "id": "skills",
+    "title": "Skills",
+    "helpOrder": 30,
+    "commands": [
+      {
+        "name": "skills",
+        "usage": "termlings skills <cmd>",
+        "summary": "List/install/update skills (skills.sh wrapper)"
+      }
+    ]
+  },
+  {
+    "id": "messaging",
+    "title": "Messaging",
+    "required": true,
+    "helpOrder": 40,
+    "commands": [
+      {
+        "name": "message",
+        "usage": "termlings message <target> <text>",
+        "summary": "Send DM",
+        "options": [
+          { "name": "target", "type": "string" },
+          { "name": "text", "type": "string" }
+        ]
+      },
+      {
+        "name": "conversation",
+        "usage": "termlings conversation <target>",
+        "summary": "Read message history",
+        "options": [
+          { "name": "target", "type": "string" },
+          { "name": "limit", "type": "number" }
+        ]
+      }
+    ],
+    "slashCommands": [
+      {
+        "name": "schedule",
+        "description": "Open the scheduled message form."
+      }
+    ],
+    "tui": {
+      "tab": {
+        "view": "messages",
+        "label": "Chat",
+        "order": 10
+      }
+    }
+  },
+  {
+    "id": "requests",
+    "title": "Requests",
+    "helpOrder": 50,
+    "commands": [
+      {
+        "name": "request",
+        "usage": "termlings request <type>",
+        "summary": "Request decision/env var from operator"
+      }
+    ],
+    "tui": {
+      "tab": {
+        "view": "requests",
+        "label": "Requests",
+        "order": 20
+      }
+    }
+  },
+  {
+    "id": "task",
+    "title": "Tasks",
+    "helpOrder": 60,
+    "commands": [
+      {
+        "name": "task",
+        "usage": "termlings task <cmd>",
+        "summary": "Task management"
+      }
+    ],
+    "tui": {
+      "tab": {
+        "view": "tasks",
+        "label": "Tasks",
+        "order": 30
+      }
+    }
+  },
+  {
+    "id": "workflows",
+    "title": "Workflows",
+    "helpOrder": 70,
+    "commands": [
+      {
+        "name": "workflow",
+        "usage": "termlings workflow <cmd>",
+        "summary": "Workflow checklists"
+      }
+    ]
+  },
+  {
+    "id": "calendar",
+    "title": "Calendar",
+    "helpOrder": 80,
+    "commands": [
+      {
+        "name": "calendar",
+        "usage": "termlings calendar <cmd>",
+        "summary": "Calendar management"
+      }
+    ],
+    "tui": {
+      "tab": {
+        "view": "calendar",
+        "label": "Calendar",
+        "order": 40
+      }
+    }
+  },
+  {
+    "id": "brand",
+    "title": "Brand",
+    "helpOrder": 90,
+    "commands": [
+      {
+        "name": "brand",
+        "usage": "termlings brand <cmd>",
+        "summary": "Brand profiles (colors/logo/voice/domain/email)"
+      }
+    ]
+  },
+  {
+    "id": "crm",
+    "title": "CRM",
+    "helpOrder": 100,
+    "commands": [
+      {
+        "name": "crm",
+        "usage": "termlings crm <cmd>",
+        "summary": "File-based CRM records and timelines"
+      }
+    ]
+  },
+  {
+    "id": "browser",
+    "title": "Browser",
+    "helpOrder": 110,
+    "commands": [
+      {
+        "name": "browser",
+        "usage": "termlings browser <cmd>",
+        "summary": "Browser automation"
+      }
+    ]
+  }
+]

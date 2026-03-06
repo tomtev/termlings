@@ -163,5 +163,4 @@ When an agent process exits:
 - [APPS.md](APPS.md)
 - [AGENTS.md](AGENTS.md)
 - [TERMLINGS.md](TERMLINGS.md)
-- [INIT.md](INIT.md)
 - [PRESENCE.md](PRESENCE.md)

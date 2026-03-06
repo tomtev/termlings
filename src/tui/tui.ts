@@ -10,12 +10,14 @@ import {
   type MessageScheduleRecurrence,
   type MessageScheduleWeekday,
 } from "../engine/message-schedules.js"
+import { resolveWorkspaceAppsForAgent, type ResolvedWorkspaceApps } from "../engine/apps.js"
 import { stopManagedRuntimeProcesses } from "../engine/runtime-processes.js"
 import { getAllTasks, type Task, type TaskPriority, type TaskStatus } from "../engine/tasks.js"
 import { listRequests, resolveRequest, dismissRequest, type AgentRequest } from "../engine/requests.js"
 import { decodeDNA, getTraitColors, renderTerminal, renderTerminalSmall, renderTermlingsLogo } from "../index.js"
 import { basename, join } from "path"
 import { execSync } from "child_process"
+import { listEnabledAppTabs } from "../apps/registry.js"
 import {
   appendWorkspaceMessage,
   ensureWorkspaceDirs,
@@ -246,6 +248,10 @@ export class WorkspaceTui {
 
   private readonly identity: Identity
 
+  private readonly enabledApps: ResolvedWorkspaceApps
+
+  private readonly enabledTabs: Array<{ view: MainView; label: string }>
+
   private view: MainView = "messages"
 
   private selectedThreadId = "activity"
@@ -399,6 +405,11 @@ export class WorkspaceTui {
     }
 
     this.identity = identity
+    this.enabledApps = resolveWorkspaceAppsForAgent(process.env.TERMLINGS_AGENT_SLUG || undefined, this.root)
+    this.enabledTabs = listEnabledAppTabs(this.enabledApps).map(({ tab }) => ({
+      view: tab.view,
+      label: tab.label,
+    }))
 
     this.onDataBound = (chunk: Buffer | string) => {
       const text = typeof chunk === "string" ? chunk : chunk.toString("utf8")
@@ -2351,7 +2362,7 @@ export class WorkspaceTui {
   private async openSlashCommand(text: string): Promise<boolean> {
     const result = executeSlashCommand(text, {
       selectedThreadId: this.selectedThreadId,
-    })
+    }, this.enabledApps)
 
     if (result.kind === "error") {
       this.statusMessage = result.message
@@ -2580,7 +2591,7 @@ export class WorkspaceTui {
   }
 
   private tabViews(): MainView[] {
-    return ["messages", "requests", "tasks", "calendar"]
+    return this.enabledTabs.map((tab) => tab.view)
   }
 
   private selectViewByNumber(viewNumber: number): void {
@@ -3105,7 +3116,7 @@ export class WorkspaceTui {
   }
 
   private readBrowserActivityMessages(limit = BROWSER_ACTIVITY_MAX_MESSAGES): WorkspaceMessage[] {
-    if (!this.showBrowserActivityInFeed) return []
+    if (!this.enabledApps.browser || !this.showBrowserActivityInFeed) return []
 
     const historyPath = this.browserActivityHistoryPath()
     if (!existsSync(historyPath)) {
@@ -3197,11 +3208,13 @@ export class WorkspaceTui {
         }
       }
 
-      const tasks = getAllTasks()
-      const calendarEvents = [...getAllCalendarEvents()].sort((a, b) => a.startTime - b.startTime)
+      const tasks = this.enabledApps.task ? getAllTasks() : []
+      const calendarEvents = this.enabledApps.calendar
+        ? [...getAllCalendarEvents()].sort((a, b) => a.startTime - b.startTime)
+        : []
       const agents = this.buildAgentPresence(sessions, typingBySessionId)
       const dmThreads = this.buildDmThreads(messages, agents, sessions)
-      const requests = listRequests()
+      const requests = this.enabledApps.requests ? listRequests() : []
       this.refreshCalendarSchedulerStatus(now)
       this.pruneLastReadThreadState(dmThreads)
 
@@ -4194,7 +4207,7 @@ export class WorkspaceTui {
 
   private getSlashCommandCandidates(query: string): SlashCommandCandidate[] {
     const q = query.trim().toLowerCase()
-    const commands = listSlashCommands().map((command) => ({
+    const commands = listSlashCommands(this.enabledApps).map((command) => ({
       name: command.name,
       insertText: `/${command.name}`,
       description: command.description,
@@ -6708,12 +6721,7 @@ export class WorkspaceTui {
   private renderBottomTabs(width: number): string {
     const leftPad = "  "
     const reqCount = this.pendingRequestCount()
-    const tabs: Array<{ view: MainView; label: string }> = [
-      { view: "messages", label: "Chat" },
-      { view: "requests", label: "Requests" },
-      { view: "tasks", label: "Tasks" },
-      { view: "calendar", label: "Calendar" },
-    ]
+    const tabs = this.enabledTabs
 
     const leftBracket = `${FG_META}[${ANSI_RESET}`
     const rightBracket = `${FG_META}]${ANSI_RESET}`

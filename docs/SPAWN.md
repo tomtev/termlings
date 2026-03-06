@@ -91,7 +91,6 @@ If runtime/preset is passed directly, that route is used.
 ## Related
 
 - [APPS.md](APPS.md)
-- [INIT.md](INIT.md)
 - [AGENTS.md](AGENTS.md)
 - [ORGANIZATIONS.md](ORGANIZATIONS.md)
 - [SCHEDULER.md](SCHEDULER.md)

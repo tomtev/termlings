@@ -1,3 +1,6 @@
+import { listEnabledSlashCommands } from "../apps/registry.js"
+import type { ResolvedWorkspaceApps } from "../engine/apps.js"
+
 export interface SlashCommandContext {
   selectedThreadId: string
 }
@@ -66,9 +69,22 @@ const scheduleCommand: SlashCommandDefinition = {
   },
 }
 
-const slashCommands = [scheduleCommand]
+const slashCommandHandlers = new Map<string, SlashCommandDefinition>([
+  [scheduleCommand.name, scheduleCommand],
+])
 
-export function executeSlashCommand(input: string, context: SlashCommandContext): SlashCommandResult {
+function resolveSlashCommands(apps: ResolvedWorkspaceApps): SlashCommandDefinition[] {
+  return listEnabledSlashCommands(apps)
+    .map((command) => slashCommandHandlers.get(command.name))
+    .filter((command): command is SlashCommandDefinition => Boolean(command))
+}
+
+export function executeSlashCommand(
+  input: string,
+  context: SlashCommandContext,
+  apps: ResolvedWorkspaceApps,
+): SlashCommandResult {
+  const slashCommands = resolveSlashCommands(apps)
   const tokens = tokenizeSlashCommand(input)
   if (tokens.length === 0) {
     return { kind: "error", message: "Enter a slash command." }
@@ -95,8 +111,8 @@ export function executeSlashCommand(input: string, context: SlashCommandContext)
   return command.run(tokens.slice(1), context)
 }
 
-export function listSlashCommands(): Array<{ name: string; description: string }> {
-  return slashCommands.map((command) => ({
+export function listSlashCommands(apps: ResolvedWorkspaceApps): Array<{ name: string; description: string }> {
+  return resolveSlashCommands(apps).map((command) => ({
     name: command.name,
     description: command.description,
   }))

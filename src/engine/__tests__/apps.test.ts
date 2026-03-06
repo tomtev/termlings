@@ -4,6 +4,7 @@ import { join } from "path"
 import { tmpdir } from "os"
 
 import { resolveWorkspaceAppsForAgent, workspaceAppEnabled } from "../apps.js"
+import { findCommandOwnerApp, listEnabledAppTabs } from "../../apps/registry.js"
 import { ensureWorkspaceDirs, updateWorkspaceApps } from "../../workspace/state.js"
 
 describe("workspace app resolution", () => {
@@ -29,8 +30,12 @@ describe("workspace app resolution", () => {
   it("applies workspace defaults and agent overrides", () => {
     updateWorkspaceApps({
       defaults: {
+        messaging: false,
         crm: false,
         browser: false,
+        requests: false,
+        task: false,
+        calendar: false,
       },
       agents: {
         growth: {
@@ -44,8 +49,21 @@ describe("workspace app resolution", () => {
 
     expect(growth.crm).toBe(true)
     expect(growth.browser).toBe(false)
+    expect(growth.messaging).toBe(true)
     expect(developer.crm).toBe(false)
+    expect(developer.messaging).toBe(true)
     expect(workspaceAppEnabled("crm", "growth", root)).toBe(true)
     expect(workspaceAppEnabled("crm", "developer", root)).toBe(false)
+    expect(workspaceAppEnabled("messaging", "developer", root)).toBe(true)
+    expect(listEnabledAppTabs(developer).map((entry) => entry.tab.view)).toEqual(["messages"])
+  })
+
+  it("maps commands back to their owning apps", () => {
+    expect(findCommandOwnerApp("message")).toBe("messaging")
+    expect(findCommandOwnerApp("conversation")).toBe("messaging")
+    expect(findCommandOwnerApp("request")).toBe("requests")
+    expect(findCommandOwnerApp("calendar")).toBe("calendar")
+    expect(findCommandOwnerApp("crm")).toBe("crm")
+    expect(findCommandOwnerApp("agents")).toBeNull()
   })
 })

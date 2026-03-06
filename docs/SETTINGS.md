@@ -53,7 +53,7 @@ If a setting is missing or invalid, Termlings falls back to defaults:
 
 ## `apps` fields
 
-Apps control which capability areas are injected into agent system context and which agent-facing commands are available at runtime.
+Apps control which agent-native file-based app surfaces are injected into agent system context and which agent-facing commands and TUI surfaces are available at runtime.
 
 Current core app keys:
 
@@ -75,7 +75,13 @@ Resolution order:
 2. `apps.defaults`
 3. `apps.agents.<slug>`
 
-If `workspace.json` has no `apps` object, all core apps default to `true`.
+If `workspace.json` has no `apps` object, all toggleable core apps default to `true`.
+
+Required app rule:
+
+- `messaging` is always enabled
+- `workspace.json.apps.defaults.messaging = false` is ignored
+- `workspace.json.apps.agents.<slug>.messaging = false` is ignored
 
 Example:
 
@@ -98,6 +104,8 @@ That means:
 
 - CRM is disabled for everyone by default
 - CRM is re-enabled only for agent slug `growth`
+
+When an app is disabled, it is removed from injected context, top-level `termlings --help`, and any TUI tabs owned by that app.
 
 ## Examples
 

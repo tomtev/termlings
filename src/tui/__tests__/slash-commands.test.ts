@@ -3,9 +3,11 @@ import { mkdtempSync, rmSync } from "fs"
 import { join } from "path"
 import { tmpdir } from "os"
 
+import { BUILTIN_WORKSPACE_APPS } from "../../engine/apps.js"
 import { WorkspaceTui } from "../tui.js"
 import { getAllScheduledMessages } from "../../engine/message-schedules.js"
 import { executeSlashCommand } from "../slash-commands.js"
+import { updateWorkspaceApps } from "../../workspace/state.js"
 
 describe("workspace tui slash commands", () => {
   let root = ""
@@ -140,7 +142,7 @@ describe("workspace tui slash commands", () => {
       }],
     })
 
-    const result = executeSlashCommand("/schedule agent:ceo", { selectedThreadId: "activity" })
+    const result = executeSlashCommand("/schedule agent:ceo", { selectedThreadId: "activity" }, BUILTIN_WORKSPACE_APPS)
     expect(result).toMatchObject({
       kind: "open-form",
       form: "schedule",
@@ -198,6 +200,23 @@ describe("workspace tui slash commands", () => {
     expect(handled).toBe(true)
     expect(tui.composerForm.target).toBe("agent:jordan")
     expect(tui.composerForm.message).toBe("Check in on blockers")
+  })
+
+  it("hides disabled request/task/calendar tabs but keeps messaging enabled", () => {
+    root = mkdtempSync(join(tmpdir(), "termlings-slash-command-test-"))
+    updateWorkspaceApps({
+      defaults: {
+        messaging: false,
+        requests: false,
+        task: false,
+        calendar: false,
+      },
+    }, root)
+
+    const tui = new WorkspaceTui(root) as any
+
+    expect(tui.enabledApps.messaging).toBe(true)
+    expect(tui.tabViews()).toEqual(["messages"])
   })
 
   it("uses segmented arrow controls for the time field", async () => {

@@ -107,7 +107,6 @@ function printJson(value: unknown): void {
 }
 
 export async function handleCrm(flags: Set<string>, positional: string[], opts: Record<string, string>) {
-  const { workspaceAppEnabled } = await import("../engine/apps.js")
   const {
     addCrmLink,
     addCrmNote,
@@ -127,13 +126,6 @@ export async function handleCrm(flags: Set<string>, positional: string[], opts: 
 
   const subcommand = positional[1]
   const actor = actorFromEnvironment()
-  const agentSlug = process.env.TERMLINGS_AGENT_SLUG || undefined
-  const crmEnabled = workspaceAppEnabled("crm", agentSlug)
-
-  if (!crmEnabled) {
-    console.error("CRM is disabled by workspace app settings for this agent.")
-    process.exit(1)
-  }
 
   if (!subcommand || subcommand === "--help" || subcommand === "help") {
     console.log(`

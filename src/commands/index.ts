@@ -2,6 +2,8 @@
  * Command router - dispatches to individual command handlers
  */
 
+import { findCommandOwnerApp, getCoreAppTitle } from "../apps/registry.js";
+import { workspaceAppEnabled } from "../engine/apps.js";
 import { handleListAgents, handleMessage } from "./messaging.js";
 import { handleTask } from "./tasks.js";
 import { handleCalendar } from "./calendar.js";
@@ -27,6 +29,15 @@ export async function routeCommand(
   opts: Record<string, string>
 ): Promise<boolean> {
   const command = positional[0];
+
+  const ownerApp = command ? findCommandOwnerApp(command) : null;
+  if (ownerApp) {
+    const agentSlug = process.env.TERMLINGS_AGENT_SLUG || undefined;
+    if (!workspaceAppEnabled(ownerApp, agentSlug)) {
+      console.error(`${getCoreAppTitle(ownerApp)} is disabled by workspace app settings for this agent.`);
+      process.exit(1);
+    }
+  }
 
   switch (command) {
     case "list-agents":

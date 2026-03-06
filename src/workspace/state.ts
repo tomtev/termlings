@@ -48,18 +48,24 @@ export interface WorkspaceSettings {
   showBrowserActivity?: boolean
 }
 
-export type WorkspaceAppKey =
-  | "messaging"
-  | "requests"
-  | "org-chart"
-  | "brief"
-  | "task"
-  | "workflows"
-  | "calendar"
-  | "browser"
-  | "skills"
-  | "brand"
-  | "crm"
+export const WORKSPACE_APP_KEYS = [
+  "messaging",
+  "requests",
+  "org-chart",
+  "brief",
+  "task",
+  "workflows",
+  "calendar",
+  "browser",
+  "skills",
+  "brand",
+  "crm",
+] as const
+
+export const REQUIRED_WORKSPACE_APP_KEYS = ["messaging"] as const satisfies readonly Array<(typeof WORKSPACE_APP_KEYS)[number]>
+const REQUIRED_WORKSPACE_APP_KEY_SET = new Set<string>(REQUIRED_WORKSPACE_APP_KEYS)
+
+export type WorkspaceAppKey = (typeof WORKSPACE_APP_KEYS)[number]
 
 export type WorkspaceAppStates = Partial<Record<WorkspaceAppKey, boolean>>
 
@@ -139,17 +145,7 @@ function isValidAvatarSize(value: unknown): value is AvatarSizeMode {
 }
 
 function isWorkspaceAppKey(value: unknown): value is WorkspaceAppKey {
-  return value === "messaging"
-    || value === "requests"
-    || value === "org-chart"
-    || value === "brief"
-    || value === "task"
-    || value === "workflows"
-    || value === "calendar"
-    || value === "browser"
-    || value === "skills"
-    || value === "brand"
-    || value === "crm"
+  return typeof value === "string" && WORKSPACE_APP_KEYS.includes(value as WorkspaceAppKey)
 }
 
 function sanitizeWorkspaceSettings(raw: unknown): WorkspaceSettings {
@@ -171,6 +167,7 @@ function sanitizeWorkspaceAppStates(raw: unknown): WorkspaceAppStates {
   const out: WorkspaceAppStates = {}
   for (const [key, value] of Object.entries(input)) {
     if (!isWorkspaceAppKey(key)) continue
+    if (REQUIRED_WORKSPACE_APP_KEY_SET.has(key)) continue
     if (typeof value !== "boolean") continue
     out[key] = value
   }
