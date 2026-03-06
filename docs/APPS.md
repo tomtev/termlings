@@ -1,6 +1,8 @@
 # Apps
 
-Termlings apps are agent-native file-based apps. They control which capability areas appear in agent system context, top-level CLI help, the TUI, slash commands, and agent-facing runtime access.
+Termlings apps are agent-native file-based CLI command surfaces. They extend agent capabilities, inject app-specific system context, and give agents CLI access to the matching `termlings` commands.
+
+They also control which capability areas appear in agent system context, top-level CLI help, the TUI, slash commands, and agent-facing runtime access.
 
 This is not markdown-tag parsing. The app model is structured and code-driven.
 

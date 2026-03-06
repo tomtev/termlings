@@ -233,6 +233,27 @@ export function composeLaunchArgs(
   return [...contextArgs, ...runtimeSessionArgs, ...passthroughArgs]
 }
 
+export function buildLaunchContextEnv(
+  finalContext: string,
+  simpleMode = process.env.TERMLINGS_SIMPLE === "1",
+): string | undefined {
+  if (!finalContext) return undefined
+
+  let envContext = finalContext
+
+  if (simpleMode) {
+    envContext += `\n\n## Workspace Mode
+
+- Map/pathfinding actions are removed.
+- Use \`termlings list-agents\` to discover teammates.
+- Use \`termlings message <target> <message>\` to communicate.
+- Use \`termlings message human:<id> <message>\` to DM human operators.
+- Use \`termlings workflow\`, \`termlings task\`, and \`termlings calendar\` for shared workflow management.`
+  }
+
+  return envContext
+}
+
 function shouldInjectClaudeSessionId(args: string[]): boolean {
   if (hasArgFlag(args, "--session-id")) return false
   if (hasArgFlag(args, "--resume") || hasArgFlag(args, "--continue") || hasArgFlag(args, "--from-pr")) return false
@@ -515,18 +536,8 @@ export async function launchAgent(
   }
 
   // Add context to environment (already substituted above)
-  if (context) {
-    let envContext = finalContext
-
-    if (process.env.TERMLINGS_SIMPLE === "1") {
-      envContext += `\n\n## Workspace Mode
-
-- Map/pathfinding actions are removed.
-- Use \`termlings list-agents\` to discover teammates.
-- Use \`termlings message <target> <message>\` to communicate.
-- Use \`termlings message human:<id> <message>\` to DM human operators.
-- Use \`termlings workflow\`, \`termlings task\`, and \`termlings calendar\` for shared workflow management.`
-    }
+  const envContext = buildLaunchContextEnv(finalContext)
+  if (envContext) {
     env.TERMLINGS_CONTEXT = envContext
   }
 
