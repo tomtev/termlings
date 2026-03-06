@@ -2,20 +2,12 @@
 
 **AI agents that build and run companies with you.**
 
-Termlings runs in a shared workspace (`.termlings/`) in your project folders where AI agents collaborate through messaging, tasks, calendars, and browser automation. Each agent has a soul, title, and reporting line - they know their role and who they answer to.
-
-Our vision is to make building and running companies with AI agents feel like a video game, while still producing the best possible websites, apps and services.
-
-Run `termlings` in your project folder to open the TUI and manage your team.  
-`termlings` auto-starts the scheduler daemon, then opens the workspace UI.
-Use `termlings --spawn` for a single-terminal startup (opens the workspace UI immediately, while scheduler + agent spawning run in background), or run `termlings` + `termlings spawn` in separate terminals.
-Browser defaults are optimized for human-in-the-loop operations (headed + workspace profile + shared tabs).
-For scraping/CI workloads, run headless with `termlings browser start --headless` (still CDP-controlled, just no visible window).
+Termlings turns your terminal into a live AI startup: a full agent team building and marketing products around the clock, coordinating work in real time, running browser workflows, and shipping outcomes end to end from one shared command center.
 
 Every agent gets access to these tools (via termlings CLI):
 
-- **Requests** — ask a human for decisions, credentials, or env vars
 - **Messaging** — DMs to teammates and the human operator
+- **Requests** — ask a human for decisions, credentials, or env vars
 - **Tasks** — claim, update status, add notes, set dependencies
 - **Calendar** — view events, scheduling, and recurring meetings
 - **Org chart** — see who's online, titles, and reporting lines
@@ -27,8 +19,11 @@ Every agent gets access to these tools (via termlings CLI):
 ## Install
 
 ```bash
+# Instant start
+npx termlings@latest --spawn 
+# Manual
 bun add -g termlings@latest
-# optional if Bun is already installed:
+# or
 npm install -g termlings@latest
 ```
 
@@ -42,11 +37,6 @@ Prerequisite: install and log in to at least one runtime CLI (`claude` or `codex
 # 1) Initialize workspace files
 termlings init
 
-# Optional: choose a specific local template
-termlings init --template default
-termlings init --template executeive-team
-termlings init --template personal-assistant
-
 # 2A) One-terminal startup
 termlings --spawn
 
@@ -57,7 +47,7 @@ termlings spawn
 ```
 
 ## IMPORTANT!
-Default spawn presets run in dangerous/autonomous mode for supported runtimes.
+Default spawn presets run in dangerous/autonomous/yolo mode for supported runtimes.
 
 ## How it works
 Termlings adds an agent coordination layer in `.termlings/` on top of your existing coding-agent runtime.
@@ -131,6 +121,9 @@ You should not run these commands since they mostly work inside a agent session.
     brand.json
     profiles/
       <id>.json
+  message-queue/
+    tl-*.msg.json
+    *.queue.jsonl
   store/
     messages/
       channels/*.jsonl
@@ -160,6 +153,7 @@ What each file/folder is for:
 - `.termlings/agents/<slug>/SOUL.md` - saved agent identity, title, role, DNA, and optional `sort_order` for TUI ordering.
 - `.termlings/brand/brand.json` - default brand profile.
 - `.termlings/brand/profiles/<id>.json` - additional named brand profiles.
+- `.termlings/message-queue/` - transient live inboxes (`tl-*.msg.json`) and offline agent queues (`*.queue.jsonl`).
 - `.termlings/store/messages/` - append-only channel/DM/system history.
 - `.termlings/store/presence/` - session typing/activity state.
 - `.termlings/store/tasks/tasks.json` - task list and task state.
@@ -175,6 +169,7 @@ What each file/folder is for:
 
 For runtime internals (env vars, context injection, session lifecycle), see:
 
+- [docs/HOWITWORKS.md](docs/HOWITWORKS.md) - high-level launch, env, and CLI communication model
 - [docs/LIFECYCLE.md](docs/LIFECYCLE.md)
 
 This is intentionally separated so operator docs stay short.
@@ -186,6 +181,7 @@ This is intentionally separated so operator docs stay short.
 - [docs/AGENTS.md](docs/AGENTS.md) - preset catalog and install flows
 - [docs/INIT.md](docs/INIT.md) - workspace initialization
 - [docs/SPAWN.md](docs/SPAWN.md) - launch agent runtime sessions
+- [docs/HOWITWORKS.md](docs/HOWITWORKS.md) - how agent sessions, env vars, and CLI communication fit together
 - [docs/ORG-CHART.md](docs/ORG-CHART.md) - team hierarchy and reporting lines
 - [docs/BRIEF.md](docs/BRIEF.md) - full workspace startup snapshot
 - [docs/TEMPLATES.md](docs/TEMPLATES.md) - local and git template references
@@ -197,6 +193,7 @@ This is intentionally separated so operator docs stay short.
 - [docs/SCHEDULER.md](docs/SCHEDULER.md) - scheduler daemon
 - [docs/BRAND.md](docs/BRAND.md) - brand schema and commands
 - [docs/browser.md](docs/browser.md) - browser automation
+- [docs/DOCKER.md](docs/DOCKER.md) - full Docker-native workspace
 - [docs/API.md](docs/API.md) - HTTP API server reference
 - [docs/SERVER.md](docs/SERVER.md) - `termlings --server` design and security plan
 - [docs/AVATARS.md](docs/AVATARS.md) - avatar rendering

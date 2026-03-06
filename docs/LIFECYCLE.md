@@ -2,6 +2,7 @@
 
 This document is for debugging and implementation context.
 Operators usually do not need this day-to-day.
+For the higher-level operator view, see [HOWITWORKS.md](HOWITWORKS.md).
 
 ## Scope
 
@@ -116,6 +117,9 @@ Workspace state is file-backed under `.termlings/`:
 
 ```text
 .termlings/
+  message-queue/
+    tl-*.msg.json
+    *.queue.jsonl
   sessions/*.json
   store/messages/
     channels/*.jsonl
@@ -130,6 +134,8 @@ Workspace state is file-backed under `.termlings/`:
 
 Runtime behavior:
 
+- live runtime delivery uses `message-queue/tl-*.msg.json`
+- offline agent delivery uses `message-queue/*.queue.jsonl`
 - messaging appends to `store/messages/*`
 - task/calendar commands update JSON stores
 - browser actions log into `.termlings/browser/history/all.jsonl` and `.termlings/browser/history/agent/*.jsonl`
@@ -152,6 +158,7 @@ When an agent process exits:
 
 ## Related Docs
 
+- [HOWITWORKS.md](HOWITWORKS.md)
 - [AGENTS.md](AGENTS.md)
 - [TERMLINGS.md](TERMLINGS.md)
 - [INIT.md](INIT.md)

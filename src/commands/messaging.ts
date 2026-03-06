@@ -100,5 +100,10 @@ HISTORY:
     process.exit(1);
   }
 
-  await sendMessage(target, text, sessionId, _agentName || "agent", _agentDna || "0000000");
+  try {
+    await sendMessage(target, text, sessionId, _agentName || "agent", _agentDna || "0000000");
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
 }

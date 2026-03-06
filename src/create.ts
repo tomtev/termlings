@@ -1,7 +1,9 @@
 import { join, resolve } from "path";
 import { mkdir, writeFile } from "fs/promises";
+import { existsSync, readFileSync, writeFileSync } from "fs";
 import { createInterface } from "readline";
 import { generateRandomDNA, renderSVG, renderTerminal } from "./index.js";
+import { generateFunName } from "./name-generator.js";
 
 export interface CreateOptions {
   slug?: string
@@ -32,14 +34,6 @@ function normalizeSlug(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-}
-
-function defaultNameFromSlug(slug: string): string {
-  return slug
-    .split("-")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ") || "Agent";
 }
 
 function validateDna(raw: string): string {
@@ -95,14 +89,14 @@ export async function runCreate(options: CreateOptions = {}): Promise<void> {
 
   let agentName = (options.name || "").trim();
   if (!agentName) {
-    const fallbackName = defaultNameFromSlug(slug);
+    const fallbackName = generateFunName();
     if (nonInteractive) {
       agentName = fallbackName;
     } else {
       if (!interactiveShell) {
         throw new Error("Interactive create requires a TTY. Use --non-interactive with explicit props.");
       }
-      agentName = (await prompt(`Agent name (default: ${fallbackName}): `)) || fallbackName;
+      agentName = (await prompt(`Display name (default: ${fallbackName}): `)) || fallbackName;
     }
   }
 
@@ -158,8 +152,42 @@ export async function runCreate(options: CreateOptions = {}): Promise<void> {
   await writeFile(join(dest, "SOUL.md"), soulContent);
   await writeFile(join(dest, "avatar.svg"), renderSVG(dna, 10, 0, null));
 
+  registerAgentInSpawn(slug);
+
   console.log(`\nCreated in ${dest}`);
   console.log(`  SOUL.md (name: ${agentName})`);
   console.log(`  avatar.svg (dna: ${dna})`);
   console.log(`\nLaunch with: termlings ${slug}`);
+}
+
+function registerAgentInSpawn(slug: string): void {
+  const spawnPath = resolve(".termlings", "spawn.json");
+  if (!existsSync(spawnPath)) return;
+
+  try {
+    const parsed = JSON.parse(readFileSync(spawnPath, "utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+    const data = parsed as Record<string, unknown>;
+
+    const agents = (data.agents && typeof data.agents === "object" && !Array.isArray(data.agents))
+      ? data.agents as Record<string, unknown>
+      : {};
+
+    if (agents[slug]) return; // already registered
+
+    // Determine runtime from default config or fall back to "claude"
+    const defaultConfig = data.default as Record<string, unknown> | undefined;
+    const runtime = (defaultConfig && typeof defaultConfig.runtime === "string")
+      ? defaultConfig.runtime
+      : "claude";
+    const preset = (defaultConfig && typeof defaultConfig.preset === "string")
+      ? defaultConfig.preset
+      : "default";
+
+    agents[slug] = { runtime, preset };
+    data.agents = agents;
+    writeFileSync(spawnPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+  } catch {
+    // Non-fatal: agent was created, spawn registration failed silently
+  }
 }

@@ -175,6 +175,7 @@ You only need one of Claude or Codex installed and logged in.
 .termlings/
 ├── VISION.md             # Project vision for agent context
 ├── .gitignore            # Git ignore rules (generated)
+├── message-queue/        # Transient live inboxes + offline queues
 ├── sessions/
 │   └── [sessionId].json  # Per-agent session state
 ├── store/

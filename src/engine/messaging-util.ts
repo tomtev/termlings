@@ -2,6 +2,8 @@
  * Message sending utility
  */
 
+import { resolveAgentToken } from "../agents/resolve.js"
+
 export async function sendMessage(
   target: string,
   text: string,
@@ -9,35 +11,33 @@ export async function sendMessage(
   agentName: string,
   agentDna: string
 ) {
-  const { writeMessages, queueMessage } = await import("./ipc.js");
-  const { appendWorkspaceMessage, readSession, upsertSession, listSessions } = await import("../workspace/state.js");
+  const { writeMessages, queueMessage } = await import("./ipc.js")
+  const { appendWorkspaceMessage, readSession, upsertSession, listSessions } = await import("../workspace/state.js")
 
-  const rawTarget = target;
+  const rawTarget = target
   const resolvedTarget =
     rawTarget === "owner" || rawTarget === "operator"
       ? "human:default"
-      : rawTarget;
-  const fromName = agentName || "agent";
-  const fromDna = agentDna || "0000000";
+      : rawTarget
+  const fromName = agentName || "agent"
+  const fromDna = agentDna || "0000000"
 
   // Check if this is a channel message
-  const isChannelTarget = resolvedTarget.startsWith("channel:");
-  const isHumanTarget = resolvedTarget.startsWith("human:");
+  const isChannelTarget = resolvedTarget.startsWith("channel:")
+  const isHumanTarget = resolvedTarget.startsWith("human:")
 
   if (isChannelTarget) {
     // Channel message - no target session needed
-    const channel = resolvedTarget.slice("channel:".length);
+    const channel = resolvedTarget.slice("channel:".length)
     if (!channel) {
-      console.error("Channel name cannot be empty");
-      console.error("Usage: termlings message channel:<name> <text>");
-      process.exit(1);
+      throw new Error("Channel name cannot be empty. Usage: termlings message channel:<name> <text>")
     }
 
     // Keep sender fresh in session listing while chatting.
     upsertSession(sessionId, {
       name: fromName,
       dna: fromDna,
-    });
+    })
 
     appendWorkspaceMessage({
       kind: "chat",
@@ -46,51 +46,56 @@ export async function sendMessage(
       fromName,
       fromDna,
       text,
-    });
+    })
 
-    console.log(`Posted to #${channel}: "${text}"`);
-    return;
+    console.log(`Posted to #${channel}: "${text}"`)
+    return
   }
 
-  let targetSession = isHumanTarget ? null : readSession(resolvedTarget);
-  let targetDna = targetSession?.dna;
-  let finalTarget = resolvedTarget;
-  let wasOffline = false;
+  let targetSession = isHumanTarget ? null : readSession(resolvedTarget)
+  let targetDna = targetSession?.dna
+  let finalTarget = resolvedTarget
+  let storageTarget = resolvedTarget
+  let wasQueued = false
 
-  let targetSlug: string | undefined;
-  let targetAgentName: string | undefined;
+  let targetSlug: string | undefined
+  let targetAgentName: string | undefined
 
   if (!isHumanTarget && resolvedTarget.startsWith("agent:")) {
-    const agentId = resolvedTarget.slice("agent:".length);
+    const agentId = resolvedTarget.slice("agent:".length)
     if (agentId.length > 0) {
-      // Try to resolve agent by slug (folder name) or DNA
-      const { discoverLocalAgents } = await import("../agents/discover.js");
-      const agents = discoverLocalAgents();
+      const { discoverLocalAgents } = await import("../agents/discover.js")
+      const resolved = resolveAgentToken(
+        agentId,
+        discoverLocalAgents().map((agent) => ({
+          slug: agent.name,
+          name: agent.soul?.name,
+          title: agent.soul?.title,
+          titleShort: agent.soul?.title_short,
+          dna: agent.soul?.dna,
+        })),
+      )
 
-      // First try exact slug match
-      let targetAgent = agents.find((a) => a.name === agentId);
-      // Fallback: try DNA match
-      if (!targetAgent) {
-        targetAgent = agents.find((a) => a.soul?.dna === agentId);
+      if ("error" in resolved) {
+        if (resolved.error === "ambiguous") {
+          throw new Error(`Agent target "${agentId}" is ambiguous. Use agent:<slug> instead.`)
+        }
+        throw new Error(`Unknown agent target "${agentId}". Use agent:<slug> from termlings org-chart.`)
       }
-      let dna = targetAgent?.soul?.dna;
-      targetSlug = targetAgent?.name;
-      targetAgentName = targetAgent?.soul?.name;
 
-      // If no slug match, try DNA match (backwards compat)
-      if (!dna) {
-        dna = agentId;
-      }
+      targetSlug = resolved.agent.slug
+      targetAgentName = resolved.agent.name
+      targetDna = resolved.agent.dna
+      storageTarget = `agent:${targetSlug}`
 
-      if (dna) {
-        // Look for online session with this DNA
+      if (targetDna) {
         const candidates = listSessions()
-          .filter((session) => session.dna === dna)
-          .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
-        targetSession = candidates[0] ?? null;
-        targetDna = dna;
-        finalTarget = targetSession?.sessionId ?? resolvedTarget;
-        wasOffline = !targetSession;
+          .filter((session) => session.dna === targetDna)
+          .sort((a, b) => b.lastSeenAt - a.lastSeenAt)
+        targetSession = candidates[0] ?? null
+        finalTarget = targetSession?.sessionId ?? resolvedTarget
+      } else {
+        targetSession = null
       }
     }
   }
@@ -102,22 +107,23 @@ export async function sendMessage(
     text,
     ts: Date.now(),
     fromDna,
-  };
+  }
 
   // Keep sender fresh in session listing while chatting.
   upsertSession(sessionId, {
     name: fromName,
     dna: fromDna,
-  });
+  })
 
   if (targetSession) {
     // Online agent - deliver immediately via IPC
-    writeMessages(finalTarget, [messageObj]);
+    writeMessages(finalTarget, [messageObj])
   } else if (!isHumanTarget && resolvedTarget.startsWith("agent:")) {
-    // Offline agent - queue for later delivery using slug (or DNA fallback)
-    const queueKey = targetSlug || targetDna;
+    // Offline agent - queue for later delivery using canonical slug.
+    const queueKey = targetSlug || targetDna
     if (queueKey) {
-      queueMessage(queueKey, messageObj);
+      queueMessage(queueKey, messageObj)
+      wasQueued = true
     }
   }
   // Human messages are stored in the workspace message index (appendWorkspaceMessage below)
@@ -128,12 +134,12 @@ export async function sendMessage(
     from: sessionId,
     fromName,
     fromDna,
-    target: targetSlug ? `agent:${targetSlug}` : finalTarget,
+    target: storageTarget,
     targetName: targetAgentName ?? targetSession?.name ?? (isHumanTarget ? "Owner" : undefined),
     targetDna,
     text,
-  });
+  })
 
-  const status = wasOffline || !targetSession ? " (queued)" : "";
-  console.log(`Sent to ${resolvedTarget}: "${text}"${status}`);
+  const status = wasQueued ? " (queued)" : ""
+  console.log(`Sent to ${storageTarget}: "${text}"${status}`)
 }

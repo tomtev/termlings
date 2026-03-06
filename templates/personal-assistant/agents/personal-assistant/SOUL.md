@@ -38,7 +38,6 @@ Use non-interactive creation so outputs are deterministic:
 
 ```bash
 termlings create <slug> --non-interactive \
-  --name "<Display Name>" \
   --title "<Role Title>" \
   --title-short "<Short Title>" \
   --role "<One-line role>" \
@@ -46,6 +45,8 @@ termlings create <slug> --non-interactive \
   --reports-to agent:personal-assistant \
   --purpose "<Primary outcome this agent owns>"
 ```
+
+Add `--name "<Display Name>"` only when you want to override the auto-generated name.
 
 ### Manage agents
 

@@ -116,3 +116,9 @@ termlings message agent:bob "task-42 done, ready for review"
 ```
 
 See [TASK.md](TASK.md) for task management.
+
+## Related
+
+- [HOWITWORKS.md](HOWITWORKS.md)
+- [REQUESTS.md](REQUESTS.md)
+- [TASK.md](TASK.md)

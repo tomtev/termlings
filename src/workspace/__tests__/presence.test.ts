@@ -113,10 +113,12 @@ describe("presence state", () => {
     const base = join(root, ".termlings")
     const presence = join(base, "store", "presence")
     const sessions = join(base, "sessions")
-    const queuePath = join(base, "tl-queue.queue.jsonl")
+    const queueDir = join(base, "message-queue")
+    const queuePath = join(queueDir, "tl-queue.queue.jsonl")
 
     writeFileSync(join(presence, "tl-a.typing.json"), '{"typing":true,"source":"terminal","updatedAt":1}\n', "utf8")
     writeFileSync(join(sessions, "tl-a.json"), '{"sessionId":"tl-a","name":"A","dna":"aaaaaaa","joinedAt":1,"lastSeenAt":1}\n', "utf8")
+    mkdirSync(queueDir, { recursive: true })
     writeFileSync(queuePath, '{"action":"send","ts":1}\n', "utf8")
 
     clearWorkspaceRuntime(root)

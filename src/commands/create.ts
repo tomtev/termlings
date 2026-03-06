@@ -22,7 +22,7 @@ RECOMMENDED FOR AGENTS:
   Use --non-interactive to force no prompts even with minimal input.
 
 PROPS:
-  --name <display-name>         Agent display name
+  --name <display-name>         Agent display name override
   --dna <hex7>                  7-char hex DNA (e.g. 0a3f201)
   --purpose <text>              Purpose section text
   --title <text>                Frontmatter title (default: Agent)
@@ -55,7 +55,7 @@ NOTES:
   - Inside agent sessions, requires \`manage_agents: true\` in your SOUL frontmatter.
   - If --dna is omitted, DNA is generated randomly.
   - If --role is omitted, role = purpose.
-  - If --name is omitted, display name is derived from slug.
+  - If --name is omitted, a fun display name is generated automatically.
   - If no props are provided, command falls back to interactive prompts.
   - This command exits non-zero on invalid input.
 

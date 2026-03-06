@@ -1,5 +1,16 @@
-import { mkdirSync, writeFileSync, readFileSync, readdirSync, unlinkSync, existsSync, appendFileSync } from "fs"
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "fs"
 import { join } from "path"
+import { discoverLocalAgents } from "../agents/discover.js"
+import { resolveAgentToken } from "../agents/resolve.js"
 
 /**
  * Get the .termlings directory for the current project.
@@ -43,6 +54,130 @@ export function ensureIpcDir(): void {
 
 export function ensureDataDir(): void {
   mkdirSync(getDataDir(), { recursive: true })
+}
+
+function messageQueueDir(): string {
+  return join(IPC_DIR, "message-queue")
+}
+
+function legacyMessagesDir(): string {
+  return join(IPC_DIR, "messages")
+}
+
+function liveMessagePath(sessionId: string): string {
+  return join(messageQueueDir(), `${sessionId}.msg.json`)
+}
+
+function queuedMessagePath(targetId: string): string {
+  return join(messageQueueDir(), `${targetId}.queue.jsonl`)
+}
+
+function canonicalQueueTargetId(targetId: string): string {
+  const trimmed = targetId.trim()
+  if (!trimmed) return targetId
+
+  try {
+    const resolved = resolveAgentToken(
+      trimmed,
+      discoverLocalAgents().map((agent) => ({
+        slug: agent.name,
+        name: agent.soul?.name,
+        title: agent.soul?.title,
+        titleShort: agent.soul?.title_short,
+        dna: agent.soul?.dna,
+      })),
+    )
+    if ("error" in resolved) return trimmed
+    return resolved.agent.slug || resolved.agent.dna || trimmed
+  } catch {
+    return trimmed
+  }
+}
+
+function mergeJsonArrayFile(src: string, dest: string): void {
+  let srcMessages: AgentMessage[] = []
+  let destMessages: AgentMessage[] = []
+
+  try {
+    srcMessages = JSON.parse(readFileSync(src, "utf8")) as AgentMessage[]
+  } catch {}
+  try {
+    destMessages = JSON.parse(readFileSync(dest, "utf8")) as AgentMessage[]
+  } catch {}
+
+  writeFileSync(dest, JSON.stringify([...destMessages, ...srcMessages]) + "\n")
+  try { unlinkSync(src) } catch {}
+}
+
+function mergeJsonlFile(src: string, dest: string): void {
+  let data = ""
+  try {
+    data = readFileSync(src, "utf8")
+  } catch {
+    return
+  }
+
+  if (!data.trim()) {
+    try { unlinkSync(src) } catch {}
+    return
+  }
+
+  appendFileSync(dest, data.endsWith("\n") ? data : `${data}\n`)
+  try { unlinkSync(src) } catch {}
+}
+
+function repairQueueDirectory(queueDir: string): void {
+  if (!existsSync(queueDir)) return
+  for (const entry of readdirSync(queueDir)) {
+    if (!entry.endsWith(".queue.jsonl")) continue
+    const src = join(queueDir, entry)
+    const canonicalTarget = canonicalQueueTargetId(entry.slice(0, -".queue.jsonl".length))
+    const dest = queuedMessagePath(canonicalTarget)
+    if (src === dest) continue
+    mergeJsonlFile(src, dest)
+  }
+}
+
+function migrateLegacyMessageIpc(): void {
+  mkdirSync(messageQueueDir(), { recursive: true })
+
+  try {
+    for (const entry of readdirSync(IPC_DIR)) {
+      if (!entry.endsWith(".msg.json")) continue
+      mergeJsonArrayFile(join(IPC_DIR, entry), liveMessagePath(entry.slice(0, -".msg.json".length)))
+    }
+  } catch {}
+
+  const oldMessagesDir = legacyMessagesDir()
+  if (existsSync(oldMessagesDir)) {
+    try {
+      for (const entry of readdirSync(oldMessagesDir)) {
+        if (entry.endsWith(".msg.json")) {
+          mergeJsonArrayFile(join(oldMessagesDir, entry), liveMessagePath(entry.slice(0, -".msg.json".length)))
+          continue
+        }
+        if (!entry.endsWith(".queue.jsonl")) continue
+        const canonicalTarget = canonicalQueueTargetId(entry.slice(0, -".queue.jsonl".length))
+        mergeJsonlFile(join(oldMessagesDir, entry), queuedMessagePath(canonicalTarget))
+      }
+      const nestedQueueDir = join(oldMessagesDir, "queue")
+      if (existsSync(nestedQueueDir)) {
+        for (const entry of readdirSync(nestedQueueDir)) {
+          if (!entry.endsWith(".queue.jsonl")) continue
+          const canonicalTarget = canonicalQueueTargetId(entry.slice(0, -".queue.jsonl".length))
+          mergeJsonlFile(join(nestedQueueDir, entry), queuedMessagePath(canonicalTarget))
+        }
+      }
+      rmSync(oldMessagesDir, { recursive: true, force: true })
+    } catch {}
+  }
+
+  repairQueueDirectory(messageQueueDir())
+}
+
+function ensureMessageIpcDirs(): void {
+  ensureIpcDir()
+  migrateLegacyMessageIpc()
 }
 
 // --- Command IPC ---
@@ -120,7 +255,8 @@ export interface AgentMessage {
 }
 
 export function writeMessages(sessionId: string, messages: AgentMessage[]): void {
-  const file = join(IPC_DIR, `${sessionId}.msg.json`)
+  ensureMessageIpcDirs()
+  const file = liveMessagePath(sessionId)
   // Append to existing messages if file exists
   let existing: AgentMessage[] = []
   try {
@@ -132,7 +268,8 @@ export function writeMessages(sessionId: string, messages: AgentMessage[]): void
 }
 
 export function readMessages(sessionId: string): AgentMessage[] {
-  const file = join(IPC_DIR, `${sessionId}.msg.json`)
+  ensureMessageIpcDirs()
+  const file = liveMessagePath(sessionId)
   try {
     const data = readFileSync(file, "utf8")
     unlinkSync(file)
@@ -153,10 +290,8 @@ export interface QueuedMessage extends AgentMessage {
  * Messages persist until agent/human comes online and reads them
  */
 export function queueMessage(targetId: string, message: QueuedMessage): void {
-  const queueDir = join(IPC_DIR, "message-queue")
-  mkdirSync(queueDir, { recursive: true })
-
-  const file = join(queueDir, `${targetId}.queue.jsonl`)
+  ensureMessageIpcDirs()
+  const file = queuedMessagePath(canonicalQueueTargetId(targetId))
   try {
     const line = JSON.stringify(message) + "\n"
     appendFileSync(file, line)
@@ -170,8 +305,8 @@ export function queueMessage(targetId: string, message: QueuedMessage): void {
  * Read all queued messages for an agent/human and clear the queue
  */
 export function readQueuedMessages(targetId: string): QueuedMessage[] {
-  const queueDir = join(IPC_DIR, "message-queue")
-  const file = join(queueDir, `${targetId}.queue.jsonl`)
+  ensureMessageIpcDirs()
+  const file = queuedMessagePath(canonicalQueueTargetId(targetId))
 
   if (!existsSync(file)) return []
 
@@ -195,8 +330,8 @@ export function readQueuedMessages(targetId: string): QueuedMessage[] {
  * Check if there are queued messages for an agent/human
  */
 export function hasQueuedMessages(targetId: string): boolean {
-  const queueDir = join(IPC_DIR, "message-queue")
-  const file = join(queueDir, `${targetId}.queue.jsonl`)
+  ensureMessageIpcDirs()
+  const file = queuedMessagePath(canonicalQueueTargetId(targetId))
   return existsSync(file)
 }
 
@@ -248,6 +383,10 @@ export function cleanupIpc(): void {
     const files = readdirSync(IPC_DIR)
     for (const file of files) {
       if (PERSIST_FILES.has(file)) continue
+      if (file === "messages" || file === "message-queue") {
+        try { rmSync(join(IPC_DIR, file), { recursive: true, force: true }) } catch {}
+        continue
+      }
       try { unlinkSync(join(IPC_DIR, file)) } catch {}
     }
   } catch {}

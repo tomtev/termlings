@@ -311,9 +311,11 @@ export function clearWorkspaceRuntime(root = process.cwd()): void {
       || entry.endsWith(".msg.json")
       || entry.endsWith(".typing.json")
       || entry === "state.json"
+      || entry === "message-queue"
+      || entry === "messages"
     ) {
       try {
-        rmSync(join(base, entry), { force: true })
+        rmSync(join(base, entry), { recursive: true, force: true })
       } catch {}
     }
   }

@@ -85,5 +85,6 @@ This is useful for scripts/agents polling decision state.
 
 ## Related
 
+- [HOWITWORKS.md](HOWITWORKS.md)
 - [HUMANS.md](HUMANS.md)
 - [INIT.md](INIT.md)

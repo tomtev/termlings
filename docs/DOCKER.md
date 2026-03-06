@@ -10,12 +10,20 @@ bash <(curl -fsSL https://termlings.com/docker.sh)
 
 This writes a local control directory at `~/termlings-docker`, builds the image, starts the container, and opens a shell inside it.
 
+If you already have host auth on your machine, the hosted bootstrap will also seed:
+
+- `~/.claude/.credentials.json`
+- `~/.codex/auth.json`
+
+into the container volumes automatically when those files exist.
+
 ## Repo-Local Bootstrap
 
 From this repo:
 
 ```bash
 docker compose up -d --build
+./scripts/docker-seed-auth.sh
 ./scripts/docker-shell
 ```
 
@@ -65,6 +73,14 @@ termlings --spawn
 
 `termlings init` requires at least one installed and authenticated coding runtime. The Docker image preinstalls both `claude` and `codex`, so only login is needed.
 
+If interactive `claude auth login` hangs inside Docker after you finish auth in the browser, seed host auth instead:
+
+```bash
+./scripts/docker-seed-auth.sh
+```
+
+That copies your existing host Claude and Codex auth files into the container volumes.
+
 ## Browser Runtime
 
 The Termlings browser CLI uses `agent-browser`, so the Docker image includes it and points it at system Chromium:
@@ -106,6 +122,12 @@ Skip auto-opening a shell after the hosted bootstrap finishes:
 
 ```bash
 TERMLINGS_DOCKER_NO_SHELL=1 bash <(curl -fsSL https://termlings.com/docker.sh)
+```
+
+Skip automatic auth seeding from host credentials during the hosted bootstrap:
+
+```bash
+TERMLINGS_DOCKER_SKIP_AUTH_SEED=1 bash <(curl -fsSL https://termlings.com/docker.sh)
 ```
 
 ## Stop Or Remove

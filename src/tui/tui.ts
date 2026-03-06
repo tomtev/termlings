@@ -1,8 +1,9 @@
 import { discoverLocalAgents } from "../agents/discover.js"
+import { resolveAgentToken } from "../agents/resolve.js"
 import { createHash } from "crypto"
 import { existsSync, readFileSync, statSync } from "fs"
 import { getAllCalendarEvents, type CalendarEvent, type CalendarRecurrence } from "../engine/calendar.js"
-import { writeMessages } from "../engine/ipc.js"
+import { queueMessage, writeMessages } from "../engine/ipc.js"
 import { stopManagedRuntimeProcesses } from "../engine/runtime-processes.js"
 import { getAllTasks, type Task, type TaskPriority, type TaskStatus } from "../engine/tasks.js"
 import { listRequests, resolveRequest, dismissRequest, type AgentRequest } from "../engine/requests.js"
@@ -103,6 +104,7 @@ const BROWSER_ACTIVITY_CACHE_MULTIPLIER = 3
 const RECENT_ACTIVITY_SNAPSHOT_LIMIT = 300
 const MESSAGE_WINDOW_DEFAULT_LIMIT = 120
 const MESSAGE_WINDOW_LOAD_STEP = 120
+const MESSAGE_CARD_CACHE_MAX = 600
 
 interface SessionTypingState {
   typing: boolean
@@ -130,6 +132,43 @@ interface MessageWindowState {
   messages: WorkspaceMessage[]
   limit: number
   hasOlder: boolean
+}
+
+interface SnapshotIndexes {
+  sessionDnaById: Map<string, string>
+  sessionByLowerName: Map<string, WorkspaceSession>
+  agentByDna: Map<string, AgentPresence>
+  agentBySlug: Map<string, AgentPresence>
+  agentByLowerName: Map<string, AgentPresence>
+  threadById: Map<string, DmThread>
+  threadBySlug: Map<string, DmThread>
+  threadByDna: Map<string, DmThread>
+  shortTitleByDna: Map<string, string>
+}
+
+interface RequestsViewData {
+  pending: AgentRequest[]
+  resolvedPreview: AgentRequest[]
+  resolvedCount: number
+}
+
+interface TaskViewData {
+  allTasks: Task[]
+  filters: Array<{ id: string; label: string; predicate: (task: Task) => boolean }>
+  safeFilterIndex: number
+  tasks: Task[]
+}
+
+interface CalendarViewData {
+  allEvents: CalendarEvent[]
+  filters: Array<{ id: string; label: string; predicate: (event: CalendarEvent) => boolean }>
+  safeFilterIndex: number
+  events: CalendarEvent[]
+}
+
+interface MessageLayoutCache {
+  key: string
+  lines: string[]
 }
 
 export class WorkspaceTui {
@@ -200,6 +239,8 @@ export class WorkspaceTui {
   private lastReadByThread = new Map<string, number>()
 
   private requestSelectionIndex = 0
+  private requestScrollOffset = 0
+  private requestScrollMax = 0
   private requestInputMode = false
   private requestInputDraft = ""
 
@@ -233,6 +274,26 @@ export class WorkspaceTui {
   private avatarTotalAgentCount = 0
   private renderScheduled = false
   private lastRenderTime = 0
+  private colorChipCache = new Map<string, string>()
+  private avatarArtCache = new Map<string, string[]>()
+  private messageCardCache = new Map<string, string[]>()
+  private messageLayoutCache: MessageLayoutCache | null = null
+  private renderContextFingerprint = ""
+
+  private snapshotIndexes: SnapshotIndexes = {
+    sessionDnaById: new Map(),
+    sessionByLowerName: new Map(),
+    agentByDna: new Map(),
+    agentBySlug: new Map(),
+    agentByLowerName: new Map(),
+    threadById: new Map(),
+    threadBySlug: new Map(),
+    threadByDna: new Map(),
+    shortTitleByDna: new Map(),
+  }
+  private requestsViewCache: { generatedAt: number; value: RequestsViewData } | null = null
+  private taskViewCache: { generatedAt: number; filterIndex: number; value: TaskViewData } | null = null
+  private calendarViewCache: { generatedAt: number; filterIndex: number; value: CalendarViewData } | null = null
 
   private calendarSchedulerRunning = false
   private calendarSchedulerCheckedAt = 0
@@ -287,6 +348,236 @@ export class WorkspaceTui {
     this.onSigTermBound = () => {
       this.stop(0)
     }
+
+    this.rebuildSnapshotIndexes()
+  }
+
+  private rebuildSnapshotIndexes(): void {
+    const sessionDnaById = new Map<string, string>()
+    const sessionByLowerName = new Map<string, WorkspaceSession>()
+    for (const session of this.snapshot.sessions) {
+      sessionDnaById.set(session.sessionId, session.dna)
+      const name = session.name.trim().toLowerCase()
+      if (name.length > 0 && !sessionByLowerName.has(name)) {
+        sessionByLowerName.set(name, session)
+      }
+    }
+
+    const agentByDna = new Map<string, AgentPresence>()
+    const agentBySlug = new Map<string, AgentPresence>()
+    const agentByLowerName = new Map<string, AgentPresence>()
+    const shortTitleByDna = new Map<string, string>()
+    for (const agent of this.snapshot.agents) {
+      agentByDna.set(agent.dna, agent)
+      if (agent.slug) {
+        agentBySlug.set(agent.slug.trim().toLowerCase(), agent)
+      }
+      const name = agent.name.trim().toLowerCase()
+      if (name.length > 0 && !agentByLowerName.has(name)) {
+        agentByLowerName.set(name, agent)
+      }
+      const shortTitle = (agent.title_short || "").trim()
+      if (shortTitle.length > 0) {
+        shortTitleByDna.set(agent.dna, shortTitle)
+      }
+    }
+
+    const threadById = new Map<string, DmThread>()
+    const threadBySlug = new Map<string, DmThread>()
+    const threadByDna = new Map<string, DmThread>()
+    for (const thread of this.snapshot.dmThreads) {
+      threadById.set(thread.id, thread)
+      threadByDna.set(thread.dna, thread)
+      if (thread.slug) {
+        threadBySlug.set(thread.slug.trim().toLowerCase(), thread)
+      }
+    }
+
+    this.snapshotIndexes = {
+      sessionDnaById,
+      sessionByLowerName,
+      agentByDna,
+      agentBySlug,
+      agentByLowerName,
+      threadById,
+      threadBySlug,
+      threadByDna,
+      shortTitleByDna,
+    }
+
+    const nextRenderContextFingerprint = [
+      this.identity.name,
+      this.identity.dna,
+      ...this.snapshot.agents.map((agent) => [
+        agent.dna,
+        agent.name,
+        agent.title_short || agent.title || "",
+      ].join(":")),
+      ...this.snapshot.dmThreads.map((thread) => [
+        thread.id,
+        thread.dna,
+        thread.slug || "",
+        thread.label,
+      ].join(":")),
+      ...this.snapshot.sessions.map((session) => [
+        session.sessionId,
+        session.dna,
+        session.name,
+      ].join(":")),
+    ].join("|")
+
+    if (nextRenderContextFingerprint !== this.renderContextFingerprint) {
+      this.renderContextFingerprint = nextRenderContextFingerprint
+      this.messageCardCache.clear()
+      this.messageLayoutCache = null
+    }
+  }
+
+  private getCachedMessageCard(key: string): string[] | null {
+    const cached = this.messageCardCache.get(key)
+    if (!cached) return null
+    this.messageCardCache.delete(key)
+    this.messageCardCache.set(key, cached)
+    return cached
+  }
+
+  private setCachedMessageCard(key: string, lines: string[]): void {
+    if (this.messageCardCache.has(key)) {
+      this.messageCardCache.delete(key)
+    }
+    this.messageCardCache.set(key, lines)
+    while (this.messageCardCache.size > MESSAGE_CARD_CACHE_MAX) {
+      const oldestKey = this.messageCardCache.keys().next().value
+      if (!oldestKey) break
+      this.messageCardCache.delete(oldestKey)
+    }
+  }
+
+  private requestsViewData(): RequestsViewData {
+    const generatedAt = this.snapshot.generatedAt
+    if (this.requestsViewCache && this.requestsViewCache.generatedAt === generatedAt) {
+      return this.requestsViewCache.value
+    }
+
+    const pending = this.snapshot.requests.filter((request) => request.status === "pending")
+    const resolved = this.snapshot.requests.filter((request) => request.status !== "pending")
+    const value = {
+      pending,
+      resolvedPreview: resolved.slice(0, 5),
+      resolvedCount: resolved.length,
+    }
+    this.requestsViewCache = { generatedAt, value }
+    return value
+  }
+
+  private taskViewData(): TaskViewData {
+    const generatedAt = this.snapshot.generatedAt
+    const filters = this.taskFilters()
+    const safeFilterIndex = Math.max(0, Math.min(this.taskFilterIndex, filters.length - 1))
+    if (
+      this.taskViewCache
+      && this.taskViewCache.generatedAt === generatedAt
+      && this.taskViewCache.filterIndex === safeFilterIndex
+    ) {
+      this.taskFilterIndex = safeFilterIndex
+      return this.taskViewCache.value
+    }
+
+    const allTasks = [...this.snapshot.tasks].sort((a, b) => b.updatedAt - a.updatedAt)
+    const clampedFilterIndex = Math.max(0, Math.min(this.taskFilterIndex, filters.length - 1))
+    this.taskFilterIndex = clampedFilterIndex
+    const activeFilter = filters[clampedFilterIndex] ?? filters[0]
+    const tasks = activeFilter ? allTasks.filter(activeFilter.predicate) : allTasks
+    const value = { allTasks, filters, safeFilterIndex: clampedFilterIndex, tasks }
+    this.taskViewCache = {
+      generatedAt,
+      filterIndex: clampedFilterIndex,
+      value,
+    }
+    return value
+  }
+
+  private calendarViewData(): CalendarViewData {
+    const generatedAt = this.snapshot.generatedAt
+    const filters = this.calendarFilters()
+    const safeFilterIndex = Math.max(0, Math.min(this.calendarFilterIndex, filters.length - 1))
+    if (
+      this.calendarViewCache
+      && this.calendarViewCache.generatedAt === generatedAt
+      && this.calendarViewCache.filterIndex === safeFilterIndex
+    ) {
+      this.calendarFilterIndex = safeFilterIndex
+      return this.calendarViewCache.value
+    }
+
+    const allEvents = [...this.snapshot.calendarEvents].sort((a, b) => a.startTime - b.startTime)
+    const clampedFilterIndex = Math.max(0, Math.min(this.calendarFilterIndex, filters.length - 1))
+    this.calendarFilterIndex = clampedFilterIndex
+    const activeFilter = filters[clampedFilterIndex] ?? filters[0]
+    const events = activeFilter ? allEvents.filter(activeFilter.predicate) : allEvents
+    const value = { allEvents, filters, safeFilterIndex: clampedFilterIndex, events }
+    this.calendarViewCache = {
+      generatedAt,
+      filterIndex: clampedFilterIndex,
+      value,
+    }
+    return value
+  }
+
+  private hasActiveUiAnimation(now = Date.now()): boolean {
+    if (this.view !== "messages") {
+      return false
+    }
+
+    if (this.selectedDmThread()?.typing) {
+      return true
+    }
+
+    for (const agent of this.snapshot.agents) {
+      if (!agent.online) continue
+      if (agent.typing) return true
+      if ((this.talkUntilByDna.get(agent.dna) ?? 0) > now) return true
+      if ((this.waveUntilByDna.get(agent.dna) ?? 0) > now) return true
+    }
+
+    return false
+  }
+
+  private tickAnimationFrame(now = Date.now()): void {
+    if (!this.hasActiveUiAnimation(now)) {
+      this.cursorBlinkVisible = true
+      return
+    }
+
+    this.cursorBlinkVisible = !this.cursorBlinkVisible
+    this.render()
+  }
+
+  private avatarLinesForAgent(
+    agent: AgentPresence,
+    size: "small" | "large",
+    largeFrame: number,
+    talkFrame: number,
+    waveFrame: number,
+  ): string[] {
+    const cacheKey = [
+      size,
+      agent.dna,
+      largeFrame,
+      talkFrame,
+      waveFrame,
+      agent.online ? "online" : "offline",
+    ].join(":")
+    const cached = this.avatarArtCache.get(cacheKey)
+    if (cached) {
+      return cached
+    }
+
+    const rendered = size === "large"
+      ? renderTerminal(agent.dna, largeFrame, !agent.online, talkFrame, waveFrame).split("\n")
+      : renderTerminalSmall(agent.dna, 0, !agent.online, talkFrame, waveFrame).split("\n")
+    this.avatarArtCache.set(cacheKey, rendered)
+    return rendered
   }
 
   private showStartupBanner(): boolean {
@@ -338,8 +629,7 @@ export class WorkspaceTui {
     }, HEARTBEAT_MS)
 
     this.animationTimer = setInterval(() => {
-      this.cursorBlinkVisible = true
-      this.render()
+      this.tickAnimationFrame()
     }, UI_ANIMATION_TICK_MS)
 
     await new Promise(() => {})
@@ -609,6 +899,13 @@ export class WorkspaceTui {
       return
     }
 
+    if (normalizedInput === "\u001b[5~" && this.view === "requests") {
+      const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
+      this.moveRequestSelection(-page)
+      this.render()
+      return
+    }
+
     if (normalizedInput === "\u001b[5~" && this.view === "calendar") {
       const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
       this.moveCalendarSelection(-page)
@@ -626,6 +923,13 @@ export class WorkspaceTui {
     if (normalizedInput === "\u001b[6~" && this.view === "tasks") {
       const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
       this.moveTaskSelection(page)
+      this.render()
+      return
+    }
+
+    if (normalizedInput === "\u001b[6~" && this.view === "requests") {
+      const page = Math.max(MESSAGE_SCROLL_STEP, Math.floor(Math.max(this.stdout.rows || 24, 10) / 2))
+      this.moveRequestSelection(page)
       this.render()
       return
     }
@@ -751,6 +1055,11 @@ export class WorkspaceTui {
 
         if (lower === "b" && this.view === "tasks" && this.taskScrollMax > 0) {
           this.jumpTaskSelectionToBottom()
+          continue
+        }
+
+        if (lower === "b" && this.view === "requests" && this.requestScrollMax > 0) {
+          this.jumpRequestSelectionToBottom()
           continue
         }
 
@@ -1162,6 +1471,8 @@ export class WorkspaceTui {
     this.view = view
     if (view === "requests") {
       this.requestSelectionIndex = 0
+      this.requestScrollOffset = 0
+      this.requestScrollMax = 0
       this.requestInputMode = false
       this.requestInputDraft = ""
     }
@@ -1229,6 +1540,11 @@ export class WorkspaceTui {
     this.moveTaskSelection(delta)
   }
 
+  private scrollRequests(delta: number): void {
+    if (this.view !== "requests") return
+    this.moveRequestSelection(delta)
+  }
+
   private scrollCalendar(delta: number): void {
     if (this.view !== "calendar") return
     this.moveCalendarSelection(delta)
@@ -1250,6 +1566,10 @@ export class WorkspaceTui {
     const step = MESSAGE_SCROLL_STEP
     if (this.view === "messages") {
       this.scrollMessages(direction < 0 ? step : -step)
+      return
+    }
+    if (this.view === "requests") {
+      this.scrollRequests(direction < 0 ? -1 : 1)
       return
     }
     if (this.view === "tasks") {
@@ -1499,42 +1819,48 @@ export class WorkspaceTui {
     let finalTarget = resolvedTarget
     let storageTarget = resolvedTarget
     let targetAgentName: string | undefined
-    let resolvedByStableDna = false
+    let queueKey: string | undefined
 
     if (!isHumanTarget && resolvedTarget.startsWith("agent:")) {
       const agentId = resolvedTarget.slice("agent:".length)
       if (agentId.length > 0) {
-        // Resolve slug (folder name) to DNA first, fall back to treating as DNA
-        let dna = agentId
-        let stableSlug: string | undefined
-        try {
-          const localAgents = discoverLocalAgents()
-          const match = localAgents.find((a) => a.name === agentId)
-            ?? localAgents.find((a) => a.soul?.dna === agentId)
-          if (match?.soul?.dna) {
-            dna = match.soul.dna
-          }
-          if (match?.name) {
-            stableSlug = match.name
-          }
-          if (match?.soul?.name) {
-            targetAgentName = match.soul.name
-          }
-        } catch {}
+        const resolved = resolveAgentToken(
+          agentId,
+          discoverLocalAgents().map((agent) => ({
+            slug: agent.name,
+            name: agent.soul?.name,
+            title: agent.soul?.title,
+            titleShort: agent.soul?.title_short,
+            dna: agent.soul?.dna,
+          })),
+        )
 
-        const candidates = listSessions(this.root)
-          .filter((session) => session.dna === dna)
-          .sort((a, b) => b.lastSeenAt - a.lastSeenAt)
+        if ("error" in resolved) {
+          if (resolved.error === "ambiguous") {
+            throw new Error(`Target ${resolvedTarget} is ambiguous. Use agent:<slug> instead.`)
+          }
+          throw new Error(`Target ${resolvedTarget} is unknown.`)
+        }
 
-        targetSession = candidates[0] ?? null
-        targetDna = dna
-        finalTarget = targetSession?.sessionId ?? resolvedTarget
-        storageTarget = `agent:${stableSlug ?? agentId}`
-        resolvedByStableDna = true
+        targetDna = resolved.agent.dna
+        targetAgentName = resolved.agent.name
+        queueKey = resolved.agent.slug || resolved.agent.dna
+        storageTarget = `agent:${resolved.agent.slug}`
+
+        if (targetDna) {
+          const candidates = listSessions(this.root)
+            .filter((session) => session.dna === targetDna)
+            .sort((a, b) => b.lastSeenAt - a.lastSeenAt)
+
+          targetSession = candidates[0] ?? null
+          finalTarget = targetSession?.sessionId ?? resolvedTarget
+        } else {
+          targetSession = null
+        }
       }
     }
 
-    if (!isHumanTarget && !targetSession && !resolvedByStableDna) {
+    if (!isHumanTarget && !targetSession && !queueKey) {
       throw new Error(`Target ${resolvedTarget} is offline or unknown.`)
     }
 
@@ -1549,6 +1875,13 @@ export class WorkspaceTui {
           ts: Date.now(),
         },
       ])
+    } else if (queueKey) {
+      queueMessage(queueKey, {
+        from: fromId,
+        fromName,
+        text,
+        ts: Date.now(),
+      })
     }
 
     const record = appendWorkspaceMessage(
@@ -1619,14 +1952,14 @@ export class WorkspaceTui {
 
       const bySlug = (entry.agentSlug || "").trim()
       if (bySlug.length > 0) {
-        const thread = this.snapshot.dmThreads.find((candidate) => candidate.slug === bySlug)
+        const thread = this.snapshotIndexes.threadBySlug.get(bySlug.toLowerCase())
         if (thread?.label) return thread.label
         return bySlug
       }
 
       const byDna = (entry.agentDna || "").trim()
       if (byDna.length > 0) {
-        const thread = this.snapshot.dmThreads.find((candidate) => candidate.dna === byDna)
+        const thread = this.snapshotIndexes.threadByDna.get(byDna)
         if (thread?.label) return thread.label
       }
 
@@ -1757,6 +2090,7 @@ export class WorkspaceTui {
         requests,
         generatedAt: Date.now(),
       }
+      this.rebuildSnapshotIndexes()
       this.refreshSelectedThreadWindow()
 
       if (this.selectedThreadId !== "activity" && !dmThreads.some((thread) => thread.id === this.selectedThreadId)) {
@@ -1768,32 +2102,38 @@ export class WorkspaceTui {
       const pendingReqCount = requests.filter(r => r.status === "pending").length
       if (pendingReqCount <= 0) {
         this.requestSelectionIndex = 0
+        this.requestScrollOffset = 0
+        this.requestScrollMax = 0
       } else if (this.requestSelectionIndex >= pendingReqCount) {
         this.requestSelectionIndex = pendingReqCount - 1
+        this.requestScrollMax = pendingReqCount - 1
+        if (this.requestScrollOffset > this.requestScrollMax) {
+          this.requestScrollOffset = this.requestScrollMax
+        }
       }
     } finally {
       this.refreshing = false
     }
   }
 
-  private waveFrameForAgent(agent: AgentPresence): number {
+  private waveFrameForAgent(agent: AgentPresence, now = Date.now()): number {
     if (!agent.online) return 0
     const until = this.waveUntilByDna.get(agent.dna) ?? 0
-    if (until <= Date.now()) return 0
-    return (Math.floor(Date.now() / AVATAR_ANIM_MS) % 2) + 1
+    if (until <= now) return 0
+    return (Math.floor(now / AVATAR_ANIM_MS) % 2) + 1
   }
 
   private resolveAgentDnaFromMentionId(id: string): string | undefined {
     if (!id.startsWith("agent:")) return undefined
 
-    const exact = this.snapshot.dmThreads.find((thread) => thread.id === id)
+    const exact = this.snapshotIndexes.threadById.get(id)
     if (exact?.dna) return exact.dna
 
     const token = id.slice("agent:".length)
-    const bySlug = this.snapshot.dmThreads.find((thread) => thread.slug === token)
+    const bySlug = this.snapshotIndexes.threadBySlug.get(token.toLowerCase())
     if (bySlug?.dna) return bySlug.dna
 
-    const byDna = this.snapshot.dmThreads.find((thread) => thread.dna === token)
+    const byDna = this.snapshotIndexes.threadByDna.get(token)
     if (byDna?.dna) return byDna.dna
 
     return undefined
@@ -1891,14 +2231,14 @@ export class WorkspaceTui {
     return out
   }
 
-  private talkFrameForAgent(agent: AgentPresence): number {
+  private talkFrameForAgent(agent: AgentPresence, now = Date.now()): number {
     if (!agent.online) return 0
     if (agent.typing) {
-      return Math.floor(Date.now() / AVATAR_ANIM_MS) % 2
+      return Math.floor(now / AVATAR_ANIM_MS) % 2
     }
     const until = this.talkUntilByDna.get(agent.dna) ?? 0
-    if (until <= Date.now()) return 0
-    return Math.floor(Date.now() / AVATAR_ANIM_MS) % 2
+    if (until <= now) return 0
+    return Math.floor(now / AVATAR_ANIM_MS) % 2
   }
 
   private typingDots(): string {
@@ -2045,33 +2385,35 @@ export class WorkspaceTui {
     if (threadId === "activity") return "All activity"
     if (!threadId.startsWith("agent:")) return threadId
 
-    const thread = this.snapshot.dmThreads.find((candidate) => candidate.id === threadId)
+    const thread = this.snapshotIndexes.threadById.get(threadId)
     if (thread) return thread.label
     return threadId.slice("agent:".length)
   }
 
   private threadDna(threadId: string): string | null {
     if (!threadId.startsWith("agent:")) return null
-    const thread = this.snapshot.dmThreads.find((candidate) => candidate.id === threadId)
+    const thread = this.snapshotIndexes.threadById.get(threadId)
     if (thread?.dna) return thread.dna
     return threadId.slice("agent:".length)
   }
 
   private selectedDmThread(): DmThread | null {
     if (!this.selectedThreadId.startsWith("agent:")) return null
-    return this.snapshot.dmThreads.find((thread) => thread.id === this.selectedThreadId) ?? null
+    return this.snapshotIndexes.threadById.get(this.selectedThreadId) ?? null
   }
 
   private loadActivityWindow(limit: number): { messages: WorkspaceMessage[]; hasOlder: boolean } {
     const rawLimit = Math.max(1, limit + 1)
     const workspaceMessages = readWorkspaceMessages({ limit: rawLimit }, this.root)
     const browserActivityMessages = this.readBrowserActivityMessages(rawLimit)
-    const combined = [...workspaceMessages, ...browserActivityMessages]
-      .sort((a, b) => {
-        if (a.ts !== b.ts) return a.ts - b.ts
-        return a.id.localeCompare(b.id)
-      })
-      .filter((message, index, all) => all.findIndex((candidate) => candidate.id === message.id) === index)
+    const byId = new Map<string, WorkspaceMessage>()
+    for (const message of [...workspaceMessages, ...browserActivityMessages]) {
+      byId.set(message.id, message)
+    }
+    const combined = Array.from(byId.values()).sort((a, b) => {
+      if (a.ts !== b.ts) return a.ts - b.ts
+      return a.id.localeCompare(b.id)
+    })
 
     return {
       messages: combined.slice(-limit),
@@ -2110,12 +2452,14 @@ export class WorkspaceTui {
       }),
     )
 
-    const deduped = combined
-      .sort((a, b) => {
-        if (a.ts !== b.ts) return a.ts - b.ts
-        return a.id.localeCompare(b.id)
-      })
-      .filter((message, index, all) => all.findIndex((candidate) => candidate.id === message.id) === index)
+    const byId = new Map<string, WorkspaceMessage>()
+    for (const message of combined) {
+      byId.set(message.id, message)
+    }
+    const deduped = Array.from(byId.values()).sort((a, b) => {
+      if (a.ts !== b.ts) return a.ts - b.ts
+      return a.id.localeCompare(b.id)
+    })
 
     return {
       messages: deduped.slice(-limit),
@@ -2161,13 +2505,13 @@ export class WorkspaceTui {
   private messageFromDna(message: WorkspaceMessage): string | undefined {
     if (message.fromDna) return message.fromDna
     if (!message.from) return undefined
-    return this.snapshot.sessions.find((session) => session.sessionId === message.from)?.dna
+    return this.snapshotIndexes.sessionDnaById.get(message.from)
   }
 
   private messageTargetDna(message: WorkspaceMessage): string | undefined {
     if (message.targetDna) return message.targetDna
     if (!message.target) return undefined
-    return this.snapshot.sessions.find((session) => session.sessionId === message.target)?.dna
+    return this.snapshotIndexes.sessionDnaById.get(message.target)
   }
 
   private isOperatorSender(message: WorkspaceMessage): boolean {
@@ -2268,21 +2612,38 @@ export class WorkspaceTui {
 
   private moveRequestSelection(delta: number): void {
     if (this.view !== "requests") return
-    const pending = this.snapshot.requests.filter(r => r.status === "pending")
+    const { pending } = this.requestsViewData()
+    const currentIndex = this.syncRequestSelection(pending)
+    if (currentIndex < 0) return
+    const next = Math.max(0, Math.min(pending.length - 1, currentIndex + delta))
+    this.requestSelectionIndex = next
+  }
+
+  private syncRequestSelection(pending: AgentRequest[]): number {
     if (pending.length === 0) {
       this.requestSelectionIndex = 0
-      return
+      this.requestScrollOffset = 0
+      this.requestScrollMax = 0
+      return -1
     }
-    const next = this.requestSelectionIndex + delta
-    const normalized = ((next % pending.length) + pending.length) % pending.length
-    this.requestSelectionIndex = normalized
+    const clamped = Math.max(0, Math.min(pending.length - 1, this.requestSelectionIndex))
+    this.requestSelectionIndex = clamped
+    return clamped
+  }
+
+  private jumpRequestSelectionToBottom(): void {
+    if (this.view !== "requests") return
+    const { pending } = this.requestsViewData()
+    if (pending.length === 0) return
+    this.requestSelectionIndex = pending.length - 1
   }
 
   private async handleRequestAction(): Promise<void> {
-    const pending = this.snapshot.requests.filter(r => r.status === "pending")
+    const { pending } = this.requestsViewData()
     if (pending.length === 0) return
 
-    const index = Math.max(0, Math.min(this.requestSelectionIndex, pending.length - 1))
+    const index = this.syncRequestSelection(pending)
+    if (index < 0) return
     const selected = pending[index]!
 
     if (selected.type === "confirm") {
@@ -2385,12 +2746,21 @@ export class WorkspaceTui {
       return `${FG_META}■${ANSI_RESET}`
     }
 
+    const cached = this.colorChipCache.get(dna)
+    if (cached) {
+      return cached
+    }
+
     try {
       const traits = decodeDNA(dna)
       const { faceRgb } = getTraitColors(traits, false)
-      return `\x1b[38;2;${faceRgb[0]};${faceRgb[1]};${faceRgb[2]}m■${ANSI_RESET}`
+      const chip = `\x1b[38;2;${faceRgb[0]};${faceRgb[1]};${faceRgb[2]}m■${ANSI_RESET}`
+      this.colorChipCache.set(dna, chip)
+      return chip
     } catch {
-      return `${FG_META}■${ANSI_RESET}`
+      const fallback = `${FG_META}■${ANSI_RESET}`
+      this.colorChipCache.set(dna, fallback)
+      return fallback
     }
   }
 
@@ -2422,16 +2792,16 @@ export class WorkspaceTui {
     if (req.fromDna) return req.fromDna
 
     if (req.fromSlug) {
-      const bySlug = this.snapshot.agents.find((agent) => agent.slug === req.fromSlug)
+      const bySlug = this.snapshotIndexes.agentBySlug.get(req.fromSlug.trim().toLowerCase())
       if (bySlug?.dna) return bySlug.dna
     }
 
     const normalizedName = (req.fromName || "").trim().toLowerCase()
     if (normalizedName.length > 0) {
-      const byAgentName = this.snapshot.agents.find((agent) => agent.name.toLowerCase() === normalizedName)
+      const byAgentName = this.snapshotIndexes.agentByLowerName.get(normalizedName)
       if (byAgentName?.dna) return byAgentName.dna
 
-      const bySessionName = this.snapshot.sessions.find((session) => session.name.toLowerCase() === normalizedName)
+      const bySessionName = this.snapshotIndexes.sessionByLowerName.get(normalizedName)
       if (bySessionName?.dna) return bySessionName.dna
     }
 
@@ -2444,7 +2814,7 @@ export class WorkspaceTui {
 
     const fromSlug = (req.fromSlug || "").trim()
     if (fromSlug.length > 0) {
-      const bySlug = this.snapshot.agents.find((agent) => agent.slug === fromSlug)
+      const bySlug = this.snapshotIndexes.agentBySlug.get(fromSlug.toLowerCase())
       if (bySlug?.name) return bySlug.name
       return fromSlug
     }
@@ -2494,10 +2864,7 @@ export class WorkspaceTui {
 
   private shortTitleForDna(dna?: string): string | undefined {
     if (!dna) return undefined
-    const agent = this.snapshot.agents.find((candidate) => candidate.dna === dna)
-    const short = (agent?.title_short || "").trim()
-    if (short.length > 0) return short
-    return undefined
+    return this.snapshotIndexes.shortTitleByDna.get(dna)
   }
 
   private formatNameWithShortTitle(
@@ -2538,12 +2905,12 @@ export class WorkspaceTui {
       return this.identity.dna
     }
 
-    const knownAgent = this.snapshot.agents.find((agent) => agent.name.toLowerCase() === normalized)
+    const knownAgent = this.snapshotIndexes.agentByLowerName.get(normalized)
     if (knownAgent?.dna) {
       return knownAgent.dna
     }
 
-    const knownSession = this.snapshot.sessions.find((session) => session.name.toLowerCase() === normalized)
+    const knownSession = this.snapshotIndexes.sessionByLowerName.get(normalized)
     if (knownSession?.dna) {
       return knownSession.dna
     }
@@ -2753,14 +3120,14 @@ export class WorkspaceTui {
       return this.identity.name || "Owner"
     }
     if (id.startsWith("agent:")) {
-      const thread = this.snapshot.dmThreads.find((candidate) => candidate.id === id)
+      const thread = this.snapshotIndexes.threadById.get(id)
       if (thread) return thread.label
 
       const token = id.slice("agent:".length)
-      const bySlug = this.snapshot.dmThreads.find((candidate) => candidate.slug === token)
+      const bySlug = this.snapshotIndexes.threadBySlug.get(token.toLowerCase())
       if (bySlug) return bySlug.label
 
-      const byDna = this.snapshot.dmThreads.find((candidate) => candidate.dna === token)
+      const byDna = this.snapshotIndexes.threadByDna.get(token)
       if (byDna) return byDna.label
     }
     return id
@@ -2775,14 +3142,14 @@ export class WorkspaceTui {
       return undefined
     }
 
-    const exact = this.snapshot.dmThreads.find((thread) => thread.id === candidate.id)
+    const exact = this.snapshotIndexes.threadById.get(candidate.id)
     if (exact?.dna) return exact.dna
 
     const token = candidate.id.slice("agent:".length)
-    const bySlug = this.snapshot.dmThreads.find((thread) => thread.slug === token)
+    const bySlug = this.snapshotIndexes.threadBySlug.get(token.toLowerCase())
     if (bySlug?.dna) return bySlug.dna
 
-    const byDna = this.snapshot.dmThreads.find((thread) => thread.dna === token)
+    const byDna = this.snapshotIndexes.threadByDna.get(token)
     if (byDna?.dna) return byDna.dna
 
     return undefined
@@ -2947,6 +3314,20 @@ export class WorkspaceTui {
     indent = 0,
     options: MessageCardOptions = {},
   ): string[] {
+    const cacheKey = [
+      message.id,
+      maxWidth,
+      indent,
+      options.borderless === true ? 1 : 0,
+      options.borderColor ?? "",
+      options.prependLines?.join("\n") ?? "",
+      this.selectedThreadId === "activity" ? "activity" : "thread",
+    ].join("|")
+    const cached = this.getCachedMessageCard(cacheKey)
+    if (cached) {
+      return cached
+    }
+
     const minCardWidth = 20
     let frameInset = Math.max(0, indent)
     if (maxWidth - frameInset < minCardWidth) {
@@ -3064,6 +3445,7 @@ export class WorkspaceTui {
       for (let row = 0; row < rows; row++) {
         plainLines.push(`${frameInsetPad}${leadPad}${padAnsi(content[row] || "", contentWidth)}${sidePad}`)
       }
+      this.setCachedMessageCard(cacheKey, plainLines)
       return plainLines
     }
 
@@ -3077,7 +3459,43 @@ export class WorkspaceTui {
     }
 
     lines.push(bottomBorder)
+    this.setCachedMessageCard(cacheKey, lines)
     return lines
+  }
+
+  private messageLayoutCacheKey(messages: WorkspaceMessage[], renderWidth: number): string {
+    const suffix = messages
+      .map((message) => `${message.id}:${this.isOutgoingDmInSelectedThread(message) ? "out" : "in"}`)
+      .join(",")
+    return `${this.selectedThreadId}|${renderWidth}|${suffix}`
+  }
+
+  private renderMessageBodyLines(messages: WorkspaceMessage[], renderWidth: number): string[] {
+    const cacheKey = this.messageLayoutCacheKey(messages, renderWidth)
+    if (this.messageLayoutCache?.key === cacheKey) {
+      return this.messageLayoutCache.lines
+    }
+
+    const blocks = messages.map((message) => {
+      const outgoing = this.isOutgoingDmInSelectedThread(message)
+      return this.renderMessageCard(message, renderWidth, 0, outgoing ? { borderless: true } : {})
+    })
+
+    const flatBodyLines: string[] = []
+    for (let index = 0; index < blocks.length; index++) {
+      flatBodyLines.push(...blocks[index]!)
+      if (index < blocks.length - 1) {
+        for (let spacer = 0; spacer < CARD_SPACER_LINES; spacer++) {
+          flatBodyLines.push("")
+        }
+      }
+    }
+
+    this.messageLayoutCache = {
+      key: cacheKey,
+      lines: flatBodyLines,
+    }
+    return flatBodyLines
   }
 
   private renderMessagesView(height: number, width: number): string[] {
@@ -3146,20 +3564,7 @@ export class WorkspaceTui {
       return out
     }
 
-    const blocks = visible.map((message) => {
-      const outgoing = this.isOutgoingDmInSelectedThread(message)
-      return this.renderMessageCard(message, renderWidth, 0, outgoing ? { borderless: true } : {})
-    })
-
-    const flatBodyLines: string[] = []
-    for (let index = 0; index < blocks.length; index++) {
-      flatBodyLines.push(...blocks[index]!)
-      if (index < blocks.length - 1) {
-        for (let spacer = 0; spacer < CARD_SPACER_LINES; spacer++) {
-          flatBodyLines.push("")
-        }
-      }
-    }
+    const flatBodyLines = this.renderMessageBodyLines(visible, renderWidth)
 
     const footerRows = typingFooter ? 1 : 0
     const reservedFooterRows = footerRows + typingFooterPadRows
@@ -3186,182 +3591,239 @@ export class WorkspaceTui {
     return out
   }
 
+  private requestText(value: unknown): string {
+    if (typeof value === "string") return value
+    if (value === null || value === undefined) return ""
+    return String(value)
+  }
+
+  private renderRequestCard(req: AgentRequest, cardWidth: number, selected: boolean): string[] {
+    const out: string[] = []
+    const cardHorizontalPadding = 1
+    const from = this.requestSenderName(req)
+    const senderDna = this.requestSenderDna(req)
+    const senderChip = this.colorChipForDna(senderDna)
+    const ago = Math.floor((Date.now() - req.ts) / 1000)
+    const agoStr = ago < 60 ? `${ago}s` : ago < 3600 ? `${Math.floor(ago / 60)}m` : `${Math.floor(ago / 3600)}h`
+    const borderColor = selected ? FG_SELECTED : FG_FRAME
+
+    let icon = "req"
+    let label = ""
+    if (req.type === "env") {
+      icon = "key"
+      label = this.requestText(req.varName)
+    } else if (req.type === "confirm") {
+      icon = "?"
+      label = "Confirm"
+    } else if (req.type === "choice") {
+      icon = ">"
+      label = "Choice"
+    }
+
+    const innerWidth = Math.max(8, cardWidth - 2)
+    const contentWidth = Math.max(1, innerWidth - (cardHorizontalPadding * 2))
+    const content: string[] = []
+    const pushWrapped = (text: unknown, options: { color?: string; prefix?: string } = {}): void => {
+      const normalizedText = this.requestText(text)
+      const prefix = options.prefix ?? ""
+      const color = options.color ?? ""
+      const bodyWidth = Math.max(1, contentWidth - prefix.length)
+      const wrapped = wrapPlain(normalizedText, bodyWidth)
+      const continuationPrefix = " ".repeat(prefix.length)
+      for (let index = 0; index < wrapped.length; index++) {
+        const linePrefix = index === 0 ? prefix : continuationPrefix
+        const plainLine = truncatePlain(`${linePrefix}${wrapped[index] ?? ""}`, contentWidth)
+        if (color.length > 0) {
+          content.push(`${color}${plainLine}${ANSI_RESET}`)
+        } else {
+          content.push(plainLine)
+        }
+      }
+    }
+
+    const agoLabel = contentWidth >= 12 ? `${agoStr} ago` : agoStr
+    const chipPrefix = `${senderChip} `
+    const chipPrefixWidth = visibleLength(chipPrefix)
+    const leftBudget = Math.max(0, contentWidth - agoLabel.length - 1)
+    let headerLeft = ""
+    if (leftBudget > 0) {
+      if (chipPrefixWidth >= leftBudget) {
+        headerLeft = visibleLength(senderChip) <= leftBudget ? senderChip : ""
+      } else {
+        const maxNameWidth = Math.max(0, leftBudget - chipPrefixWidth)
+        headerLeft = maxNameWidth > 0
+          ? `${chipPrefix}${this.formatNameWithShortTitle(from, senderDna, maxNameWidth)}`
+          : senderChip
+      }
+    }
+    const headerGap = Math.max(0, contentWidth - visibleLength(headerLeft) - agoLabel.length)
+    content.push(`${headerLeft}${" ".repeat(headerGap)}${FG_META}${agoLabel}${ANSI_RESET}`)
+    content.push("")
+
+    if (req.type === "env") {
+      if (req.reason) pushWrapped(this.requestText(req.reason), { color: FG_META, prefix: "Reason: " })
+      if (req.url) pushWrapped(this.requestText(req.url), { color: FG_META })
+      const envPath = req.envScope === "termlings" ? ".termlings/.env" : ".env"
+      if (selected && this.requestInputMode) {
+        pushWrapped(`Value (saved to ${envPath}): ${this.requestInputDraft}█`, { color: FG_SELECTED })
+      } else if (selected) {
+        pushWrapped("Press Enter to set value", { color: FG_META })
+      }
+    } else if (req.type === "confirm") {
+      pushWrapped(this.requestText(req.question))
+      if (selected && this.requestInputMode) {
+        pushWrapped(`Type y/n: ${this.requestInputDraft}█`, { color: FG_SELECTED })
+      } else if (selected) {
+        pushWrapped("Press Enter to respond", { color: FG_META })
+      }
+    } else if (req.type === "choice") {
+      pushWrapped(this.requestText(req.question))
+      if (req.options) {
+        for (let index = 0; index < req.options.length; index++) {
+          pushWrapped(this.requestText(req.options[index]), { color: FG_META, prefix: `  ${index + 1}. ` })
+        }
+      }
+      if (selected && this.requestInputMode) {
+        pushWrapped(`Pick #: ${this.requestInputDraft}█`, { color: FG_SELECTED })
+      } else if (selected) {
+        pushWrapped("Press Enter to choose", { color: FG_META })
+      }
+    }
+
+    const cardLabel = icon.length > 0 ? `${icon} ${label}` : label
+    const labelTrimmed = truncatePlain(cardLabel, Math.max(0, innerWidth - 2))
+    const labelUsed = visibleLength(labelTrimmed) + 2
+    const dashCount = Math.max(0, innerWidth - labelUsed)
+    out.push(` ${borderColor}${FRAME_TL} ${ANSI_RESET}${labelTrimmed}${borderColor} ${FRAME_H.repeat(dashCount)}${FRAME_TR}${ANSI_RESET}`)
+
+    for (const line of content) {
+      const textPart = padAnsi(line, contentWidth)
+      out.push(
+        ` ${borderColor}${FRAME_V}${ANSI_RESET}${" ".repeat(cardHorizontalPadding)}${textPart}${" ".repeat(cardHorizontalPadding)}${borderColor}${FRAME_V}${ANSI_RESET}`,
+      )
+    }
+
+    out.push(` ${borderColor}${FRAME_BL}${FRAME_H.repeat(innerWidth)}${FRAME_BR}${ANSI_RESET}`)
+    return out
+  }
+
+  private renderResolvedRequestPreview(req: AgentRequest, width: number): string[] {
+    const from = this.requestSenderName(req)
+    const senderChip = this.colorChipForDna(this.requestSenderDna(req))
+    const status = req.status === "resolved" ? "✓" : "✗"
+    const response = this.requestText(req.response) || "dismissed"
+    let summary = ""
+    if (req.type === "env") {
+      const reasonSuffix = req.reason ? ` — ${this.requestText(req.reason)}` : ""
+      summary = `${from}: ${this.requestText(req.varName)} -> set${reasonSuffix}`
+    } else if (req.type === "confirm") {
+      summary = `${from}: ${this.requestText(req.question)} -> ${response}`
+    } else if (req.type === "choice") {
+      summary = `${from}: ${this.requestText(req.question)} -> ${response}`
+    }
+
+    const wrapped = wrapPlain(summary, width)
+    const lead = `${status} ${senderChip} `
+    const leadIndent = " ".repeat(visibleLength(`${status} ■ `))
+    if (wrapped.length === 0) {
+      return []
+    }
+
+    const out = [`  ${FG_META}${lead}${wrapped[0] ?? ""}${ANSI_RESET}`]
+    for (let index = 1; index < wrapped.length; index++) {
+      out.push(`  ${FG_META}${leadIndent}${wrapped[index] ?? ""}${ANSI_RESET}`)
+    }
+    return out
+  }
+
   private renderRequestsView(height: number, width: number): string[] {
     const out: string[] = []
     const cardWidth = Math.max(34, Math.min(width - 2, 96))
-    const cardHorizontalPadding = 1
-    const asText = (value: unknown): string => {
-      if (typeof value === "string") return value
-      if (value === null || value === undefined) return ""
-      return String(value)
-    }
+    const { pending, resolvedPreview, resolvedCount } = this.requestsViewData()
 
-    const pending = this.snapshot.requests.filter(r => r.status === "pending")
-    const resolved = this.snapshot.requests.filter(r => r.status !== "pending").slice(0, 5)
-
-    if (pending.length === 0 && resolved.length === 0) {
+    if (pending.length === 0 && resolvedPreview.length === 0) {
       return this.renderHeaderFrame([`${FG_META}No requests from agents.${ANSI_RESET}`], width)
     }
 
-    const resolvedCount = this.snapshot.requests.filter(r => r.status !== "pending").length
     out.push(
       ...this.renderHeaderFrame(
-        [`${FG_META}Pending ${pending.length} · Resolved ${resolvedCount}${ANSI_RESET}`],
+        [
+          `${FG_META}Pending ${pending.length} · Resolved ${resolvedCount}${ANSI_RESET}`,
+          `${FG_SUBTLE_HINT}↑/↓ select · Enter respond · PgUp/PgDn jump · b bottom${ANSI_RESET}`,
+        ],
         width,
       ),
     )
     out.push("")
 
-    const selectedIndex = Math.max(0, Math.min(this.requestSelectionIndex, pending.length - 1))
+    const bodyHeight = Math.max(1, height - out.length)
+    const bodyLines: string[] = []
 
-    for (let i = 0; i < pending.length; i++) {
-      const req = pending[i]!
-      const selected = i === selectedIndex
-      const from = this.requestSenderName(req)
-      const senderDna = this.requestSenderDna(req)
-      const senderChip = this.colorChipForDna(senderDna)
-      const ago = Math.floor((Date.now() - req.ts) / 1000)
-      const agoStr = ago < 60 ? `${ago}s` : ago < 3600 ? `${Math.floor(ago / 60)}m` : `${Math.floor(ago / 3600)}h`
-      const borderColor = selected ? FG_SELECTED : FG_FRAME
+    if (pending.length === 0) {
+      this.requestSelectionIndex = 0
+      this.requestScrollOffset = 0
+      this.requestScrollMax = 0
+    } else {
+      const selectedIndex = this.syncRequestSelection(pending)
+      this.requestScrollMax = Math.max(0, pending.length - 1)
+      if (this.requestScrollOffset > this.requestScrollMax) this.requestScrollOffset = this.requestScrollMax
+      if (this.requestScrollOffset < 0) this.requestScrollOffset = 0
 
-      // Card label
-      let icon = "req"
-      let label = ""
-      if (req.type === "env") {
-        icon = "key"
-        label = asText(req.varName)
-      } else if (req.type === "confirm") {
-        icon = "?"
-        label = "Confirm"
-      } else if (req.type === "choice") {
-        icon = ">"
-        label = "Choice"
-      }
-
-      // Build card content lines
-      const innerWidth = Math.max(8, cardWidth - 2)
-      const contentWidth = Math.max(1, innerWidth - (cardHorizontalPadding * 2))
-      const content: string[] = []
-      const pushWrapped = (text: unknown, options: { color?: string; prefix?: string } = {}): void => {
-        const normalizedText = asText(text)
-        const prefix = options.prefix ?? ""
-        const color = options.color ?? ""
-        const bodyWidth = Math.max(1, contentWidth - prefix.length)
-        const wrapped = wrapPlain(normalizedText, bodyWidth)
-        const continuationPrefix = " ".repeat(prefix.length)
-        for (let index = 0; index < wrapped.length; index++) {
-          const linePrefix = index === 0 ? prefix : continuationPrefix
-          const plainLine = truncatePlain(`${linePrefix}${wrapped[index] ?? ""}`, contentWidth)
-          if (color.length > 0) {
-            content.push(`${color}${plainLine}${ANSI_RESET}`)
-          } else {
-            content.push(plainLine)
+      const isSelectedVisibleFrom = (startIndex: number): boolean => {
+        let used = 0
+        for (let index = startIndex; index < pending.length && used < bodyHeight; index++) {
+          const cardLines = this.renderRequestCard(pending[index]!, cardWidth, index === selectedIndex)
+          const blockHeight = cardLines.length + (index < pending.length - 1 ? 1 : 0)
+          if (index === selectedIndex) {
+            return true
           }
+          used += blockHeight
         }
+        return false
       }
 
-      const agoLabel = contentWidth >= 12 ? `${agoStr} ago` : agoStr
-      const chipPrefix = `${senderChip} `
-      const chipPrefixWidth = visibleLength(chipPrefix)
-      const leftBudget = Math.max(0, contentWidth - agoLabel.length - 1)
-      let headerLeft = ""
-      if (leftBudget > 0) {
-        if (chipPrefixWidth >= leftBudget) {
-          headerLeft = visibleLength(senderChip) <= leftBudget ? senderChip : ""
-        } else {
-          const maxNameWidth = Math.max(0, leftBudget - chipPrefixWidth)
-          headerLeft = maxNameWidth > 0
-            ? `${chipPrefix}${this.formatNameWithShortTitle(from, senderDna, maxNameWidth)}`
-            : senderChip
-        }
-      }
-      const headerGap = Math.max(0, contentWidth - visibleLength(headerLeft) - agoLabel.length)
-      content.push(`${headerLeft}${" ".repeat(headerGap)}${FG_META}${agoLabel}${ANSI_RESET}`)
-      content.push("")
-
-      if (req.type === "env") {
-        if (req.reason) pushWrapped(asText(req.reason), { color: FG_META, prefix: "Reason: " })
-        if (req.url) pushWrapped(asText(req.url), { color: FG_META })
-        const envPath = req.envScope === "termlings" ? ".termlings/.env" : ".env"
-        if (selected && this.requestInputMode) {
-          pushWrapped(`Value (saved to ${envPath}): ${this.requestInputDraft}█`, { color: FG_SELECTED })
-        } else if (selected) {
-          pushWrapped("Press Enter to set value", { color: FG_META })
-        }
-      } else if (req.type === "confirm") {
-        pushWrapped(asText(req.question))
-        if (selected && this.requestInputMode) {
-          pushWrapped(`Type y/n: ${this.requestInputDraft}█`, { color: FG_SELECTED })
-        } else if (selected) {
-          pushWrapped("Press Enter to respond", { color: FG_META })
-        }
-      } else if (req.type === "choice") {
-        pushWrapped(asText(req.question))
-        if (req.options) {
-          for (let j = 0; j < req.options.length; j++) {
-            pushWrapped(asText(req.options[j]), { color: FG_META, prefix: `  ${j + 1}. ` })
-          }
-        }
-        if (selected && this.requestInputMode) {
-          pushWrapped(`Pick #: ${this.requestInputDraft}█`, { color: FG_SELECTED })
-        } else if (selected) {
-          pushWrapped("Press Enter to choose", { color: FG_META })
-        }
+      if (!isSelectedVisibleFrom(this.requestScrollOffset)) {
+        this.requestScrollOffset = selectedIndex
       }
 
-      // Render card with border
-      const cardLabel = icon.length > 0 ? `${icon} ${label}` : label
-      const labelTrimmed = truncatePlain(cardLabel, Math.max(0, innerWidth - 2))
-      const labelUsed = visibleLength(labelTrimmed) + 2
-      const dashCount = Math.max(0, innerWidth - labelUsed)
-      out.push(` ${borderColor}${FRAME_TL} ${ANSI_RESET}${labelTrimmed}${borderColor} ${FRAME_H.repeat(dashCount)}${FRAME_TR}${ANSI_RESET}`)
-
-      for (const line of content) {
-        const textPart = padAnsi(line, contentWidth)
-        out.push(
-          ` ${borderColor}${FRAME_V}${ANSI_RESET}${" ".repeat(cardHorizontalPadding)}${textPart}${" ".repeat(cardHorizontalPadding)}${borderColor}${FRAME_V}${ANSI_RESET}`,
-        )
+      for (let index = this.requestScrollOffset; index < pending.length && bodyLines.length < bodyHeight; index++) {
+        const cardLines = this.renderRequestCard(pending[index]!, cardWidth, index === selectedIndex)
+        for (const line of cardLines) {
+          if (bodyLines.length >= bodyHeight) break
+          bodyLines.push(line)
+        }
+        if (bodyLines.length < bodyHeight && index < pending.length - 1) {
+          bodyLines.push("")
+        }
       }
+    }
 
-      out.push(` ${borderColor}${FRAME_BL}${FRAME_H.repeat(innerWidth)}${FRAME_BR}${ANSI_RESET}`)
+    if (resolvedPreview.length > 0 && bodyLines.length < bodyHeight) {
+      if (bodyLines.length > 0 && bodyLines[bodyLines.length - 1] !== "") {
+        bodyLines.push("")
+      }
+      if (bodyLines.length < bodyHeight) {
+        bodyLines.push(`${FG_META}  Resolved:${ANSI_RESET}`)
+      }
+      const resolvedBodyWidth = Math.max(12, width - 8)
+      for (const req of resolvedPreview) {
+        const previewLines = this.renderResolvedRequestPreview(req, resolvedBodyWidth)
+        for (const line of previewLines) {
+          if (bodyLines.length >= bodyHeight) break
+          bodyLines.push(line)
+        }
+      }
+    }
+
+    out.push(...bodyLines.slice(0, bodyHeight))
+    while (out.length < height) {
       out.push("")
     }
-
-    if (resolved.length > 0) {
-      out.push(`${FG_META}  Resolved:${ANSI_RESET}`)
-      const resolvedBodyWidth = Math.max(12, width - 8)
-      for (const req of resolved) {
-        const from = this.requestSenderName(req)
-        const senderChip = this.colorChipForDna(this.requestSenderDna(req))
-        const status = req.status === "resolved" ? "✓" : "✗"
-        const response = asText(req.response) || "dismissed"
-        let summary = ""
-        if (req.type === "env") {
-          const reasonSuffix = req.reason ? ` — ${asText(req.reason)}` : ""
-          summary = `${from}: ${asText(req.varName)} -> set${reasonSuffix}`
-        } else if (req.type === "confirm") {
-          summary = `${from}: ${asText(req.question)} -> ${response}`
-        } else if (req.type === "choice") {
-          summary = `${from}: ${asText(req.question)} -> ${response}`
-        }
-
-        const wrapped = wrapPlain(summary, resolvedBodyWidth)
-        const lead = `${status} ${senderChip} `
-        const leadIndent = " ".repeat(visibleLength(`${status} ■ `))
-        if (wrapped.length > 0) {
-          out.push(`  ${FG_META}${lead}${wrapped[0] ?? ""}${ANSI_RESET}`)
-          for (let index = 1; index < wrapped.length; index++) {
-            out.push(`  ${FG_META}${leadIndent}${wrapped[index] ?? ""}${ANSI_RESET}`)
-          }
-        }
-      }
-    }
-
     return out
   }
 
   private pendingRequestCount(): number {
-    return this.snapshot.requests.filter(r => r.status === "pending").length
+    return this.requestsViewData().pending.length
   }
 
   private taskStatusColor(status: TaskStatus): string {
@@ -3526,21 +3988,6 @@ export class WorkspaceTui {
     return `${prefix}${built.text}`
   }
 
-  private taskViewData(): {
-    allTasks: Task[]
-    filters: Array<{ id: string; label: string; predicate: (task: Task) => boolean }>
-    safeFilterIndex: number
-    tasks: Task[]
-  } {
-    const allTasks = [...this.snapshot.tasks].sort((a, b) => b.updatedAt - a.updatedAt)
-    const filters = this.taskFilters()
-    const safeFilterIndex = Math.max(0, Math.min(this.taskFilterIndex, filters.length - 1))
-    this.taskFilterIndex = safeFilterIndex
-    const activeFilter = filters[safeFilterIndex] ?? filters[0]
-    const tasks = activeFilter ? allTasks.filter(activeFilter.predicate) : allTasks
-    return { allTasks, filters, safeFilterIndex, tasks }
-  }
-
   private syncTaskSelection(tasks: Task[]): number {
     if (tasks.length === 0) {
       this.taskSelectionIndex = 0
@@ -3587,21 +4034,6 @@ export class WorkspaceTui {
     if (selectedIndex < 0) return
     const selectedTask = tasks[selectedIndex]!
     this.taskExpandedId = this.taskExpandedId === selectedTask.id ? "" : selectedTask.id
-  }
-
-  private calendarViewData(): {
-    allEvents: CalendarEvent[]
-    filters: Array<{ id: string; label: string; predicate: (event: CalendarEvent) => boolean }>
-    safeFilterIndex: number
-    events: CalendarEvent[]
-  } {
-    const allEvents = [...this.snapshot.calendarEvents].sort((a, b) => a.startTime - b.startTime)
-    const filters = this.calendarFilters()
-    const safeFilterIndex = Math.max(0, Math.min(this.calendarFilterIndex, filters.length - 1))
-    this.calendarFilterIndex = safeFilterIndex
-    const activeFilter = filters[safeFilterIndex] ?? filters[0]
-    const events = activeFilter ? allEvents.filter(activeFilter.predicate) : allEvents
-    return { allEvents, filters, safeFilterIndex, events }
   }
 
   private syncCalendarSelection(events: CalendarEvent[]): number {
@@ -4318,8 +4750,8 @@ export class WorkspaceTui {
   private calendarAgentBySlug(slug: string): AgentPresence | undefined {
     const normalized = slug.trim().toLowerCase()
     if (!normalized) return undefined
-    return this.snapshot.agents.find((agent) => (agent.slug || "").trim().toLowerCase() === normalized)
-      ?? this.snapshot.agents.find((agent) => agent.name.trim().toLowerCase() === normalized)
+    return this.snapshotIndexes.agentBySlug.get(normalized)
+      ?? this.snapshotIndexes.agentByLowerName.get(normalized)
   }
 
   private calendarAssignedCompact(event: CalendarEvent): string {
@@ -4618,37 +5050,38 @@ export class WorkspaceTui {
     const logoWalkFrame = 0
     const logoBw = false
     const logoLines = renderTermlingsLogo(logoBw, logoTalkFrame, logoWalkFrame).split("\n")
+    const allActivityLines = tinyAvatars
+      ? [`${skeletonColor}▤${ANSI_RESET}`]
+      : largeAvatars
+        ? [
+            `${skeletonColor}██  ████████████${ANSI_RESET}`,
+            `${skeletonColor}██  ████████████${ANSI_RESET}`,
+            `${skeletonColor}██  ████████████${ANSI_RESET}`,
+            `${skeletonColor}██  ████████████${ANSI_RESET}`,
+            `${skeletonColor}██  ████████████${ANSI_RESET}`,
+          ]
+        : logoLines
     const allActivityBlock: AvatarBlock = {
       kind: "activity",
       label: "All",
       displayLabel: "All",
       subtitle: "Activity",
       typing: false,
-      lines: tinyAvatars
-        ? [`${skeletonColor}▤${ANSI_RESET}`]
-        : largeAvatars
-          ? [
-              `${skeletonColor}██  ████████████${ANSI_RESET}`,
-              `${skeletonColor}██  ████████████${ANSI_RESET}`,
-              `${skeletonColor}██  ████████████${ANSI_RESET}`,
-              `${skeletonColor}██  ████████████${ANSI_RESET}`,
-              `${skeletonColor}██  ████████████${ANSI_RESET}`,
-            ]
-          : logoLines,
-      width: Math.max(...logoLines.map((l) => visibleLength(l)), "All".length, "Activity".length),
+      lines: allActivityLines,
+      width: Math.max(...allActivityLines.map((line) => visibleLength(line)), 1),
       selected: this.selectedThreadId === "activity",
     }
 
     const now = Date.now()
     const agentBlocks: AvatarBlock[] = sortedAgents.map((agent) => {
-      const waveFrame = this.waveFrameForAgent(agent)
-      const talkFrame = 0
-      const baseAvatarLines = renderTerminalSmall(agent.dna, 0, !agent.online, talkFrame, waveFrame).split("\n")
-      const largeFrame = waveFrame > 0 ? Math.floor(Date.now() / AVATAR_ANIM_MS) % 2 : 0
+      const waveFrame = this.waveFrameForAgent(agent, now)
+      const talkFrame = this.talkFrameForAgent(agent, now)
+      const baseAvatarLines = this.avatarLinesForAgent(agent, "small", 0, talkFrame, waveFrame)
+      const largeFrame = waveFrame > 0 ? Math.floor(now / AVATAR_ANIM_MS) % 2 : 0
       const lines = tinyAvatars
         ? [agent.online ? this.colorChipForDna(agent.dna) : `${FG_META}■${ANSI_RESET}`]
         : largeAvatars
-          ? renderTerminal(agent.dna, largeFrame, !agent.online, talkFrame, waveFrame).split("\n")
+          ? this.avatarLinesForAgent(agent, "large", largeFrame, talkFrame, waveFrame)
           : baseAvatarLines
       const label = agent.name
       const displayLabel = label
@@ -4680,16 +5113,19 @@ export class WorkspaceTui {
         selected,
       }
     })
+    const slotWidth = this.avatarSlotWidthForBlocks([allActivityBlock, ...agentBlocks])
+    const fixedAllActivityBlock: AvatarBlock = { ...allActivityBlock, width: slotWidth }
+    const fixedAgentBlocks: AvatarBlock[] = agentBlocks.map((block) => ({ ...block, width: slotWidth }))
 
     // Large avatar mode: "All" header above + responsive grid + desk visual
     if (largeAvatars) {
-      this.avatarVisibleAgentCount = agentBlocks.length
+      this.avatarVisibleAgentCount = fixedAgentBlocks.length
       const lines: string[] = []
 
       // "All Activity" header above the grid
-      const allChip = allActivityBlock.selected ? `${FG_SELECTED}■${ANSI_RESET}` : `${FG_META}■${ANSI_RESET}`
+      const allChip = fixedAllActivityBlock.selected ? `${FG_SELECTED}■${ANSI_RESET}` : `${FG_META}■${ANSI_RESET}`
       const allLabel = "All Activity"
-      const allStyled = allActivityBlock.selected
+      const allStyled = fixedAllActivityBlock.selected
         ? `${allChip} ${FG_SELECTED}${allLabel}${ANSI_RESET}`
         : `${allChip} ${FG_META}${allLabel}${ANSI_RESET}`
       lines.push(allStyled)
@@ -4702,7 +5138,7 @@ export class WorkspaceTui {
       let currentRow: AvatarBlock[] = []
       let rowWidth = 0
 
-      for (const block of agentBlocks) {
+      for (const block of fixedAgentBlocks) {
         const needed = block.width + (currentRow.length > 0 ? gap : 0)
         if (currentRow.length > 0 && rowWidth + needed > width) {
           gridRows.push(currentRow)
@@ -4742,7 +5178,7 @@ export class WorkspaceTui {
           const labelText = fitPlain(truncatePlain(block.displayLabel, block.width), block.width)
           const styled = block.selected
             ? `${FG_SELECTED}${labelText}${ANSI_RESET}`
-            : `${FG_META}${labelText}${ANSI_RESET}`
+            : `${FG_SUBTLE_HINT}${labelText}${ANSI_RESET}`
           labelLine += padAnsi(styled, block.width)
           if (i < row.length - 1) labelLine += "  "
         }
@@ -4773,7 +5209,7 @@ export class WorkspaceTui {
     }
 
     // Standard layout (small/tiny): single row with "All" inline
-    const blocks: AvatarBlock[] = [allActivityBlock, ...agentBlocks]
+    const blocks: AvatarBlock[] = [fixedAllActivityBlock, ...fixedAgentBlocks]
     const shown = this.computeAvatarViewport(blocks, width)
     this.avatarVisibleAgentCount = shown.filter((block) => block.kind === "agent").length
 
@@ -4800,7 +5236,7 @@ export class WorkspaceTui {
       const labelText = fitPlain(truncatePlain(block.displayLabel, block.width), block.width)
       const styledLabel = block.selected
         ? `${FG_SELECTED}${labelText}${ANSI_RESET}`
-        : `${FG_META}${labelText}${ANSI_RESET}`
+        : `${FG_SUBTLE_HINT}${labelText}${ANSI_RESET}`
       labels += padAnsi(styledLabel, block.width)
       if (index < shown.length - 1) {
         labels += "  "
@@ -4825,6 +5261,19 @@ export class WorkspaceTui {
     lines.push(subtitles)
 
     return lines
+  }
+
+  private avatarSlotWidthForBlocks(blocks: AvatarBlock[]): number {
+    const minWidth = this.avatarSizeMode === "large"
+      ? 18
+      : this.avatarSizeMode === "tiny"
+        ? 8
+        : 11
+
+    return blocks.reduce((maxWidth, block) => {
+      const artWidth = Math.max(...block.lines.map((line) => visibleLength(line)), 0)
+      return Math.max(maxWidth, artWidth)
+    }, minWidth)
   }
 
   private computeAvatarViewport(blocks: AvatarBlock[], width: number): AvatarBlock[] {
@@ -5076,7 +5525,10 @@ export class WorkspaceTui {
     }
 
     if (this.view === "requests") {
-      return "↑/↓ select | Enter respond"
+      const { pending } = this.requestsViewData()
+      const selectedIndex = this.syncRequestSelection(pending)
+      const selected = selectedIndex >= 0 ? selectedIndex + 1 : 0
+      return `${selected}/${pending.length} selected · Enter respond · ${this.requestScrollOffset}/${this.requestScrollMax} offset`
     }
 
     if (this.view === "tasks") {

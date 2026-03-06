@@ -1,6 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "fs"
 import { createHash } from "crypto"
 import { basename, join, resolve } from "path"
+import { resolveAgentToken } from "../agents/resolve.js"
 
 import {
   appendWorkspaceMessage,
@@ -471,17 +472,31 @@ function resolveMessageTarget(
   savedAgents: SavedAgent[],
 ): {
   resolvedTarget: string
+  storageTarget: string
   targetSession?: WorkspaceSession
   targetDna?: string
   targetAgentName?: string
 } {
   if (target.startsWith("agent:")) {
     const agentKey = target.slice("agent:".length)
-    const savedBySlug = savedAgents.find((agent) => agent.agentId === agentKey)
-    const savedByDna = savedAgents.find((agent) => agent.dna === agentKey)
-    const saved = savedBySlug || savedByDna
+    const resolved = resolveAgentToken(
+      agentKey,
+      savedAgents.map((agent) => ({
+        slug: agent.agentId,
+        name: agent.name,
+        title: agent.title,
+        titleShort: agent.title_short,
+        dna: agent.dna,
+      })),
+    )
+    if ("error" in resolved) {
+      return {
+        resolvedTarget: target,
+        storageTarget: target,
+      }
+    }
 
-    const dna = saved?.dna || agentKey
+    const dna = resolved.agent.dna || agentKey
     const candidates = sessions
       .filter((session) => session.dna === dna)
       .sort((a, b) => b.lastSeenAt - a.lastSeenAt)
@@ -489,15 +504,17 @@ function resolveMessageTarget(
     const targetSession = candidates[0]
     return {
       resolvedTarget: targetSession?.sessionId || target,
+      storageTarget: `agent:${resolved.agent.slug}`,
       targetSession,
       targetDna: dna,
-      targetAgentName: saved?.name,
+      targetAgentName: resolved.agent.name,
     }
   }
 
   const targetSession = sessions.find((session) => session.sessionId === target)
   return {
     resolvedTarget: target,
+    storageTarget: target,
     targetSession,
     targetDna: targetSession?.dna,
     targetAgentName: targetSession?.name,
@@ -744,6 +761,7 @@ export async function startServer(opts: Record<string, string>, projectRoot = pr
           const savedAgents = listSavedAgents(context.projectRoot)
 
           let resolvedTarget = target
+          let storageTarget = target
           let targetSession: WorkspaceSession | undefined
           let targetDna: string | undefined
           let targetName: string | undefined
@@ -756,6 +774,7 @@ export async function startServer(opts: Record<string, string>, projectRoot = pr
             } else {
               const resolved = resolveMessageTarget(target, sessions, savedAgents)
               resolvedTarget = resolved.resolvedTarget
+              storageTarget = resolved.storageTarget
               targetSession = resolved.targetSession
               targetDna = resolved.targetDna
               targetName = resolved.targetAgentName || resolved.targetSession?.name
@@ -776,7 +795,7 @@ export async function startServer(opts: Record<string, string>, projectRoot = pr
             from,
             fromName,
             fromDna,
-            target: resolvedTarget,
+            target: storageTarget,
             targetName: targetName || targetSession?.name,
             targetDna: targetDna || targetSession?.dna,
             text,

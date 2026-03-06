@@ -1,5 +1,20 @@
 const ANSI_REGEX = /\u001B\[[0-9;?]*[ -/]*[@-~]/g
-const ANSI_PREFIX_REGEX = /^\u001B\[[0-9;?]*[ -/]*[@-~]/
+
+function readAnsiCsiSequence(input: string, start: number): string | null {
+  if (input.charCodeAt(start) !== 0x1b) return null
+  if (input.charCodeAt(start + 1) !== 0x5b) return null
+
+  let index = start + 2
+  while (index < input.length) {
+    const code = input.charCodeAt(index)
+    if (code >= 0x40 && code <= 0x7e) {
+      return input.slice(start, index + 1)
+    }
+    index += 1
+  }
+
+  return null
+}
 
 export const REFRESH_MS = 1_000
 export const HEARTBEAT_MS = 10_000
@@ -50,11 +65,10 @@ export function truncateAnsi(input: string, maxWidth: number): string {
   let sawAnsi = false
 
   while (index < input.length) {
-    const rest = input.slice(index)
-    const ansi = rest.match(ANSI_PREFIX_REGEX)
-    if (ansi && ansi[0]) {
-      out += ansi[0]
-      index += ansi[0].length
+    const ansi = readAnsiCsiSequence(input, index)
+    if (ansi) {
+      out += ansi
+      index += ansi.length
       sawAnsi = true
       continue
     }
