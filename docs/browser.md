@@ -231,3 +231,19 @@ termlings browser status
 ### Login blocked on strict providers
 
 Use headed mode (default) and complete login manually in the visible browser, then continue automation.
+
+## Disable This Feature
+
+Disable `browser` for all agents in `.termlings/workspace.json`:
+
+```json
+{
+  "features": {
+    "defaults": {
+      "browser": false
+    }
+  }
+}
+```
+
+You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).

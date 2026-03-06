@@ -2,19 +2,17 @@ import type { AgentAdapter } from "./types.js"
 import { createHash, randomBytes } from "crypto"
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, statSync, unlinkSync, writeFileSync } from "fs"
 import { homedir } from "os"
-import { resolve as resolvePath, dirname as dirName, join as joinPath } from "path"
-import { fileURLToPath } from "url"
+import { resolve as resolvePath, join as joinPath } from "path"
 import { readMessages, getIpcDir } from "../engine/ipc.js"
+import { resolveWorkspaceFeaturesForAgent } from "../engine/features.js"
 import { sanitizeManagedRuntimeEnv } from "../engine/runtime-processes.js"
+import { renderManageAgentsContext, renderSystemContext } from "../system-context.js"
 import {
   appendWorkspaceMessage,
   ensureWorkspaceDirs,
   removeSession,
   upsertSession,
 } from "../workspace/state.js"
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirName(__filename)
 
 const RANDOM_NAMES = [
   "Pixel", "Sprout", "Ember", "Nimbus", "Glitch",
@@ -48,45 +46,16 @@ function runtimeLabelForAdapter(adapter: AgentAdapter): string {
   return fallback || adapter.bin || "Unknown"
 }
 
-function readFirstContextFile(paths: string[]): string {
-  for (const path of paths) {
-    try {
-      return readFileSync(path, "utf8")
-    } catch {}
-  }
-  return ""
-}
-
-function loadContext(): string {
-  // Load framework context (termlings-system-message.md)
-  let context = readFirstContextFile([
-    // Installed / built layout
-    joinPath(__dirname, "..", "termlings-system-message.md"),
-    // Dev mode
-    resolvePath("src/termlings-system-message.md"),
-  ])
-
-  // Append project vision addendum if present.
+function loadVisionAddendum(): string {
   try {
     const visionPath = resolvePath(".termlings", "VISION.md")
-    if (existsSync(visionPath)) {
-      const vision = readFileSync(visionPath, "utf8").trim()
-      if (vision) {
-        context += `\n\n<TERMLINGS-VISION>\n${vision}\n</TERMLINGS-VISION>\n`
-      }
-    }
-  } catch {}
-
-  return context
-}
-
-function loadManageAgentsContext(): string {
-  return readFirstContextFile([
-    // Installed / built layout
-    joinPath(__dirname, "..", "termlings-system-message-manage-agents.md"),
-    // Dev mode
-    resolvePath("src/termlings-system-message-manage-agents.md"),
-  ]).trim()
+    if (!existsSync(visionPath)) return ""
+    const vision = readFileSync(visionPath, "utf8").trim()
+    if (!vision) return ""
+    return `\n\n<TERMLINGS-VISION>\n${vision}\n</TERMLINGS-VISION>\n`
+  } catch {
+    return ""
+  }
 }
 
 function parseSoul(): { name: string; dna: string } {
@@ -349,7 +318,6 @@ export async function launchAgent(
 ): Promise<never> {
   const sessionId = `tl-${randomBytes(4).toString("hex")}`
   const runtimeDiscoveryMarker = `tlm-${sessionId}-${randomBytes(6).toString("hex")}`
-  const context = loadContext()
   const soul = soulData || parseSoul()
 
   const agentName = termlingOpts.name || soul.name || pickRandomName()
@@ -366,33 +334,33 @@ export async function launchAgent(
   const agentTitleShort = soulData?.title_short
   const agentRole = soulData?.role
   const agentCanManageAgents = Boolean(soulData?.manage_agents)
+  const agentDescription =
+    termlingOpts.description
+    || soul.description
+    || process.env.TERMLINGS_DESCRIPTION
+    || "You are an autonomous agent exploring and interacting with the world."
+  const workspaceFeatures = resolveWorkspaceFeaturesForAgent(agentSlug || undefined)
 
-  // Apply context substitutions BEFORE passing to adapter
-  let finalContext = context
-  if (context) {
-    const dynamicFields: Record<string, string> = {
-      NAME: agentName,
-      SESSION_ID: sessionId,
-      DNA: agentDna,
-      ROOM: "default",
-      AGENT_TITLE: agentTitle || "",
-      AGENT_TITLE_SHORT: agentTitleShort || "",
-      AGENT_ROLE: agentRole || "",
-      DESCRIPTION: termlingOpts.description || soul.description || process.env.TERMLINGS_DESCRIPTION || "You are an autonomous agent exploring and interacting with the world.",
-    }
-    for (const [field, value] of Object.entries(dynamicFields)) {
-      finalContext = finalContext.replace(new RegExp(`\\$${field}\\b`, "g"), value)
-    }
-  }
+  let finalContext = renderSystemContext({
+    name: agentName,
+    sessionId,
+    title: agentTitle,
+    titleShort: agentTitleShort,
+    role: agentRole,
+    description: agentDescription,
+    features: workspaceFeatures,
+  })
 
   if (agentCanManageAgents) {
-    const manageAgentsContext = loadManageAgentsContext()
+    const manageAgentsContext = renderManageAgentsContext()
     if (manageAgentsContext) {
       finalContext = finalContext
         ? `${finalContext}\n\n${manageAgentsContext}\n`
         : `${manageAgentsContext}\n`
     }
   }
+
+  finalContext += loadVisionAddendum()
 
   // Per-launch marker used only to link this runtime process to its transcript file.
   // It improves mapping accuracy when multiple agents spawn concurrently.

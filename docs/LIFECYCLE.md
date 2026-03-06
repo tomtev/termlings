@@ -2,7 +2,7 @@
 
 This document is for debugging and implementation context.
 Operators usually do not need this day-to-day.
-For the higher-level operator view, see [HOWITWORKS.md](HOWITWORKS.md).
+For the higher-level operator view, see [FEATURES.md](FEATURES.md).
 
 ## Scope
 
@@ -158,7 +158,7 @@ When an agent process exits:
 
 ## Related Docs
 
-- [HOWITWORKS.md](HOWITWORKS.md)
+- [FEATURES.md](FEATURES.md)
 - [AGENTS.md](AGENTS.md)
 - [TERMLINGS.md](TERMLINGS.md)
 - [INIT.md](INIT.md)

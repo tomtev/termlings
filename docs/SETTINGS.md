@@ -23,6 +23,24 @@ There is no Settings tab in the TUI. Edit this file directly when you need to ch
 }
 ```
 
+Feature flags can also live in the same file:
+
+```json
+{
+  "features": {
+    "defaults": {
+      "crm": false,
+      "browser": true
+    },
+    "agents": {
+      "growth": {
+        "crm": true
+      }
+    }
+  }
+}
+```
+
 ## `settings` fields
 
 - `avatarSize`: `"large" | "small" | "tiny"`
@@ -32,6 +50,54 @@ If a setting is missing or invalid, Termlings falls back to defaults:
 
 - `avatarSize`: `small`
 - `showBrowserActivity`: `true`
+
+## `features` fields
+
+Feature flags control which capability areas are injected into agent system context and which agent-facing commands can be enforced at runtime.
+
+Current feature keys:
+
+- `messaging`
+- `requests`
+- `org-chart`
+- `brief`
+- `task`
+- `workflows`
+- `calendar`
+- `browser`
+- `skills`
+- `brand`
+- `crm`
+
+Resolution order:
+
+1. built-in defaults in code
+2. `features.defaults`
+3. `features.agents.<slug>`
+
+If `workspace.json` has no `features` object, all features default to `true`.
+
+Example:
+
+```json
+{
+  "features": {
+    "defaults": {
+      "crm": false
+    },
+    "agents": {
+      "growth": {
+        "crm": true
+      }
+    }
+  }
+}
+```
+
+That means:
+
+- CRM is disabled for everyone by default
+- CRM is re-enabled only for agent slug `growth`
 
 ## Examples
 
@@ -57,5 +123,6 @@ Use tiny avatar mode in the TUI:
 
 ## Related
 
+- [FEATURES.md](FEATURES.md)
 - [browser.md](browser.md)
 - [LIFECYCLE.md](LIFECYCLE.md)

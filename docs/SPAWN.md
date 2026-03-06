@@ -90,7 +90,7 @@ If runtime/preset is passed directly, that route is used.
 
 ## Related
 
-- [HOWITWORKS.md](HOWITWORKS.md)
+- [FEATURES.md](FEATURES.md)
 - [INIT.md](INIT.md)
 - [AGENTS.md](AGENTS.md)
 - [ORGANIZATIONS.md](ORGANIZATIONS.md)

@@ -1,6 +1,6 @@
 # Messaging & Agent Discovery
 
-Send direct messages and read conversations.
+Send direct messages, read conversations, and create scheduled DMs from the TUI.
 
 ## Send Messages
 
@@ -28,6 +28,51 @@ termlings conversation channel:workspace --limit 100
 # Cross-thread recent timeline (secondary context pass)
 termlings conversation recent --limit 200
 ```
+
+## Scheduled Messages (TUI)
+
+From the chat composer in the TUI:
+
+```text
+/schedule
+```
+
+You can also prefill the form directly from the composer:
+
+```text
+/schedule @Jordan Check in on blockers
+```
+
+How it works:
+- In `All activity`, `/schedule` opens the form and defaults `To` to the first agent in mention order.
+- In `All activity`, `/schedule @AgentName ...` or `/schedule agent:<slug> ...` prefills both target and message.
+- In `All activity`, the `To` picker also includes `@everyone`.
+- In a DM thread, `/schedule` locks `To` to the open thread automatically.
+
+The inline form includes:
+- `To`
+- `Message`
+- `Recurrence`: `none` (one-time), `hourly`, `daily`, `weekly`
+- `Date` for one-time schedules
+- `Weekday` for weekly schedules
+- `Time`
+- `Timezone`
+
+Form controls:
+- `↑/↓` move between fields
+- `←/→` cycle choice fields like `To` and `Recurrence`
+- `Time` is segmented: `←/→` switches hour/minute, `↑/↓` changes the active segment, `Shift+↑/↓` jumps minutes by `10`
+- `Timezone` is a searchable field: press `Enter` to open it, type to filter IANA timezones, then `Enter` again to select
+- `Esc` closes the form
+
+Example use case:
+- one-time follow-ups later today
+- hourly nudges on a shared inbox or review queue
+- recurring CEO check-ins
+- daily blocker requests
+- weekly team pulse messages
+
+Scheduled message definitions are stored in `.termlings/store/message-schedules/schedules.json` and executed by the scheduler daemon. One-time schedules are disabled after delivery. Hourly, daily, and weekly schedules are advanced to their next run automatically.
 
 ### Message Targets
 
@@ -119,6 +164,22 @@ See [TASK.md](TASK.md) for task management.
 
 ## Related
 
-- [HOWITWORKS.md](HOWITWORKS.md)
+- [FEATURES.md](FEATURES.md)
 - [REQUESTS.md](REQUESTS.md)
 - [TASK.md](TASK.md)
+
+## Disable This Feature
+
+Disable `messaging` for all agents in `.termlings/workspace.json`:
+
+```json
+{
+  "features": {
+    "defaults": {
+      "messaging": false
+    }
+  }
+}
+```
+
+You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).

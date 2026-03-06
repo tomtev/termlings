@@ -85,6 +85,22 @@ This is useful for scripts/agents polling decision state.
 
 ## Related
 
-- [HOWITWORKS.md](HOWITWORKS.md)
+- [FEATURES.md](FEATURES.md)
 - [HUMANS.md](HUMANS.md)
 - [INIT.md](INIT.md)
+
+## Disable This Feature
+
+Disable `requests` for all agents in `.termlings/workspace.json`:
+
+```json
+{
+  "features": {
+    "defaults": {
+      "requests": false
+    }
+  }
+}
+```
+
+You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).

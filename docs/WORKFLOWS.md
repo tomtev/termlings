@@ -142,3 +142,19 @@ Use tasks when:
 
 - work needs ownership, status, dependencies, and notes
 - the team is tracking outcomes, not just checklist execution
+
+## Disable This Feature
+
+Disable `workflows` for all agents in `.termlings/workspace.json`:
+
+```json
+{
+  "features": {
+    "defaults": {
+      "workflows": false
+    }
+  }
+}
+```
+
+You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).

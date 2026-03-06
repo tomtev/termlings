@@ -146,3 +146,19 @@ Each task includes:
 
 - [MESSAGING.md](MESSAGING.md) - Notify teammates about task progress
 - [AGENTS.md](AGENTS.md) - Agent identity and reporting lines
+
+## Disable This Feature
+
+Disable `task` for all agents in `.termlings/workspace.json`:
+
+```json
+{
+  "features": {
+    "defaults": {
+      "task": false
+    }
+  }
+}
+```
+
+You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).

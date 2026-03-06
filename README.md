@@ -88,7 +88,7 @@ The built-in terminal UI is like an AI-native Slack: chat with your agents, trac
 | `termlings --server` | Run secure HTTP API server [WIP] | [docs/SERVER.md](docs/SERVER.md) |
 | `termlings scheduler --daemon` | Run scheduler daemon (calendar/messages/tasks) | [docs/SCHEDULER.md](docs/SCHEDULER.md) |
 
-### Agent-facing commands
+### Agent Features
 These are primarily for agents running inside sessions. You can run them manually when needed.
 You should not run these commands since they mostly work inside a agent session.
 
@@ -103,6 +103,7 @@ You should not run these commands since they mostly work inside a agent session.
 | `termlings workflow <cmd>` | Workflow checklist commands | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) |
 | `termlings task <cmd>` | Task workflow commands | [docs/TASK.md](docs/TASK.md) |
 | `termlings calendar <cmd>` | Calendar/event workflow | [docs/CALENDAR.md](docs/CALENDAR.md) |
+| `termlings crm <cmd>` | File-based CRM records + timelines | [docs/CRM.md](docs/CRM.md) |
 | `termlings request <type>` | Ask operator for decisions/credentials | [docs/REQUESTS.md](docs/REQUESTS.md) |
 | `termlings browser <cmd>` | Browser automation commands | [docs/browser.md](docs/browser.md) |
 
@@ -135,6 +136,9 @@ You should not run these commands since they mostly work inside a agent session.
       schedules.json
     presence/
       tl-*.typing.json
+    crm/
+      records/<type>/*.json
+      activity/<type>/*.jsonl
     tasks/tasks.json
     calendar/calendar.json
     workflows/
@@ -166,6 +170,8 @@ What each file/folder is for:
 - `.termlings/store/messages/` - append-only channel/DM/system history.
 - `.termlings/store/message-schedules/schedules.json` - one-time, hourly, daily, and weekly DM definitions.
 - `.termlings/store/presence/` - session typing/activity state.
+- `.termlings/store/crm/records/<type>/*.json` - one file per CRM record.
+- `.termlings/store/crm/activity/<type>/*.jsonl` - append-only activity timelines per CRM record.
 - `.termlings/store/tasks/tasks.json` - task list and task state.
 - `.termlings/store/calendar/calendar.json` - events and recurrence.
 - `.termlings/store/workflows/<slug>/*.json` - running workflow copies with step completion state.
@@ -182,7 +188,7 @@ What each file/folder is for:
 
 For runtime internals (env vars, context injection, session lifecycle), see:
 
-- [docs/HOWITWORKS.md](docs/HOWITWORKS.md) - high-level launch, env, and CLI communication model
+- [docs/FEATURES.md](docs/FEATURES.md) - feature flags, prompt injection, and capability visibility
 - [docs/LIFECYCLE.md](docs/LIFECYCLE.md)
 
 This is intentionally separated so operator docs stay short.
@@ -194,7 +200,7 @@ This is intentionally separated so operator docs stay short.
 - [docs/AGENTS.md](docs/AGENTS.md) - preset catalog and install flows
 - [docs/INIT.md](docs/INIT.md) - workspace initialization
 - [docs/SPAWN.md](docs/SPAWN.md) - launch agent runtime sessions
-- [docs/HOWITWORKS.md](docs/HOWITWORKS.md) - how agent sessions, env vars, and CLI communication fit together
+- [docs/FEATURES.md](docs/FEATURES.md) - feature flags, injection, and capability visibility
 - [docs/ORG-CHART.md](docs/ORG-CHART.md) - team hierarchy and reporting lines
 - [docs/BRIEF.md](docs/BRIEF.md) - full workspace startup snapshot
 - [docs/TEMPLATES.md](docs/TEMPLATES.md) - local and git template references
@@ -203,6 +209,7 @@ This is intentionally separated so operator docs stay short.
 - [docs/WORKFLOWS.md](docs/WORKFLOWS.md) - workflow checklist system
 - [docs/TASK.md](docs/TASK.md) - task system
 - [docs/CALENDAR.md](docs/CALENDAR.md) - calendar system
+- [docs/CRM.md](docs/CRM.md) - file-based CRM records and timelines
 - [docs/REQUESTS.md](docs/REQUESTS.md) - operator request workflow
 - [docs/SCHEDULER.md](docs/SCHEDULER.md) - scheduler daemon
 - [docs/BRAND.md](docs/BRAND.md) - brand schema and commands

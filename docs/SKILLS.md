@@ -52,3 +52,19 @@ termlings skills update
 
 - CLI docs: `https://skills.sh/docs/cli`
 - Source/reference formats: `https://skills.sh/docs/cli/sources`
+
+## Disable This Feature
+
+Disable `skills` for all agents in `.termlings/workspace.json`:
+
+```json
+{
+  "features": {
+    "defaults": {
+      "skills": false
+    }
+  }
+}
+```
+
+You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).

@@ -19,6 +19,7 @@ import { handleBrand } from "./brand.js";
 import { handleConversation } from "./conversation.js";
 import { handleSkills } from "./skills.js";
 import { handleAgents } from "./agents.js";
+import { handleCrm } from "./crm.js";
 
 export async function routeCommand(
   positional: string[],
@@ -62,6 +63,10 @@ export async function routeCommand(
 
     case "brand":
       await handleBrand(flags, positional, opts);
+      return true;
+
+    case "crm":
+      await handleCrm(flags, positional, opts);
       return true;
 
     case "skills":

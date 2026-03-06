@@ -48,12 +48,33 @@ export interface WorkspaceSettings {
   showBrowserActivity?: boolean
 }
 
+export type WorkspaceFeatureKey =
+  | "messaging"
+  | "requests"
+  | "org-chart"
+  | "brief"
+  | "task"
+  | "workflows"
+  | "calendar"
+  | "browser"
+  | "skills"
+  | "brand"
+  | "crm"
+
+export type WorkspaceFeatureFlags = Partial<Record<WorkspaceFeatureKey, boolean>>
+
+export interface WorkspaceFeatures {
+  defaults?: WorkspaceFeatureFlags
+  agents?: Record<string, WorkspaceFeatureFlags>
+}
+
 interface WorkspaceMeta {
   version: number
   projectName: string
   createdAt: number
   updatedAt: number
   settings?: WorkspaceSettings
+  features?: WorkspaceFeatures
 }
 
 const WORKSPACE_VERSION = 1
@@ -117,6 +138,20 @@ function isValidAvatarSize(value: unknown): value is AvatarSizeMode {
   return value === "large" || value === "small" || value === "tiny"
 }
 
+function isWorkspaceFeatureKey(value: unknown): value is WorkspaceFeatureKey {
+  return value === "messaging"
+    || value === "requests"
+    || value === "org-chart"
+    || value === "brief"
+    || value === "task"
+    || value === "workflows"
+    || value === "calendar"
+    || value === "browser"
+    || value === "skills"
+    || value === "brand"
+    || value === "crm"
+}
+
 function sanitizeWorkspaceSettings(raw: unknown): WorkspaceSettings {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
   const input = raw as Record<string, unknown>
@@ -130,6 +165,45 @@ function sanitizeWorkspaceSettings(raw: unknown): WorkspaceSettings {
   return out
 }
 
+function sanitizeWorkspaceFeatureFlags(raw: unknown): WorkspaceFeatureFlags {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
+  const input = raw as Record<string, unknown>
+  const out: WorkspaceFeatureFlags = {}
+  for (const [key, value] of Object.entries(input)) {
+    if (!isWorkspaceFeatureKey(key)) continue
+    if (typeof value !== "boolean") continue
+    out[key] = value
+  }
+  return out
+}
+
+function sanitizeWorkspaceFeatures(raw: unknown): WorkspaceFeatures {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {}
+  const input = raw as Record<string, unknown>
+  const out: WorkspaceFeatures = {}
+  const defaults = sanitizeWorkspaceFeatureFlags(input.defaults)
+  if (Object.keys(defaults).length > 0) {
+    out.defaults = defaults
+  }
+
+  if (input.agents && typeof input.agents === "object" && !Array.isArray(input.agents)) {
+    const agentsInput = input.agents as Record<string, unknown>
+    const agents: Record<string, WorkspaceFeatureFlags> = {}
+    for (const [agentSlug, agentFlags] of Object.entries(agentsInput)) {
+      const slug = agentSlug.trim()
+      if (!slug) continue
+      const sanitized = sanitizeWorkspaceFeatureFlags(agentFlags)
+      if (Object.keys(sanitized).length <= 0) continue
+      agents[slug] = sanitized
+    }
+    if (Object.keys(agents).length > 0) {
+      out.agents = agents
+    }
+  }
+
+  return out
+}
+
 function ensureWorkspaceMeta(root: string): WorkspaceMeta {
   const now = Date.now()
   const path = workspaceMetaPath(root)
@@ -140,6 +214,7 @@ function ensureWorkspaceMeta(root: string): WorkspaceMeta {
       createdAt: now,
       updatedAt: now,
       settings: {},
+      features: {},
     }
   }
 
@@ -153,7 +228,8 @@ function ensureWorkspaceMeta(root: string): WorkspaceMeta {
         : basename(root)
     const version = typeof parsed.version === "number" ? parsed.version : WORKSPACE_VERSION
     const settings = sanitizeWorkspaceSettings(parsed.settings)
-    return { version, projectName, createdAt, updatedAt, settings }
+    const features = sanitizeWorkspaceFeatures(parsed.features)
+    return { version, projectName, createdAt, updatedAt, settings, features }
   } catch {
     return {
       version: WORKSPACE_VERSION,
@@ -161,6 +237,7 @@ function ensureWorkspaceMeta(root: string): WorkspaceMeta {
       createdAt: now,
       updatedAt: now,
       settings: {},
+      features: {},
     }
   }
 }
@@ -169,6 +246,12 @@ export function readWorkspaceSettings(root = process.cwd()): WorkspaceSettings {
   ensureWorkspaceDirs(root)
   const meta = ensureWorkspaceMeta(root)
   return sanitizeWorkspaceSettings(meta.settings)
+}
+
+export function readWorkspaceFeatures(root = process.cwd()): WorkspaceFeatures {
+  ensureWorkspaceDirs(root)
+  const meta = ensureWorkspaceMeta(root)
+  return sanitizeWorkspaceFeatures(meta.features)
 }
 
 export function updateWorkspaceSettings(
@@ -187,6 +270,55 @@ export function updateWorkspaceSettings(
     updatedAt: now,
     settings: merged,
   })
+  return merged
+}
+
+export function updateWorkspaceFeatures(
+  patch: Partial<WorkspaceFeatures>,
+  root = process.cwd(),
+): WorkspaceFeatures {
+  ensureWorkspaceDirs(root)
+  const now = Date.now()
+  const meta = ensureWorkspaceMeta(root)
+  const current = sanitizeWorkspaceFeatures(meta.features)
+  const defaults = sanitizeWorkspaceFeatureFlags({
+    ...(current.defaults || {}),
+    ...((patch.defaults && typeof patch.defaults === "object") ? patch.defaults : {}),
+  })
+  const nextAgents: Record<string, WorkspaceFeatureFlags> = {
+    ...(current.agents || {}),
+  }
+
+  if (patch.agents && typeof patch.agents === "object" && !Array.isArray(patch.agents)) {
+    for (const [agentSlug, agentFlags] of Object.entries(patch.agents)) {
+      const slug = agentSlug.trim()
+      if (!slug) continue
+      const merged = sanitizeWorkspaceFeatureFlags({
+        ...(nextAgents[slug] || {}),
+        ...(agentFlags && typeof agentFlags === "object" ? agentFlags : {}),
+      })
+      if (Object.keys(merged).length > 0) {
+        nextAgents[slug] = merged
+      } else {
+        delete nextAgents[slug]
+      }
+    }
+  }
+
+  const merged: WorkspaceFeatures = {}
+  if (Object.keys(defaults).length > 0) {
+    merged.defaults = defaults
+  }
+  if (Object.keys(nextAgents).length > 0) {
+    merged.agents = nextAgents
+  }
+
+  writeWorkspaceMeta(root, {
+    ...meta,
+    updatedAt: now,
+    features: merged,
+  })
+
   return merged
 }
 
@@ -213,6 +345,7 @@ function touchWorkspace(root: string): void {
       projectName: basename(root),
       createdAt: now,
       updatedAt: now,
+      features: {},
     })
   }
 }
@@ -340,6 +473,8 @@ export function ensureWorkspaceDirs(root = process.cwd()): void {
   mkdirSync(join(workflowsDir(root), "org"), { recursive: true })
   mkdirSync(join(workflowsDir(root), "agents"), { recursive: true })
   mkdirSync(storeDir(root), { recursive: true })
+  mkdirSync(join(storeDir(root), "crm", "records"), { recursive: true })
+  mkdirSync(join(storeDir(root), "crm", "activity"), { recursive: true })
   mkdirSync(join(storeDir(root), "workflows"), { recursive: true })
   mkdirSync(sessionsDir(root), { recursive: true })
   mkdirSync(presenceDir(root), { recursive: true })

@@ -51,6 +51,7 @@ Use this for:
 ## Operating Model
 
 - **Tasks are the primary unit of work.** Use tasks to plan, delegate, track, and coordinate everything.
+- **CRM is the system of record for external relationships.** Use it for prospects, customers, contacts, partners, notes, and follow-ups.
 - Collaborate through DMs, workflows, tasks, and calendar
 - Communicate explicitly with `termlings message`
 - Work autonomously and keep humans/operators updated
@@ -70,6 +71,7 @@ termlings request --help               # Request inputs/decisions/env vars
 termlings workflow --help              # Workflow checklists
 termlings task --help                  # Task management
 termlings calendar --help              # Calendar events
+termlings crm --help                   # External relationship records + follow-ups
 termlings skills --help                # Skills discovery/install/update (skills.sh wrapper)
 termlings brand --help                 # Brand CLI
 termlings browser --help               # Browser (browsing, testing, automation)
@@ -116,6 +118,17 @@ termlings workflow step done <ref> <step-id>       # Mark a step done on the run
 ```bash
 termlings calendar list                            # Your assigned events
 termlings calendar show <id>                       # Event details
+```
+
+**CRM:**
+```bash
+termlings crm list                                  # External records
+termlings crm create org "Acme"                     # Create org/person/deal/etc.
+termlings crm show org/acme                         # Record details
+termlings crm set org/acme attrs.domain acme.com   # Set custom fields
+termlings crm note org/acme "Warm intro from Nora" # Append relationship note
+termlings crm followup org/acme 2026-03-10 "Send pricing"  # Set next action
+termlings crm timeline org/acme                     # Activity history
 ```
 
 **Brand profile:**
@@ -227,6 +240,24 @@ If you are unsure what someone is referring to (for example "did you fix this?" 
 - Tasks with notes create a clear audit trail of decisions and progress
 - Dependencies prevent conflicts and ensure work happens in the right order
 - Teammates can pick up context from task notes without back-and-forth messages
+
+## CRM — External Relationship Memory
+
+Use CRM when the work involves people or organizations outside the agent team.
+
+- Create a CRM record for prospects, customers, partners, contacts, and deals.
+- Add notes after meaningful external interactions.
+- Keep the next follow-up on the CRM record so someone can pick up the thread later.
+- Use tasks for execution work that comes out of a relationship; use CRM for the relationship itself.
+
+Typical pattern:
+
+```bash
+termlings crm create org "Acme"
+termlings crm note org/acme "Intro call went well. Interested in pilot."
+termlings crm followup org/acme 2026-03-10 "Send pricing draft"
+termlings task create "Prepare Acme pricing draft"
+```
 
 ## Team & Operator Communication (ALWAYS USE `termlings message`)
 

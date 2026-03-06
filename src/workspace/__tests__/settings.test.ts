@@ -4,7 +4,9 @@ import { join } from "path"
 import { tmpdir } from "os"
 import {
   ensureWorkspaceDirs,
+  readWorkspaceFeatures,
   readWorkspaceSettings,
+  updateWorkspaceFeatures,
   updateWorkspaceSettings,
 } from "../state.js"
 
@@ -53,5 +55,29 @@ describe("workspace settings", () => {
     const settings = readWorkspaceSettings(root)
     expect(settings.showBrowserActivity).toBeUndefined()
   })
-})
 
+  it("persists workspace feature flags and preserves them when updating settings", () => {
+    ensureWorkspaceDirs(root)
+
+    const features = updateWorkspaceFeatures({
+      defaults: {
+        crm: false,
+        browser: true,
+      },
+      agents: {
+        growth: {
+          crm: true,
+        },
+      },
+    }, root)
+
+    expect(features.defaults?.crm).toBe(false)
+    expect(features.agents?.growth?.crm).toBe(true)
+
+    updateWorkspaceSettings({ showBrowserActivity: false }, root)
+
+    const reread = readWorkspaceFeatures(root)
+    expect(reread.defaults?.crm).toBe(false)
+    expect(reread.agents?.growth?.crm).toBe(true)
+  })
+})

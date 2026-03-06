@@ -58,3 +58,19 @@ Common fields:
 - [TASK.md](TASK.md)
 - [WORKFLOWS.md](WORKFLOWS.md)
 - [CALENDAR.md](CALENDAR.md)
+
+## Disable This Feature
+
+Disable `brief` for all agents in `.termlings/workspace.json`:
+
+```json
+{
+  "features": {
+    "defaults": {
+      "brief": false
+    }
+  }
+}
+```
+
+You can override that for a specific agent under `features.agents.<slug>`. See [FEATURES.md](FEATURES.md).

@@ -89,7 +89,7 @@ const VALUE_FLAGS = new Set([
   "to", "cc", "bcc", "subject", "send-at", "send_at",
   "token", "cors-origin", "cors_origin", "allowed-projects", "allowed_projects",
   "max-body-kb", "max_body_kb", "rate-limit", "rate_limit", "sse-max", "sse_max",
-  "agent", "account", "folder", "scope",
+  "agent", "account", "folder", "scope", "type", "status", "stage", "tags", "query", "attrs",
 ]);
 
 // Check if first arg is an agent name
@@ -171,6 +171,8 @@ try {
     }
 
     if (flags.has("help") || flags.has("h")) {
+      const { resolveWorkspaceFeaturesForAgent } = await import("./engine/features.js");
+      const visibleFeatures = resolveWorkspaceFeaturesForAgent(process.env.TERMLINGS_AGENT_SLUG || undefined);
       console.log(`Usage: termlings [options]
        termlings avatar [dna|name] [options]
        termlings <agent> [options]
@@ -194,6 +196,7 @@ Agent System:
   termlings workflow <cmd> Workflow checklists
   termlings calendar <cmd> Calendar management
   termlings brand <cmd>    Brand profiles (colors/logo/voice/domain/email)
+${visibleFeatures.crm ? "  termlings crm <cmd>      File-based CRM records and timelines\n" : ""}
 
 Browser Automation:
   termlings browser --help Show browser commands
