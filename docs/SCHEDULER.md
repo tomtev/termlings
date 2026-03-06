@@ -2,6 +2,7 @@
 
 The scheduler automatically executes:
 - due calendar notifications
+- one-time and recurring direct messages
 - due/overdue task reminders (for tasks with `dueDate`)
 
 ## Running the Scheduler
@@ -23,9 +24,10 @@ Runs continuously in the background, checking every 60 seconds for due work.
 ## How It Works
 
 1. **Checks calendar events** - Reads `.termlings/store/calendar/calendar.json`
-2. **Checks task due dates** - Reads `.termlings/store/tasks/tasks.json` and tracks reminder state in `.termlings/store/tasks/scheduler-state.json`
-3. **Executes due items** - Sends event notifications and task reminders
-4. **Marks completed work** - Calendar marks notifications
+2. **Checks scheduled messages** - Reads `.termlings/store/message-schedules/schedules.json`
+3. **Checks task due dates** - Reads `.termlings/store/tasks/tasks.json` and tracks reminder state in `.termlings/store/tasks/scheduler-state.json`
+4. **Executes due items** - Sends event notifications, scheduled DMs, and task reminders
+5. **Marks completed work** - Calendar and one-time message schedules mark notifications
 
 ## Calendar Agent Notification
 
@@ -40,6 +42,33 @@ End: 2026-03-02 09:30 UTC
 They see this in:
 - Web UI message stream
 - `termlings list-agents` (recent activity)
+
+## Scheduled Message Delivery
+
+Scheduled messages are useful for delayed DMs, recurring check-ins, and lightweight team automation.
+
+In the TUI, type:
+
+```text
+/schedule
+```
+
+You can also prefill it directly:
+
+```text
+/schedule @Jordan Check in on blockers
+```
+
+The `/schedule` form supports:
+- `To` target selection
+- `Message`
+- `Recurrence`: one-time (`none` in the UI), `hourly`, `daily`, `weekly`
+- `Date` for one-time schedules
+- `Weekday` for weekly schedules
+- segmented `Time` editing
+- searchable `Timezone` selection
+
+When due, the scheduler sends the DM from `Scheduler` to the target thread. Offline agent targets are queued and delivered when that agent comes back online.
 
 ## Setup (Recommended)
 
@@ -69,6 +98,7 @@ termlings scheduler --daemon
 2. **Scheduler runs (automatically or daemon)**
    - Checks every 60 seconds
    - Sends notifications when events start
+   - Sends scheduled DMs when their run time arrives
 
 3. **Agents receive notifications**
    - See in workspace TUI
@@ -77,7 +107,12 @@ termlings scheduler --daemon
    termlings calendar show <event-id>
    ```
 
-4. **Task reminders are checked**
+4. **Scheduled messages are checked**
+   - Scheduled DMs can target `agent:<slug>`, `human:default`, or `@everyone` from the TUI
+   - Hourly, daily, and weekly schedules are re-queued automatically after delivery
+   - One-time schedules disable themselves after delivery
+
+5. **Task reminders are checked**
    - For tasks with `dueDate`, scheduler sends:
    - One upcoming reminder in the 24h pre-due window
    - One due-now reminder when due time is reached
@@ -97,6 +132,7 @@ src/commands/scheduler.ts
 ✅ **DO:**
 - Run scheduler daemon during work sessions
 - Use recurring events for regular meetings
+- Use `/schedule` for one-time follow-ups and recurring operator-driven check-ins
 - Test calendar creation before relying on scheduler
 - Use `dueDate` on tasks that need time-based reminders
 
@@ -119,17 +155,22 @@ src/commands/scheduler.ts
    termlings calendar list
    ```
 
-3. Check event times are in the future:
+3. Verify scheduled DMs exist:
+   ```bash
+   cat .termlings/store/message-schedules/schedules.json
+   ```
+
+4. Check event times are in the future:
    ```bash
    termlings calendar show <event-id>
    ```
 
-4. Manually trigger check:
+5. Manually trigger check:
    ```bash
    termlings scheduler  # Runs once
    ```
 
-5. Verify due task metadata:
+6. Verify due task metadata:
    - Task must include a valid `dueDate` timestamp
    - Task status must not be `completed`
 

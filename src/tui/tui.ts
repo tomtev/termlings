@@ -4,6 +4,12 @@ import { createHash } from "crypto"
 import { existsSync, readFileSync, statSync } from "fs"
 import { getAllCalendarEvents, type CalendarEvent, type CalendarRecurrence } from "../engine/calendar.js"
 import { queueMessage, writeMessages } from "../engine/ipc.js"
+import {
+  createScheduledMessage,
+  describeScheduledMessage,
+  type MessageScheduleRecurrence,
+  type MessageScheduleWeekday,
+} from "../engine/message-schedules.js"
 import { stopManagedRuntimeProcesses } from "../engine/runtime-processes.js"
 import { getAllTasks, type Task, type TaskPriority, type TaskStatus } from "../engine/tasks.js"
 import { listRequests, resolveRequest, dismissRequest, type AgentRequest } from "../engine/requests.js"
@@ -35,6 +41,7 @@ import type {
   MessageCardOptions,
   Snapshot,
 } from "./types.js"
+import { executeSlashCommand, listSlashCommands } from "./slash-commands.js"
 import {
   ANSI_RESET,
   AVATAR_ANIM_MS,
@@ -105,6 +112,22 @@ const RECENT_ACTIVITY_SNAPSHOT_LIMIT = 300
 const MESSAGE_WINDOW_DEFAULT_LIMIT = 120
 const MESSAGE_WINDOW_LOAD_STEP = 120
 const MESSAGE_CARD_CACHE_MAX = 600
+const FG_PRIMARY_ACTION = "\x1b[38;5;75m"
+const FALLBACK_TIMEZONES = [
+  "UTC",
+  "Europe/Oslo",
+  "Europe/London",
+  "Europe/Berlin",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Los_Angeles",
+  "Asia/Tokyo",
+  "Asia/Singapore",
+  "Australia/Sydney",
+]
+
+let supportedTimezoneOptionsCache: string[] | null = null
 
 interface SessionTypingState {
   typing: boolean
@@ -171,6 +194,49 @@ interface MessageLayoutCache {
   lines: string[]
 }
 
+type ComposerMode = "text" | "form"
+type ScheduleFormFieldKey = "target" | "message" | "recurrence" | "date" | "weekday" | "time" | "timezone" | "submit"
+type ScheduleTimeSegment = "hour" | "minute"
+
+interface ComposerSearchFieldState {
+  open: boolean
+  query: string
+  selectionIndex: number
+}
+
+interface ScheduleComposerForm {
+  kind: "schedule"
+  threadId: string
+  target: string
+  targetLocked: boolean
+  message: string
+  recurrence: MessageScheduleRecurrence
+  date: string
+  weekday: MessageScheduleWeekday
+  time: string
+  timezone: string
+  timeSegment: ScheduleTimeSegment
+  enteredFieldBySubmit: boolean
+  search: Partial<Record<ScheduleFormFieldKey, ComposerSearchFieldState>>
+  selectedFieldIndex: number
+}
+
+interface ComposerFormField {
+  key: ScheduleFormFieldKey
+  label: string
+  kind: "text" | "choice" | "readonly" | "action" | "search" | "segments"
+  value: string
+  placeholder?: string
+  options?: string[]
+  searchQuery?: string
+}
+
+interface SlashCommandCandidate {
+  name: string
+  insertText: string
+  description: string
+}
+
 export class WorkspaceTui {
   private readonly root: string
 
@@ -186,6 +252,8 @@ export class WorkspaceTui {
 
   private draft = ""
   private draftCursorIndex = 0
+  private composerMode: ComposerMode = "text"
+  private composerForm: ScheduleComposerForm | null = null
 
   private statusMessage = "Ready"
   private startupBanner = ""
@@ -783,6 +851,11 @@ export class WorkspaceTui {
         return
       }
 
+      if (this.composerMode === "form" && this.composerForm) {
+        await this.handleComposerFormInput(pasteText, true)
+        return
+      }
+
       if (!this.isComposerAvailable()) {
         return
       }
@@ -792,8 +865,9 @@ export class WorkspaceTui {
         && this.selectedThreadId === "activity"
         && this.draft.length === 0
         && !pasteText.trimStart().startsWith("@")
+        && !pasteText.trimStart().startsWith("/")
       ) {
-        this.statusMessage = 'Start with @everyone or @agent.'
+        this.statusMessage = 'Start with @everyone, @agent, or /command.'
         this.render()
         return
       }
@@ -807,11 +881,17 @@ export class WorkspaceTui {
       return
     }
 
+    if (this.composerMode === "form" && this.composerForm) {
+      await this.handleComposerFormInput(normalizedInput, false)
+      return
+    }
+
     const isArrowUp = normalizedInput === "\u001b[A" || normalizedInput === "\u001bOA"
     const isArrowDown = normalizedInput === "\u001b[B" || normalizedInput === "\u001bOB"
     const isArrowLeft = normalizedInput === "\u001b[D" || normalizedInput === "\u001bOD"
     const isArrowRight = normalizedInput === "\u001b[C" || normalizedInput === "\u001bOC"
     const mentionState = this.getMentionMenuState()
+    const slashCommandState = this.getSlashCommandMenuState()
     const mouseWheelDirection = this.parseMouseWheelDirection(normalizedInput)
 
     if (mouseWheelDirection !== null) {
@@ -821,6 +901,12 @@ export class WorkspaceTui {
     }
 
     if (isArrowUp || isArrowDown) {
+      if (slashCommandState && slashCommandState.candidates.length > 0 && this.inputFocused) {
+        this.stepMentionSelection(isArrowUp ? -1 : 1, slashCommandState.candidates.length)
+        this.render()
+        return
+      }
+
       if (mentionState && mentionState.candidates.length > 0 && this.inputFocused) {
         this.stepMentionSelection(isArrowUp ? -1 : 1, mentionState.candidates.length)
         this.render()
@@ -953,6 +1039,18 @@ export class WorkspaceTui {
     }
 
     if (normalizedInput === "\r" || normalizedInput === "\n") {
+      if (slashCommandState && slashCommandState.candidates.length > 0 && this.inputFocused) {
+        const selected =
+          slashCommandState.candidates[Math.max(0, Math.min(this.mentionSelectionIndex, slashCommandState.candidates.length - 1))]
+          ?? slashCommandState.candidates[0]
+        if (selected) {
+          this.acceptSlashCommand(selected, slashCommandState.slashIndex)
+        }
+        this.syncMentionSelection()
+        this.render()
+        return
+      }
+
       if (mentionState && mentionState.candidates.length > 0 && this.inputFocused) {
         const selected =
           mentionState.candidates[Math.max(0, Math.min(this.mentionSelectionIndex, mentionState.candidates.length - 1))]
@@ -1088,8 +1186,9 @@ export class WorkspaceTui {
           && this.selectedThreadId === "activity"
           && this.draft.length === 0
           && ch !== "@"
+          && ch !== "/"
         ) {
-          this.statusMessage = 'Start with @everyone or @agent.'
+          this.statusMessage = 'Start with @everyone, @agent, or /command.'
           continue
         }
         if (!this.inputFocused) {
@@ -1430,7 +1529,1027 @@ export class WorkspaceTui {
     this.syncMentionSelection()
   }
 
+  private defaultScheduleTimezone(): string {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+    } catch {
+      return "UTC"
+    }
+  }
+
+  private defaultScheduleDate(): string {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, "0")
+    const day = String(now.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
+  private scheduleFormFields(): ComposerFormField[] {
+    if (!this.composerForm) return []
+
+    const form = this.composerForm
+    const targetOptions = form.targetLocked ? [] : this.scheduleTargetOptionIds()
+    const fields: ComposerFormField[] = [
+      {
+        key: "target",
+        label: form.targetLocked ? "To (thread)" : "To",
+        kind: form.targetLocked ? "readonly" : targetOptions.length > 0 ? "choice" : "readonly",
+        value: form.target || targetOptions[0] || "",
+        placeholder: "No agents available",
+        options: targetOptions,
+      },
+      {
+        key: "message",
+        label: "Message",
+        kind: "text",
+        value: form.message,
+        placeholder: "Message to send",
+      },
+      {
+        key: "recurrence",
+        label: "Recurrence",
+        kind: "choice",
+        value: form.recurrence,
+        options: ["once", "hourly", "daily", "weekly"],
+      },
+    ]
+
+    if (form.recurrence === "once") {
+      fields.push({
+        key: "date",
+        label: "Date",
+        kind: "text",
+        value: form.date,
+        placeholder: "YYYY-MM-DD",
+      })
+    }
+
+    if (form.recurrence === "weekly") {
+      fields.push({
+        key: "weekday",
+        label: "Weekday",
+        kind: "choice",
+        value: form.weekday,
+        options: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+      })
+    }
+
+    fields.push(
+      {
+        key: "time",
+        label: "Time",
+        kind: "segments",
+        value: form.time,
+        placeholder: "HH:MM",
+      },
+      {
+        key: "timezone",
+        label: "Timezone",
+        kind: "search",
+        value: form.timezone,
+        options: this.scheduleTimezoneOptions(form.timezone),
+        searchQuery: this.composerSearchQuery("timezone"),
+      },
+      {
+        key: "submit",
+        label: "Create",
+        kind: "action",
+        value: "Create schedule",
+      },
+    )
+
+    return fields
+  }
+
+  private scheduleTimezoneOptions(current: string): string[] {
+    const preferred = this.defaultScheduleTimezone()
+    if (!supportedTimezoneOptionsCache) {
+      const intlWithSupported = Intl as typeof Intl & {
+        supportedValuesOf?: (key: string) => string[]
+      }
+      let supported: string[] = []
+      try {
+        supported = typeof intlWithSupported.supportedValuesOf === "function"
+          ? intlWithSupported.supportedValuesOf("timeZone")
+          : []
+      } catch {
+        supported = []
+      }
+      supportedTimezoneOptionsCache = supported.length > 0 ? supported : [...FALLBACK_TIMEZONES]
+    }
+
+    const options = [
+      current,
+      preferred,
+      ...FALLBACK_TIMEZONES,
+      ...supportedTimezoneOptionsCache,
+    ]
+
+    const out: string[] = []
+    const seen = new Set<string>()
+    for (const option of options) {
+      const normalized = option.trim()
+      if (!normalized || seen.has(normalized)) continue
+      seen.add(normalized)
+      out.push(normalized)
+    }
+    return out
+  }
+
+  private scheduleTimezoneDisplay(timezone: string): string {
+    const normalized = timezone.trim()
+    if (!normalized) return timezone
+
+    const sampleDate = this.composerForm?.recurrence === "once" && this.composerForm.date
+      ? (() => {
+          const parsed = new Date(`${this.composerForm?.date}T12:00:00Z`)
+          return Number.isNaN(parsed.getTime()) ? new Date() : parsed
+        })()
+      : new Date()
+
+    let offsetLabel = ""
+    let shortName = ""
+
+    try {
+      const offsetParts = new Intl.DateTimeFormat("en-US", {
+        timeZone: normalized,
+        timeZoneName: "shortOffset",
+      }).formatToParts(sampleDate)
+      offsetLabel = offsetParts.find((part) => part.type === "timeZoneName")?.value || ""
+    } catch {}
+
+    try {
+      const shortParts = new Intl.DateTimeFormat("en-US", {
+        timeZone: normalized,
+        timeZoneName: "short",
+      }).formatToParts(sampleDate)
+      shortName = shortParts.find((part) => part.type === "timeZoneName")?.value || ""
+    } catch {}
+
+    const extras = [shortName, offsetLabel]
+      .map((value) => value.trim())
+      .filter((value, index, arr) => value.length > 0 && arr.indexOf(value) === index)
+
+    if (extras.length === 0) return normalized
+    return `${normalized} (${extras.join(", ")})`
+  }
+
+  private composerSearchState(fieldKey: ScheduleFormFieldKey): ComposerSearchFieldState {
+    if (!this.composerForm) {
+      return { open: false, query: "", selectionIndex: 0 }
+    }
+    if (!this.composerForm.search) {
+      this.composerForm.search = {}
+    }
+    const existing = this.composerForm.search[fieldKey]
+    if (existing) {
+      return existing
+    }
+    const created = { open: false, query: "", selectionIndex: 0 }
+    this.composerForm.search[fieldKey] = created
+    return created
+  }
+
+  private isComposerSearchOpen(fieldKey: ScheduleFormFieldKey): boolean {
+    return this.composerForm?.search?.[fieldKey]?.open === true
+  }
+
+  private composerSearchQuery(fieldKey: ScheduleFormFieldKey): string {
+    return this.composerForm?.search?.[fieldKey]?.query || ""
+  }
+
+  private openComposerSearchField(fieldKey: ScheduleFormFieldKey): void {
+    if (!this.composerForm) return
+    const state = this.composerSearchState(fieldKey)
+    state.open = true
+    state.selectionIndex = 0
+  }
+
+  private closeComposerSearchField(fieldKey: ScheduleFormFieldKey): void {
+    if (!this.composerForm) return
+    const state = this.composerSearchState(fieldKey)
+    state.open = false
+    state.query = ""
+    state.selectionIndex = 0
+  }
+
+  private setComposerSearchQuery(fieldKey: ScheduleFormFieldKey, query: string): void {
+    if (!this.composerForm) return
+    const state = this.composerSearchState(fieldKey)
+    state.open = true
+    state.query = query
+    state.selectionIndex = 0
+  }
+
+  private clearComposerSearchField(fieldKey: ScheduleFormFieldKey): void {
+    this.closeComposerSearchField(fieldKey)
+  }
+
+  private scheduleTargetOptionIds(): string[] {
+    const out: string[] = []
+    const seen = new Set<string>()
+    const candidates = this.selectedThreadId === "activity"
+      ? this.getMentionCandidates("").filter((candidate) => candidate.id === "everyone" || candidate.id.startsWith("agent:"))
+      : this.allMentionCandidates().filter((candidate) => candidate.id.startsWith("agent:"))
+
+    for (const candidate of candidates) {
+      if (seen.has(candidate.id)) continue
+      seen.add(candidate.id)
+      out.push(candidate.id)
+    }
+
+    return out
+  }
+
+  private composerFieldOptionDisplay(field: ComposerFormField, value: string): string {
+    if (field.key === "target") {
+      return this.scheduleTargetPreview(value) || value
+    }
+    if (field.key === "recurrence" && value === "once") {
+      return "none"
+    }
+    if (field.key === "timezone") {
+      return this.scheduleTimezoneDisplay(value)
+    }
+    return value
+  }
+
+  private composerFieldSearchMatches(field: ComposerFormField): string[] {
+    const options = field.options || []
+    const query = (field.searchQuery || "").trim().toLowerCase()
+    if (query.length === 0) {
+      return options.slice(0, 6)
+    }
+
+    const normalize = (input: string): string => input.toLowerCase().replace(/[/_-]+/g, " ")
+    const scored = options
+      .map((option) => {
+        const haystack = normalize(option)
+        if (!haystack.includes(normalize(query))) {
+          return null
+        }
+
+        let score = 3
+        if (haystack === normalize(query)) score = 0
+        else if (haystack.startsWith(normalize(query))) score = 1
+        else if (option.toLowerCase().includes(query)) score = 2
+
+        return { option, score }
+      })
+      .filter((entry): entry is { option: string; score: number } => Boolean(entry))
+      .sort((a, b) => {
+        if (a.score !== b.score) return a.score - b.score
+        return a.option.localeCompare(b.option)
+      })
+
+    return scored.slice(0, 6).map((entry) => entry.option)
+  }
+
+  private scheduleTimeParts(): { hour: number; minute: number } {
+    const raw = this.composerForm?.time || "09:00"
+    const match = raw.match(/^(\d{1,2}):(\d{1,2})$/)
+    if (!match) {
+      return { hour: 9, minute: 0 }
+    }
+    const hour = Number.parseInt(match[1] || "9", 10)
+    const minute = Number.parseInt(match[2] || "0", 10)
+    return {
+      hour: Number.isFinite(hour) ? Math.max(0, Math.min(23, hour)) : 9,
+      minute: Number.isFinite(minute) ? Math.max(0, Math.min(59, minute)) : 0,
+    }
+  }
+
+  private setScheduleTimeParts(hour: number, minute: number): void {
+    this.updateComposerFormField(
+      "time",
+      `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    )
+  }
+
+  private composerFieldDisplayValue(field: ComposerFormField, selected: boolean): string {
+    const hasValue = field.value.trim().length > 0
+    const rawValue = hasValue
+      ? field.value
+      : `<${field.placeholder || "value"}>`
+
+    const valueDisplay = selected && field.kind === "segments" && field.key === "time"
+      ? (() => {
+          const { hour, minute } = this.scheduleTimeParts()
+          const hourText = String(hour).padStart(2, "0")
+          const minuteText = String(minute).padStart(2, "0")
+          const activeSegment = this.composerForm?.timeSegment || "hour"
+          const activeHour = activeSegment === "hour"
+            ? `${FG_SELECTED}${hourText}${FG_INPUT}`
+            : hourText
+          const activeMinute = activeSegment === "minute"
+            ? `${FG_SELECTED}${minuteText}${FG_INPUT}`
+            : minuteText
+          return `${activeHour}${FG_SUBTLE_HINT}:${FG_INPUT}${activeMinute}`
+        })()
+      : selected && field.kind === "search"
+        ? (() => {
+            if (!this.isComposerSearchOpen(field.key)) {
+              return this.composerFieldOptionDisplay(field, rawValue)
+            }
+            const query = (field.searchQuery || "").trim()
+            if (query.length === 0) {
+              return `${FG_PLACEHOLDER}<Search ${field.label.toLowerCase()}>${FG_INPUT}`
+            }
+            return `${query}${FG_INPUT}`
+          })()
+        : this.composerFieldOptionDisplay(field, rawValue)
+
+    if (!selected) {
+      if (!hasValue && field.kind !== "choice" && field.kind !== "action" && field.kind !== "segments") {
+        return `${FG_PLACEHOLDER}${valueDisplay}${FG_INPUT}`
+      }
+      return valueDisplay
+    }
+
+    if (field.kind === "choice") {
+      return `${FG_SUBTLE_HINT}←${ANSI_RESET} ${valueDisplay} ${FG_SUBTLE_HINT}→${ANSI_RESET}`
+    }
+
+    if (field.kind === "search") {
+      return valueDisplay
+    }
+
+    if (field.kind !== "readonly") {
+      if (!hasValue) {
+        return `${FG_CURSOR_BLOCK}█${FG_PLACEHOLDER}${valueDisplay}${FG_INPUT}`
+      }
+      return `${valueDisplay}█`
+    }
+
+    return valueDisplay
+  }
+
+  private normalizeComposerFormSelection(): void {
+    if (!this.composerForm) return
+    const fields = this.scheduleFormFields()
+    if (fields.length === 0) {
+      this.composerForm.selectedFieldIndex = 0
+      return
+    }
+    if (this.composerForm.selectedFieldIndex < 0) {
+      this.composerForm.selectedFieldIndex = 0
+      return
+    }
+    if (this.composerForm.selectedFieldIndex >= fields.length) {
+      this.composerForm.selectedFieldIndex = fields.length - 1
+    }
+  }
+
+  private selectedComposerFormField(): ComposerFormField | null {
+    if (!this.composerForm) return null
+    this.normalizeComposerFormSelection()
+    const fields = this.scheduleFormFields()
+    return fields[this.composerForm.selectedFieldIndex] ?? null
+  }
+
+  private openScheduleForm(target?: string, targetLocked = false, message = ""): void {
+    let normalizedTarget = (target || "").trim()
+    if (!normalizedTarget) {
+      normalizedTarget = this.defaultScheduleTarget() || ""
+    } else {
+      try {
+        normalizedTarget = this.resolveScheduledMessageTarget(normalizedTarget).target
+      } catch {}
+    }
+
+    this.composerMode = "form"
+    this.composerForm = {
+      kind: "schedule",
+      threadId: this.selectedThreadId,
+      target: normalizedTarget,
+      targetLocked,
+      message,
+      recurrence: "once",
+      date: this.defaultScheduleDate(),
+      weekday: "mon",
+      time: "09:00",
+      timezone: this.defaultScheduleTimezone(),
+      timeSegment: "hour",
+      enteredFieldBySubmit: false,
+      search: {},
+      selectedFieldIndex: targetLocked ? 1 : 0,
+    }
+    this.normalizeComposerFormSelection()
+    this.clearDraftInput()
+    this.inputFocused = true
+  }
+
+  private closeComposerForm(statusMessage?: string): void {
+    this.composerMode = "text"
+    this.composerForm = null
+    this.inputFocused = true
+    if (statusMessage) {
+      this.statusMessage = statusMessage
+    }
+  }
+
+  private stepComposerFormField(delta: number, reason: "nav" | "enter" | "tab" = "nav"): void {
+    if (!this.composerForm) return
+    const fields = this.scheduleFormFields()
+    if (fields.length === 0) return
+    const previousField = fields[this.composerForm.selectedFieldIndex]
+    const next = this.composerForm.selectedFieldIndex + delta
+    this.composerForm.selectedFieldIndex = Math.max(0, Math.min(fields.length - 1, next))
+    this.composerForm.enteredFieldBySubmit = reason === "enter" && delta > 0
+    const nextField = fields[this.composerForm.selectedFieldIndex]
+    if (previousField && nextField && previousField.key !== nextField.key && previousField.kind === "search") {
+      this.closeComposerSearchField(previousField.key)
+    }
+  }
+
+  private updateComposerFormField(key: Exclude<ScheduleFormFieldKey, "submit">, nextValue: string): void {
+    if (!this.composerForm) return
+    if (key === "target") {
+      this.composerForm.target = nextValue
+    } else if (key === "message") {
+      this.composerForm.message = nextValue
+    } else if (key === "recurrence") {
+      this.composerForm.recurrence = nextValue as MessageScheduleRecurrence
+      this.normalizeComposerFormSelection()
+    } else if (key === "date") {
+      this.composerForm.date = nextValue
+    } else if (key === "weekday") {
+      this.composerForm.weekday = nextValue as MessageScheduleWeekday
+    } else if (key === "time") {
+      this.composerForm.time = nextValue
+    } else if (key === "timezone") {
+      this.composerForm.timezone = nextValue
+    }
+  }
+
+  private insertComposerFormText(text: string): void {
+    const field = this.selectedComposerFormField()
+    if (!field || !this.composerForm) return
+    if (field.kind === "search") {
+      if (!this.isComposerSearchOpen(field.key)) {
+        this.statusMessage = `Press Enter to search ${field.label.toLowerCase()}.`
+        return
+      }
+      this.setComposerSearchQuery(field.key, `${this.composerSearchQuery(field.key)}${text}`)
+      return
+    }
+    if (field.kind !== "text") return
+
+    if (field.key === "target") {
+      this.updateComposerFormField("target", `${this.composerForm.target}${text}`)
+      return
+    }
+    if (field.key === "message") {
+      this.updateComposerFormField("message", `${this.composerForm.message}${text}`)
+      return
+    }
+    if (field.key === "date") {
+      this.updateComposerFormField("date", `${this.composerForm.date}${text}`)
+      return
+    }
+    if (field.key === "time") {
+      this.updateComposerFormField("time", `${this.composerForm.time}${text}`)
+      return
+    }
+    if (field.key === "timezone") {
+      this.updateComposerFormField("timezone", `${this.composerForm.timezone}${text}`)
+    }
+  }
+
+  private deleteComposerFormText(): void {
+    const field = this.selectedComposerFormField()
+    if (!field || !this.composerForm) return
+    if (field.kind === "search") {
+      if (!this.isComposerSearchOpen(field.key)) {
+        return
+      }
+      this.setComposerSearchQuery(field.key, this.composerSearchQuery(field.key).slice(0, -1))
+      return
+    }
+    if (field.kind !== "text") return
+
+    if (field.key === "target") {
+      this.updateComposerFormField("target", this.composerForm.target.slice(0, -1))
+      return
+    }
+    if (field.key === "message") {
+      this.updateComposerFormField("message", this.composerForm.message.slice(0, -1))
+      return
+    }
+    if (field.key === "date") {
+      this.updateComposerFormField("date", this.composerForm.date.slice(0, -1))
+      return
+    }
+    if (field.key === "time") {
+      this.updateComposerFormField("time", this.composerForm.time.slice(0, -1))
+      return
+    }
+    if (field.key === "timezone") {
+      this.updateComposerFormField("timezone", this.composerForm.timezone.slice(0, -1))
+    }
+  }
+
+  private cycleComposerFormChoice(delta: number): void {
+    const field = this.selectedComposerFormField()
+    if (!field || !this.composerForm || field.kind !== "choice" || !field.options || field.options.length === 0) {
+      return
+    }
+
+    const currentIndex = Math.max(0, field.options.indexOf(field.value))
+    const nextIndex = ((currentIndex + delta) % field.options.length + field.options.length) % field.options.length
+    const nextValue = field.options[nextIndex] || field.value
+
+    if (field.key === "target") {
+      this.updateComposerFormField("target", nextValue)
+      return
+    }
+    if (field.key === "recurrence") {
+      this.updateComposerFormField("recurrence", nextValue as MessageScheduleRecurrence)
+      return
+    }
+    if (field.key === "weekday") {
+      this.updateComposerFormField("weekday", nextValue as MessageScheduleWeekday)
+      return
+    }
+    if (field.key === "timezone") {
+      this.updateComposerFormField("timezone", nextValue)
+    }
+  }
+
+  private moveScheduleTimeSegment(delta: number): void {
+    if (!this.composerForm) return
+    this.composerForm.enteredFieldBySubmit = false
+    this.composerForm.timeSegment = delta < 0 ? "hour" : "minute"
+  }
+
+  private stepScheduleTimeValue(delta: number, fastMinutes = false): void {
+    if (!this.composerForm) return
+    this.composerForm.enteredFieldBySubmit = false
+    const { hour, minute } = this.scheduleTimeParts()
+    if ((this.composerForm.timeSegment || "hour") === "hour") {
+      this.setScheduleTimeParts((hour + delta + 24) % 24, minute)
+      return
+    }
+
+    const step = fastMinutes ? 10 : 1
+    const totalMinutes = ((hour * 60 + minute + delta * step) % (24 * 60) + (24 * 60)) % (24 * 60)
+    this.setScheduleTimeParts(Math.floor(totalMinutes / 60), totalMinutes % 60)
+  }
+
+  private stepComposerSearchSelection(field: ComposerFormField, delta: number): void {
+    if (!this.composerForm) return
+    const matches = this.composerFieldSearchMatches(field)
+    if (matches.length === 0) return
+    this.composerForm.enteredFieldBySubmit = false
+    const state = this.composerSearchState(field.key)
+    const next = ((state.selectionIndex + delta) % matches.length + matches.length) % matches.length
+    state.selectionIndex = next
+  }
+
+  private acceptComposerSearchSelection(field: ComposerFormField): boolean {
+    if (!this.composerForm) return false
+    const matches = this.composerFieldSearchMatches(field)
+    const query = (field.searchQuery || "").trim()
+    if (matches.length === 0) {
+      if (query.length > 0) {
+        this.statusMessage = `No ${field.label.toLowerCase()} matches for "${query}".`
+      }
+      return false
+    }
+
+    const state = this.composerSearchState(field.key)
+    const selected = matches[Math.max(0, Math.min(state.selectionIndex, matches.length - 1))] || matches[0]
+    if (!selected) return false
+    this.updateComposerFormField(field.key, selected)
+    this.closeComposerSearchField(field.key)
+    return true
+  }
+
+  private handleComposerFormShortcut(ch: string): boolean {
+    const field = this.selectedComposerFormField()
+    if (!field || !this.composerForm) return false
+
+    if (field.key === "recurrence") {
+      const lower = ch.toLowerCase()
+      if (lower === "o") {
+        this.updateComposerFormField("recurrence", "once")
+        return true
+      }
+      if (lower === "h") {
+        this.updateComposerFormField("recurrence", "hourly")
+        return true
+      }
+      if (lower === "d") {
+        this.updateComposerFormField("recurrence", "daily")
+        return true
+      }
+      if (lower === "w") {
+        this.updateComposerFormField("recurrence", "weekly")
+        return true
+      }
+    }
+
+    return false
+  }
+
+  private resolveScheduledMessageTarget(input: string): { target: string; targetName?: string; targetDna?: string } {
+    const normalized = input.trim()
+    if (!normalized) {
+      throw new Error("Target is required.")
+    }
+
+    const lower = normalized.toLowerCase()
+    if (lower === "everyone" || lower === "@everyone") {
+      return {
+        target: "everyone",
+        targetName: "Everyone",
+      }
+    }
+
+    if (
+      lower === "owner"
+      || lower === "operator"
+      || lower === "human"
+      || lower === "human:default"
+    ) {
+      return {
+        target: "human:default",
+        targetName: this.identity.name || "Owner",
+      }
+    }
+
+    const withoutAt = normalized.startsWith("@") ? normalized.slice(1) : normalized
+    const token = withoutAt.startsWith("agent:")
+      ? withoutAt.slice("agent:".length)
+      : withoutAt
+
+    const resolved = resolveAgentToken(
+      token,
+      this.snapshot.agents.map((agent) => ({
+        slug: agent.slug,
+        name: agent.name,
+        title: agent.title,
+        titleShort: agent.title_short,
+        dna: agent.dna,
+      })),
+    )
+
+    if ("error" in resolved) {
+      if (resolved.error === "ambiguous") {
+        throw new Error(`Target "${input}" is ambiguous. Use agent:<slug>.`)
+      }
+      throw new Error(`Unknown target "${input}". Use agent:<slug> or human:default.`)
+    }
+
+    const target = resolved.agent.slug
+      ? `agent:${resolved.agent.slug}`
+      : `agent:${resolved.agent.dna}`
+
+    return {
+      target,
+      targetName: resolved.agent.name,
+      targetDna: resolved.agent.dna,
+    }
+  }
+
+  private renderComposerFormLines(width: number): string[] {
+    if (!this.composerForm) return []
+
+    const lines: string[] = []
+    const renderBar = (content: string): string => {
+      const normalized = truncateAnsi(content, width).replaceAll(ANSI_RESET, `${ANSI_RESET}${BG_INPUT_PANEL}${FG_INPUT}`)
+      return `${BG_INPUT_PANEL}${FG_INPUT}${padAnsi(normalized, width)}${ANSI_RESET}`
+    }
+    const selectedField = this.selectedComposerFormField()
+    const helpLine = selectedField?.key === "time"
+      ? `${FG_SUBTLE_HINT}Tab next · Shift+Tab prev · ←/→ hour/minute · ↑/↓ change · Shift+↑/↓ ±10m · Esc cancel${ANSI_RESET}`
+      : selectedField?.kind === "search" && this.isComposerSearchOpen(selectedField.key)
+        ? `${FG_SUBTLE_HINT}Type to search · ↑/↓ results · Enter select/next · Tab next · Esc cancel${ANSI_RESET}`
+        : selectedField?.kind === "search"
+          ? `${FG_SUBTLE_HINT}Enter open search · ↑/↓ move · Tab next · Esc cancel${ANSI_RESET}`
+        : `${FG_SUBTLE_HINT}↑/↓ move · ←/→ options · Enter next/create · Esc cancel${ANSI_RESET}`
+
+    lines.push(renderBar(`${FG_SELECTED}/schedule${FG_INPUT}  Fill fields below to create a scheduled DM.${ANSI_RESET}`))
+    lines.push(renderBar(helpLine))
+
+    const fields = this.scheduleFormFields()
+    for (let index = 0; index < fields.length; index += 1) {
+      const field = fields[index]!
+      const selected = this.composerForm.selectedFieldIndex === index
+      const marker = selected ? `${FG_SELECTED}›${FG_INPUT}` : " "
+
+      if (field.kind === "action") {
+        lines.push(renderBar(` ${marker} ${FG_PRIMARY_ACTION}[${field.value}]${ANSI_RESET}`))
+        continue
+      }
+
+      const displayValue = this.composerFieldDisplayValue(field, selected)
+
+      const label = `${field.label}: `
+      const wrapWidth = Math.max(8, width - label.length - 4)
+      const wrapped = wrapPlain(displayValue, wrapWidth)
+      const first = wrapped[0] || ""
+      lines.push(renderBar(` ${marker} ${label}${first}`))
+      for (let wrappedIndex = 1; wrappedIndex < wrapped.length; wrappedIndex += 1) {
+        lines.push(renderBar(`   ${" ".repeat(label.length)}${wrapped[wrappedIndex] || ""}`))
+      }
+
+      if (selected && field.kind === "search" && this.isComposerSearchOpen(field.key)) {
+        const matches = this.composerFieldSearchMatches(field)
+        const state = this.composerSearchState(field.key)
+        const resultPrefix = `   ${" ".repeat(label.length)}`
+        const resultWidth = Math.max(8, width - resultPrefix.length)
+        if (matches.length === 0 && (field.searchQuery || "").trim().length > 0) {
+          lines.push(renderBar(`${resultPrefix}${FG_SUBTLE_HINT}no ${field.label.toLowerCase()} matches${ANSI_RESET}`))
+        } else {
+          for (let matchIndex = 0; matchIndex < matches.length; matchIndex += 1) {
+            const option = matches[matchIndex]!
+            const active = matchIndex === Math.max(0, Math.min(state.selectionIndex, matches.length - 1))
+            const prefix = active ? `${FG_SELECTED}›${FG_INPUT} ` : "  "
+            const body = truncateAnsi(this.composerFieldOptionDisplay(field, option), Math.max(0, resultWidth - 2))
+            lines.push(renderBar(`${resultPrefix}${prefix}${body}`))
+          }
+        }
+      }
+    }
+
+    const tipLines = wrapPlain(
+      "Tip: you can also ask an agent to set up message schedules for you.",
+      Math.max(8, width - 2),
+    )
+    for (const tipLine of tipLines) {
+      lines.push(renderBar(`${FG_SUBTLE_HINT}${tipLine}${ANSI_RESET}`))
+    }
+
+    return lines
+  }
+
+  private renderChatComposerArea(width: number): { composerLines: string[]; mentionSuggestionLines: string[] } {
+    if (this.composerMode === "form" && this.composerForm) {
+      return {
+        composerLines: this.renderComposerFormLines(width),
+        mentionSuggestionLines: [],
+      }
+    }
+
+    const [promptLine, isPlaceholder] = this.renderPrompt(width)
+    const ghostText = this.composerGhostHint()
+    const slashCommandSuggestionLines = this.renderSlashCommandSuggestions(width)
+    return {
+      composerLines: this.renderComposerLines(width, promptLine, isPlaceholder, ghostText),
+      mentionSuggestionLines: slashCommandSuggestionLines.length > 0
+        ? slashCommandSuggestionLines
+        : this.renderMentionSuggestions(width),
+    }
+  }
+
+  private defaultScheduleTarget(): string | undefined {
+    const firstAgent = this.allMentionCandidates().find((candidate) => candidate.id.startsWith("agent:"))
+    return firstAgent?.id
+  }
+
+  private scheduleTargetPreview(target: string): string | null {
+    const normalized = target.trim()
+    if (!normalized) return null
+
+    if (normalized === "everyone") {
+      return `${FG_META}■${ANSI_RESET} @everyone${FG_META} · All agents${ANSI_RESET}`
+    }
+
+    const humanTarget = normalized === "human:default" || normalized === "human:owner" || normalized === "human:operator"
+    if (humanTarget) {
+      const chip = this.colorChipForDna(this.identity.dna)
+      const title = "Owner"
+      const name = this.identity.name || "Owner"
+      return `${chip} ${name}${FG_META} · ${title}${ANSI_RESET}`
+    }
+
+    const agentToken = normalized.startsWith("agent:") ? normalized.slice("agent:".length).trim() : normalized
+    if (!agentToken) return null
+
+    const thread =
+      this.snapshotIndexes.threadById.get(`agent:${agentToken}`)
+      ?? this.snapshotIndexes.threadBySlug.get(agentToken.toLowerCase())
+      ?? this.snapshotIndexes.threadByDna.get(agentToken)
+    const agent = thread
+      ? this.snapshotIndexes.agentByDna.get(thread.dna)
+      : this.snapshotIndexes.agentBySlug.get(agentToken.toLowerCase()) ?? this.snapshotIndexes.agentByDna.get(agentToken)
+
+    const label = thread?.label || agent?.name
+    const dna = thread?.dna || agent?.dna
+    if (!label || !dna) return null
+
+    const title = (agent?.title_short || agent?.title || "").trim()
+    const chip = this.colorChipForDna(dna)
+    if (title.length > 0) {
+      return `${chip} ${label}${FG_META} · ${title}${ANSI_RESET}`
+    }
+    return `${chip} ${label}`
+  }
+
+  private async openSlashCommand(text: string): Promise<boolean> {
+    const result = executeSlashCommand(text, {
+      selectedThreadId: this.selectedThreadId,
+    })
+
+    if (result.kind === "error") {
+      this.statusMessage = result.message
+      return false
+    }
+
+    if (result.kind === "open-form" && result.form === "schedule") {
+      const target = result.target || this.defaultScheduleTarget()
+      this.openScheduleForm(target, result.targetLocked, result.message || "")
+      this.statusMessage = "Schedule form opened."
+      return true
+    }
+
+    return false
+  }
+
+  private async submitComposerForm(): Promise<void> {
+    if (!this.composerForm) return
+
+    try {
+      const resolvedTarget = this.resolveScheduledMessageTarget(this.composerForm.target)
+      const schedule = createScheduledMessage(
+        {
+          target: resolvedTarget.target,
+          targetName: resolvedTarget.targetName,
+          targetDna: resolvedTarget.targetDna,
+          text: this.composerForm.message,
+          recurrence: this.composerForm.recurrence,
+          date: this.composerForm.recurrence === "once" ? this.composerForm.date : undefined,
+          weekday: this.composerForm.recurrence === "weekly" ? this.composerForm.weekday : undefined,
+          time: this.composerForm.time,
+          timezone: this.composerForm.timezone,
+          createdBy: "human:default",
+        },
+        this.root,
+      )
+
+      const label = resolvedTarget.targetName || resolvedTarget.target
+      const summary = describeScheduledMessage(schedule)
+      this.closeComposerForm(`Scheduled ${summary} -> ${label}.`)
+    } catch (error) {
+      this.statusMessage = error instanceof Error ? error.message : "Failed to create schedule."
+    }
+  }
+
+  private async handleComposerFormInput(input: string, isPasteInput: boolean): Promise<void> {
+    if (!this.composerForm) return
+
+    if (isPasteInput) {
+      const pasteText = input
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .replace(/\n+/g, " ")
+      this.insertComposerFormText(pasteText)
+      this.render()
+      return
+    }
+
+    const isArrowUp = input === "\u001b[A" || input === "\u001bOA"
+    const isArrowDown = input === "\u001b[B" || input === "\u001bOB"
+    const isArrowLeft = input === "\u001b[D" || input === "\u001bOD"
+    const isArrowRight = input === "\u001b[C" || input === "\u001bOC"
+    const isShiftArrowUp = input === "\u001b[1;2A"
+    const isShiftArrowDown = input === "\u001b[1;2B"
+    const field = this.selectedComposerFormField()
+
+    if (input === "\t") {
+      this.stepComposerFormField(1, "tab")
+      this.render()
+      return
+    }
+
+    if (input === "\u001b[Z") {
+      this.stepComposerFormField(-1, "tab")
+      this.render()
+      return
+    }
+
+    if (field?.key === "time") {
+      if (isArrowLeft || isArrowRight) {
+        this.moveScheduleTimeSegment(isArrowLeft ? -1 : 1)
+        this.render()
+        return
+      }
+      if (isArrowUp || isArrowDown || isShiftArrowUp || isShiftArrowDown) {
+        this.stepScheduleTimeValue(isArrowUp || isShiftArrowUp ? 1 : -1, isShiftArrowUp || isShiftArrowDown)
+        this.render()
+        return
+      }
+    }
+
+    if (field?.kind === "search" && this.isComposerSearchOpen(field.key)) {
+      if (isArrowUp || isArrowDown) {
+        this.stepComposerSearchSelection(field, isArrowUp ? -1 : 1)
+        this.render()
+        return
+      }
+    }
+
+    if (isArrowUp || isArrowDown) {
+      this.stepComposerFormField(isArrowUp ? -1 : 1, "nav")
+      this.render()
+      return
+    }
+
+    if (isArrowLeft || isArrowRight) {
+      this.cycleComposerFormChoice(isArrowLeft ? -1 : 1)
+      this.render()
+      return
+    }
+
+    if (input === "\u001b") {
+      if (field?.kind === "search" && this.isComposerSearchOpen(field.key)) {
+        this.closeComposerSearchField(field.key)
+        this.render()
+        return
+      }
+      this.closeComposerForm("Schedule form cancelled.")
+      this.render()
+      return
+    }
+
+    if (input === "\u0003") {
+      this.stop(0)
+      return
+    }
+
+    if (input === "\r" || input === "\n") {
+      const activeField = this.selectedComposerFormField()
+      if (activeField?.kind === "search" && !this.isComposerSearchOpen(activeField.key) && this.composerForm.enteredFieldBySubmit) {
+        this.stepComposerFormField(1, "enter")
+      } else if (activeField?.kind === "search" && !this.isComposerSearchOpen(activeField.key)) {
+        this.openComposerSearchField(activeField.key)
+        this.composerForm.enteredFieldBySubmit = false
+      } else if (activeField?.kind === "search" && this.acceptComposerSearchSelection(activeField)) {
+        this.stepComposerFormField(1, "enter")
+      } else if (activeField?.key === "submit") {
+        await this.submitComposerForm()
+      } else {
+        this.stepComposerFormField(1, "enter")
+      }
+      this.render()
+      return
+    }
+
+    if (input === "\x7f") {
+      this.deleteComposerFormText()
+      this.render()
+      return
+    }
+
+    if (input.startsWith("\u001b[")) {
+      return
+    }
+
+    for (const ch of input) {
+      if (ch === "\u0003") {
+        this.stop(0)
+        return
+      }
+      if (ch === "\r" || ch === "\n") {
+        const activeField = this.selectedComposerFormField()
+        if (activeField?.kind === "search" && !this.isComposerSearchOpen(activeField.key) && this.composerForm.enteredFieldBySubmit) {
+          this.stepComposerFormField(1, "enter")
+        } else if (activeField?.kind === "search" && !this.isComposerSearchOpen(activeField.key)) {
+          this.openComposerSearchField(activeField.key)
+          this.composerForm.enteredFieldBySubmit = false
+        } else if (activeField?.kind === "search" && this.acceptComposerSearchSelection(activeField)) {
+          this.stepComposerFormField(1, "enter")
+        } else if (activeField?.key === "submit") {
+          await this.submitComposerForm()
+        } else {
+          this.stepComposerFormField(1, "enter")
+        }
+        continue
+      }
+      if (ch === "\x7f") {
+        this.deleteComposerFormText()
+        continue
+      }
+      if (ch < " " || ch > "~") {
+        continue
+      }
+      if (this.handleComposerFormShortcut(ch)) {
+        continue
+      }
+      this.insertComposerFormText(ch)
+    }
+
+    this.render()
+  }
+
   private handleEscape(): void {
+    if (this.composerMode === "form" && this.composerForm) {
+      this.closeComposerForm("Schedule form cancelled.")
+      this.render()
+      return
+    }
     if (this.view === "requests" && this.requestInputMode) {
       this.requestInputMode = false
       this.requestInputDraft = ""
@@ -1440,7 +2559,8 @@ export class WorkspaceTui {
     if (!this.isComposerAvailable()) return
 
     const mentionState = this.getMentionMenuState()
-    if (mentionState) {
+    const slashCommandState = this.getSlashCommandMenuState()
+    if (mentionState || slashCommandState) {
       this.mentionSelectionIndex = 0
       return
     }
@@ -1468,6 +2588,9 @@ export class WorkspaceTui {
     const index = viewNumber - 1
     const view = views[index]
     if (!view) return
+    if (view !== "messages" && this.composerMode === "form") {
+      this.closeComposerForm()
+    }
     this.view = view
     if (view === "requests") {
       this.requestSelectionIndex = 0
@@ -1516,6 +2639,9 @@ export class WorkspaceTui {
     const currentIndex = rooms.findIndex((id) => id === this.selectedThreadId)
     const startIndex = currentIndex >= 0 ? currentIndex : 0
     const nextIndex = ((startIndex + delta) % rooms.length + rooms.length) % rooms.length
+    if (rooms[nextIndex] !== this.selectedThreadId && this.composerMode === "form") {
+      this.closeComposerForm()
+    }
     this.selectedThreadId = rooms[nextIndex]!
     if (this.selectedThreadId === "activity") {
       this.clearDraftInput()
@@ -1592,6 +2718,11 @@ export class WorkspaceTui {
       return
     }
 
+    if (text.startsWith("/")) {
+      await this.openSlashCommand(text)
+      return
+    }
+
     if (this.selectedThreadId === "activity") {
       const parsedDm = this.parseAllActivityDm(text)
       if (parsedDm.error) {
@@ -1635,12 +2766,6 @@ export class WorkspaceTui {
 
     if (!this.selectedThreadId.startsWith("agent:")) {
       this.statusMessage = "Select a DM room to send messages."
-      return
-    }
-
-    const selectedDmThread = this.selectedDmThread()
-    if (selectedDmThread && !selectedDmThread.online) {
-      this.statusMessage = `${selectedDmThread.label} is offline. Run \`termlings spawn\` in another terminal.`
       return
     }
 
@@ -2094,6 +3219,9 @@ export class WorkspaceTui {
       this.refreshSelectedThreadWindow()
 
       if (this.selectedThreadId !== "activity" && !dmThreads.some((thread) => thread.id === this.selectedThreadId)) {
+        if (this.composerMode === "form") {
+          this.closeComposerForm()
+        }
         this.selectedThreadId = "activity"
         this.messageScrollOffset = 0
         this.refreshSelectedThreadWindow()
@@ -2496,10 +3624,7 @@ export class WorkspaceTui {
   private isComposerAvailable(): boolean {
     if (this.view !== "messages") return false
     if (this.selectedThreadId === "activity") return true
-    if (!this.selectedThreadId.startsWith("agent:")) return false
-    const thread = this.selectedDmThread()
-    if (thread && !thread.online) return false
-    return true
+    return this.selectedThreadId.startsWith("agent:")
   }
 
   private messageFromDna(message: WorkspaceMessage): string | undefined {
@@ -3050,6 +4175,7 @@ export class WorkspaceTui {
   }
 
   private getMentionMenuState(): { atIndex: number; query: string; candidates: MentionCandidate[] } | null {
+    if (this.composerMode === "form") return null
     if (!this.inputFocused) return null
     if (!this.isComposerAvailable()) return null
     if (this.draft.length === 0) return null
@@ -3066,12 +4192,59 @@ export class WorkspaceTui {
     return { atIndex, query, candidates }
   }
 
+  private getSlashCommandCandidates(query: string): SlashCommandCandidate[] {
+    const q = query.trim().toLowerCase()
+    const commands = listSlashCommands().map((command) => ({
+      name: command.name,
+      insertText: `/${command.name}`,
+      description: command.description,
+    }))
+
+    if (q.length === 0) {
+      return commands
+    }
+
+    return commands.filter((command) => {
+      const haystack = `${command.name} ${command.description}`.toLowerCase()
+      return haystack.includes(q)
+    })
+  }
+
+  private getSlashCommandMenuState(): { slashIndex: number; query: string; candidates: SlashCommandCandidate[] } | null {
+    if (this.composerMode === "form") return null
+    if (!this.inputFocused) return null
+    if (!this.isComposerAvailable()) return null
+    if (this.draft.length === 0) return null
+
+    const draftBeforeCursor = this.draft.slice(0, this.draftCursorIndex)
+    if (draftBeforeCursor.length === 0) return null
+    const match = draftBeforeCursor.match(/^\/([a-zA-Z0-9._-]*)$/)
+    if (!match) return null
+
+    const query = (match[1] || "").toLowerCase()
+    const candidates = this.getSlashCommandCandidates(query)
+    return { slashIndex: 0, query, candidates }
+  }
+
   private syncMentionSelection(): void {
     this.pruneDraftPlaceholderCaches()
     this.updateMentionWavesFromDraft()
 
     const mention = this.getMentionMenuState()
-    if (!mention || mention.candidates.length === 0) {
+    if (mention && mention.candidates.length > 0) {
+      if (this.mentionSelectionIndex < 0) {
+        this.mentionSelectionIndex = 0
+        return
+      }
+
+      if (this.mentionSelectionIndex >= mention.candidates.length) {
+        this.mentionSelectionIndex = mention.candidates.length - 1
+      }
+      return
+    }
+
+    const slash = this.getSlashCommandMenuState()
+    if (!slash || slash.candidates.length === 0) {
       this.mentionSelectionIndex = 0
       return
     }
@@ -3081,8 +4254,8 @@ export class WorkspaceTui {
       return
     }
 
-    if (this.mentionSelectionIndex >= mention.candidates.length) {
-      this.mentionSelectionIndex = mention.candidates.length - 1
+    if (this.mentionSelectionIndex >= slash.candidates.length) {
+      this.mentionSelectionIndex = slash.candidates.length - 1
     }
   }
 
@@ -3108,6 +4281,15 @@ export class WorkspaceTui {
 
   private acceptMention(candidate: MentionCandidate, atIndex: number): void {
     const before = this.draft.slice(0, atIndex)
+    const after = this.draft.slice(this.draftCursorIndex)
+    this.draft = `${before}${candidate.insertText} ${after}`
+    this.draftCursorIndex = before.length + candidate.insertText.length + 1
+    this.mentionSelectionIndex = 0
+    this.cursorBlinkVisible = true
+  }
+
+  private acceptSlashCommand(candidate: SlashCommandCandidate, slashIndex: number): void {
+    const before = this.draft.slice(0, slashIndex)
     const after = this.draft.slice(this.draftCursorIndex)
     this.draft = `${before}${candidate.insertText} ${after}`
     this.draftCursorIndex = before.length + candidate.insertText.length + 1
@@ -3536,7 +4718,7 @@ export class WorkspaceTui {
         const bannerLines = this.selectedThreadId === "activity"
           ? [
               "No messages yet.",
-              'Start with @everyone or @agent below.',
+              'Start with @everyone, @agent, or /schedule below.',
             ]
           : [
               "No messages yet.",
@@ -5350,7 +6532,7 @@ export class WorkspaceTui {
   private renderPrompt(width: number): [string, boolean] {
     if (this.view === "messages" && this.draft.length === 0) {
       if (this.selectedThreadId === "activity") {
-        return ['Write "@everyone" or "@agent" to send DM', true]
+        return ['Write "@everyone", "@agent", or /command', true]
       }
       if (this.selectedThreadId.startsWith("agent:")) {
         return [`Message ${this.threadLabel(this.selectedThreadId)}...`, true]
@@ -5361,7 +6543,7 @@ export class WorkspaceTui {
       ? "Press Enter or type to focus..."
       : this.view === "messages"
         ? this.selectedThreadId === "activity"
-          ? "Send DM: @everyone or @agent your message..."
+          ? "Send DM: @everyone, @agent, or /command..."
           : `Message ${this.threadLabel(this.selectedThreadId)}...`
         : "Switch to Chat to send"
 
@@ -5374,14 +6556,41 @@ export class WorkspaceTui {
     return [body, this.draft.length === 0]
   }
 
-  private renderComposerLines(width: number, body: string, isPlaceholder: boolean): string[] {
+  private composerGhostHint(): string {
+    const trimmed = this.draft.trimEnd()
+    if (!trimmed.startsWith("/schedule")) {
+      return ""
+    }
+
+    const remainder = trimmed.slice("/schedule".length).trim()
+    if (remainder.length === 0) {
+      return this.selectedThreadId === "activity"
+        ? "Mention @agent first. Press Enter for details."
+        : "Scheduled message. Press Enter for details."
+    }
+
+    const [firstToken = ""] = remainder.split(/\s+/, 1)
+    const looksLikeTarget = firstToken === "@everyone" || firstToken.startsWith("@") || firstToken.startsWith("agent:")
+    if (!looksLikeTarget) {
+      return ""
+    }
+
+    const messageText = remainder.slice(firstToken.length).trim()
+    if (messageText.length === 0) {
+      return "Scheduled message. Press Enter for details."
+    }
+
+    return ""
+  }
+
+  private renderComposerLines(width: number, body: string, isPlaceholder: boolean, ghostText = ""): string[] {
     const cursor = this.shouldShowComposerCursor()
       ? `${FG_CURSOR_BLOCK}█${FG_INPUT}`
       : ""
     const cursorIndex = !isPlaceholder ? this.draftCursorIndex : undefined
 
     if (isPlaceholder) {
-      return [composerInputBar(" ❯ ", body, width, true, cursor, cursorIndex)]
+      return [composerInputBar(" ❯ ", body, width, true, cursor, cursorIndex, ghostText)]
     }
 
     const segments = this.wrappedDraftSegments(width)
@@ -5407,6 +6616,7 @@ export class WorkspaceTui {
         false,
         cursor,
         segmentCursorIndex,
+        ghostText,
       )
     })
   }
@@ -5460,6 +6670,38 @@ export class WorkspaceTui {
         return `${BG_INPUT_PANEL}${FG_SELECTED}\x1b[1m${shownPrefix}\x1b[22m${chipChunk}${FG_SUBTLE_HINT}${shownTitle}${padding}${ANSI_RESET}`
       }
       return `${BG_INPUT_PANEL}${FG_META}${shownPrefix}${chipChunk}${FG_SUBTLE_HINT}${shownTitle}${padding}${ANSI_RESET}`
+    })
+  }
+
+  private renderSlashCommandSuggestions(width: number): string[] {
+    const commandMenu = this.getSlashCommandMenuState()
+    if (!commandMenu) return []
+
+    if (commandMenu.candidates.length === 0) {
+      return [
+        `${BG_INPUT_PANEL}${FG_META}${fitPlain(`   no commands for /${commandMenu.query}`, width)}${ANSI_RESET}`,
+      ]
+    }
+
+    const maxRows = 3
+    const selected = Math.max(0, Math.min(this.mentionSelectionIndex, commandMenu.candidates.length - 1))
+    const windowStart = Math.max(0, Math.min(selected - maxRows + 1, commandMenu.candidates.length - maxRows))
+    const shown = commandMenu.candidates.slice(windowStart, windowStart + maxRows)
+
+    return shown.map((candidate, offset) => {
+      const absoluteIndex = windowStart + offset
+      const active = absoluteIndex === selected
+      const prefixText = `   ${active ? "›" : " "} ${candidate.insertText}`
+      const subtitle = candidate.description ? ` · ${candidate.description}` : ""
+      const shownPrefix = truncatePlain(prefixText, width)
+      const remaining = Math.max(0, width - shownPrefix.length)
+      const shownSubtitle = remaining > 0 ? truncatePlain(subtitle, remaining) : ""
+      const padding = " ".repeat(Math.max(0, width - shownPrefix.length - shownSubtitle.length))
+
+      if (active) {
+        return `${BG_INPUT_PANEL}${FG_SELECTED}\x1b[1m${shownPrefix}\x1b[22m${FG_SUBTLE_HINT}${shownSubtitle}${padding}${ANSI_RESET}`
+      }
+      return `${BG_INPUT_PANEL}${FG_META}${shownPrefix}${FG_SUBTLE_HINT}${shownSubtitle}${padding}${ANSI_RESET}`
     })
   }
 
@@ -5605,16 +6847,16 @@ export class WorkspaceTui {
     const showOfflineJoinHint = Boolean(selectedDmThread && !selectedDmThread.online)
     const showRequestsNavigator = this.view === "requests"
     const showScrollToBottomHint = this.view === "messages" && this.messageScrollOffset > 0
-    const showComposer = this.view === "messages" && !showOfflineJoinHint
-    const mentionSuggestionLines = showComposer ? this.renderMentionSuggestions(layoutWidth) : []
-    const [promptLine, isPlaceholder] = this.renderPrompt(layoutWidth)
-    const composerLines = showComposer ? this.renderComposerLines(layoutWidth, promptLine, isPlaceholder) : []
+    const showComposer = this.view === "messages"
+    const { composerLines, mentionSuggestionLines } = showComposer
+      ? this.renderChatComposerArea(layoutWidth)
+      : { composerLines: [], mentionSuggestionLines: [] }
     const showPromptArea = showOfflineJoinHint || showComposer
     const inputPadTopRows = showPromptArea ? (showRequestsNavigator ? 0 : 1) : 0
     const inputPadBottomRows = showPromptArea ? 1 : 0
     const inputMarginBottomRows = 0
     const promptContentRows = showPromptArea
-      ? (showComposer ? composerLines.length + mentionSuggestionLines.length : 1)
+      ? (showOfflineJoinHint ? 1 : 0) + (showComposer ? composerLines.length + mentionSuggestionLines.length : 0)
       : 0
     const promptBoxHeight = inputPadTopRows + promptContentRows + inputPadBottomRows + inputMarginBottomRows
     const minBodyBoxHeight = 8
@@ -5690,13 +6932,14 @@ export class WorkspaceTui {
     }
 
     if (showPromptArea) {
-      const promptBg = showOfflineJoinHint ? BG_OFFLINE_PANEL : BG_INPUT_PANEL
+      const promptBg = BG_INPUT_PANEL
       for (let index = 0; index < inputPadTopRows; index++) {
         lines.push(grayBar("", layoutWidth, promptBg))
       }
       if (showOfflineJoinHint && selectedDmThread) {
-        lines.push(offlineBar(` ${selectedDmThread.label} is offline. Run \`termlings spawn\` in another terminal.`, layoutWidth))
-      } else if (showComposer) {
+        lines.push(offlineBar(` ${selectedDmThread.label} is offline. Messages and schedules will be queued.`, layoutWidth))
+      }
+      if (showComposer) {
         lines.push(...composerLines)
         lines.push(...mentionSuggestionLines)
       }

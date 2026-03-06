@@ -922,14 +922,14 @@ const LOGO_GRID: LogoPixel[][] = [
   ["b","b","d","b","b","b","d","b","b"],  // 2: eyes top
   ["b","b","d","b","b","b","d","b","b"],  // 3: eyes bottom
   ["b","b","b","b","b","b","b","b","b"],  // 4: body
-  ["b","b","b","d","d","d","b","b","b"],  // 5: mouth
+  ["b","b","d","d","d","b","b","b","b"],  // 5: mouth
   ["_","b","b","b","b","b","b","b","_"],  // 6: lower body
   ["_","_","b","_","b","_","b","_","_"],  // 7: teeth/legs
   ["_","b","_","_","_","_","_","b","_"],  // 8: feet
 ];
 
 // Mouth talk frame — row 5 narrowed (1-wide dark instead of 3)
-const LOGO_MOUTH_TALK: LogoPixel[] = ["b","b","b","b","d","b","b","b","b"];
+const LOGO_MOUTH_TALK: LogoPixel[] = ["b","b","b","d","b","b","b","b","b"];
 
 // Walk frames for row 8 only (feet)
 const LOGO_FEET: LogoPixel[][] = [
@@ -949,6 +949,13 @@ const LOGO_ARM_ROW = 2;
 const LOGO_BODY_RGB: [number, number, number] = [138, 43, 226]; // purple
 const LOGO_DARK_RGB: [number, number, number] = [50, 13, 87];   // dark purple (same hue, L=0.18)
 
+function resolveLogoRow(row: number, talkFrame = 0, walkFrame = 0): LogoPixel[] {
+  const mouthOpen = talkFrame === 0 || talkFrame % 2 === 0;
+  if (row === LOGO_MOUTH_ROW && !mouthOpen) return LOGO_MOUTH_TALK;
+  if (row === LOGO_FEET_ROW) return LOGO_FEET[walkFrame % LOGO_FEET.length]!;
+  return LOGO_GRID[row]!;
+}
+
 /**
  * Render the Termlings 👾 logo in small half-block terminal style.
  * 9-col grid with ▂ arms on the sides. Dark eyes and mouth like regular avatars.
@@ -959,8 +966,6 @@ const LOGO_DARK_RGB: [number, number, number] = [50, 13, 87];   // dark purple (
 export function renderTermlingsLogo(bw = false, talkFrame = 0, walkFrame = 0): string {
   const bodyRgb: [number, number, number] = bw ? [140, 140, 140] : LOGO_BODY_RGB;
   const darkRgb: [number, number, number] = bw ? [77, 77, 77] : LOGO_DARK_RGB;
-  const mouthOpen = talkFrame === 0 || talkFrame % 2 === 0;
-  const feetRow = LOGO_FEET[walkFrame % LOGO_FEET.length]!;
 
   function cellRgb(c: LogoPixel): [number, number, number] | null {
     if (c === "b") return bodyRgb;
@@ -972,14 +977,9 @@ export function renderTermlingsLogo(bw = false, talkFrame = 0, walkFrame = 0): s
   const lines: string[] = [];
 
   for (let r = 0; r < LOGO_GRID.length; r += 2) {
-    function getRow(idx: number): LogoPixel[] {
-      if (idx === LOGO_MOUTH_ROW && !mouthOpen) return LOGO_MOUTH_TALK;
-      if (idx === LOGO_FEET_ROW) return feetRow;
-      return LOGO_GRID[idx]!;
-    }
-    const topRow = getRow(r);
+    const topRow = resolveLogoRow(r, talkFrame, walkFrame);
     const botIdx = r + 1;
-    const botRow = botIdx < LOGO_GRID.length ? getRow(botIdx) : null;
+    const botRow = botIdx < LOGO_GRID.length ? resolveLogoRow(botIdx, talkFrame, walkFrame) : null;
     let line = "";
     for (let c = 0; c < topRow.length; c++) {
       const top = cellRgb(topRow[c]!);
@@ -1016,15 +1016,17 @@ export function renderTermlingsLogoSVG(pixelSize = 10): string {
   const w = cols * pixelSize;
   const h = rows * pixelSize;
 
-  function cellColor(c: "b" | "_"): string | null {
+  function cellColor(c: LogoPixel): string | null {
     if (c === "b") return "#8a2be2";
+    if (c === "d") return "#320d57";
     return null;
   }
 
-  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n`;
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges">\n`;
   for (let r = 0; r < rows; r++) {
+    const row = resolveLogoRow(r);
     for (let c = 0; c < cols; c++) {
-      const color = cellColor(LOGO_GRID[r]![c]!);
+      const color = cellColor(row[c]!);
       if (color) {
         svg += `<rect x="${c * pixelSize}" y="${r * pixelSize}" width="${pixelSize}" height="${pixelSize}" fill="${color}"/>\n`;
       }

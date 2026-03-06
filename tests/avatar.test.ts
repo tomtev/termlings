@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { decodeDNA, encodeDNA, generateRandomDNA, traitsFromName } from "../src/index.js";
+import { decodeDNA, encodeDNA, generateRandomDNA, renderTermlingsLogoSVG, traitsFromName } from "../src/index.js";
 
 describe("Avatar Generation", () => {
   it("should encode and decode DNA consistently", () => {
@@ -50,5 +50,14 @@ describe("Avatar Generation", () => {
     expect(traits).toHaveProperty("eyes");
     expect(traits).toHaveProperty("mouth");
     expect(traits).toHaveProperty("hat");
+  });
+
+  it("should render the logo mouth one cell to the left", () => {
+    const svg = renderTermlingsLogoSVG(4);
+    expect(svg).toContain('shape-rendering="crispEdges"');
+    expect(svg).toContain('<rect x="8" y="20" width="4" height="4" fill="#320d57"/>');
+    expect(svg).toContain('<rect x="12" y="20" width="4" height="4" fill="#320d57"/>');
+    expect(svg).toContain('<rect x="16" y="20" width="4" height="4" fill="#320d57"/>');
+    expect(svg).not.toContain('<rect x="20" y="20" width="4" height="4" fill="#320d57"/>');
   });
 });

@@ -41,6 +41,7 @@ export const FG_INPUT = "\x1b[38;5;253m"
 export const FG_OFFLINE_TEXT = "\x1b[38;5;252m"
 export const FG_IMAGE_TOKEN = "\x1b[38;5;216m"
 export const FG_MENTION_TOKEN = "\x1b[38;5;117m"
+export const FG_COMMAND_TOKEN = FG_SELECTED
 
 export const MESSAGE_SCROLL_STEP = 3
 export const CARD_SPACER_LINES = 0
@@ -197,6 +198,7 @@ export function composerInputBar(
   placeholder: boolean,
   cursor = "",
   cursorIndex?: number,
+  ghostText = "",
 ): string {
   const safeWidth = Math.max(0, width)
   if (safeWidth === 0) return ""
@@ -223,12 +225,18 @@ export function composerInputBar(
     const before = visible.slice(0, inViewIndex)
     const after = visible.slice(inViewIndex)
     const used = before.length + after.length
-    const padding = " ".repeat(Math.max(0, availableBody - used))
-    return `${BG_INPUT_PANEL}${FG_INPUT}${safePrefix}${bodyColor}${renderBodyText(before)}${cursor}${bodyColor}${renderBodyText(after)}${FG_INPUT}${padding}${ANSI_RESET}`
+    const hint = ghostText.length > 0
+      ? truncatePlain(ghostText, Math.max(0, availableBody - used))
+      : ""
+    const padding = " ".repeat(Math.max(0, availableBody - used - hint.length))
+    return `${BG_INPUT_PANEL}${FG_INPUT}${safePrefix}${bodyColor}${renderBodyText(before)}${cursor}${bodyColor}${renderBodyText(after)}${FG_PLACEHOLDER}${hint}${FG_INPUT}${padding}${ANSI_RESET}`
   }
 
-  const padding = " ".repeat(Math.max(0, availableBody - bodyText.length))
-  return `${BG_INPUT_PANEL}${FG_INPUT}${safePrefix}${bodyColor}${renderBodyText(bodyText)}${cursor}${FG_INPUT}${padding}${ANSI_RESET}`
+  const hint = ghostText.length > 0
+    ? truncatePlain(ghostText, Math.max(0, availableBody - bodyText.length))
+    : ""
+  const padding = " ".repeat(Math.max(0, availableBody - bodyText.length - hint.length))
+  return `${BG_INPUT_PANEL}${FG_INPUT}${safePrefix}${bodyColor}${renderBodyText(bodyText)}${cursor}${FG_PLACEHOLDER}${hint}${FG_INPUT}${padding}${ANSI_RESET}`
 }
 
 function highlightComposerTokens(input: string, baseColor: string): string {
@@ -237,6 +245,15 @@ function highlightComposerTokens(input: string, baseColor: string): string {
   let out = ""
   let lastIndex = 0
   let match: RegExpExecArray | null
+
+  const slashCommandMatch = input.match(/^\/[a-zA-Z0-9._-]+/)
+  if (slashCommandMatch) {
+    const token = slashCommandMatch[0]
+    out += `${FG_COMMAND_TOKEN}${token}${baseColor}`
+    lastIndex = token.length
+  }
+
+  tokenRegex.lastIndex = lastIndex
 
   while ((match = tokenRegex.exec(input)) !== null) {
     const token = match[0]

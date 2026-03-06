@@ -4,7 +4,7 @@ import { join } from "path"
 import { tmpdir } from "os"
 
 import { WorkspaceTui } from "../tui.js"
-import { truncateAnsi } from "../ui.js"
+import { ANSI_RESET, BG_INPUT_PANEL, FG_COMMAND_TOKEN, FG_CURSOR_BLOCK, FG_INPUT, FG_PLACEHOLDER, FG_SELECTED, FG_SUBTLE_HINT, truncateAnsi } from "../ui.js"
 
 describe("workspace tui render hot paths", () => {
   let root = ""
@@ -181,5 +181,181 @@ describe("workspace tui render hot paths", () => {
 
     tui.renderMessagesView(12, 60)
     expect(renderCardSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it("keeps the composer form background after inline color resets", () => {
+    root = mkdtempSync(join(tmpdir(), "termlings-tui-render-test-"))
+    const tui = new WorkspaceTui(root) as any
+    tui.composerMode = "form"
+    tui.composerForm = {
+      kind: "schedule",
+      threadId: "activity",
+      target: "",
+      targetLocked: false,
+      message: "",
+      recurrence: "daily",
+      date: "2026-03-06",
+      weekday: "mon",
+      time: "09:00",
+      timezone: "Europe/Oslo",
+      selectedFieldIndex: 0,
+    }
+
+    const lines = tui.renderComposerFormLines(80)
+    expect(lines[0]).toContain(`${BG_INPUT_PANEL}${FG_INPUT}`)
+    expect(lines[0]).toContain(`${FG_SELECTED}/schedule${FG_INPUT}`)
+    expect(lines[0]).toContain(`${ANSI_RESET}${BG_INPUT_PANEL}${FG_INPUT}`)
+  })
+
+  it("renders selected choice fields as left-right pickers instead of text cursors", () => {
+    root = mkdtempSync(join(tmpdir(), "termlings-tui-render-test-"))
+    const tui = new WorkspaceTui(root) as any
+    tui.composerMode = "form"
+    tui.composerForm = {
+      kind: "schedule",
+      threadId: "activity",
+      target: "agent:ceo",
+      targetLocked: false,
+      message: "Check in",
+      recurrence: "daily",
+      date: "2026-03-06",
+      weekday: "mon",
+      time: "09:00",
+      timezone: "Europe/Oslo",
+      selectedFieldIndex: 2,
+    }
+
+    const lines = tui.renderComposerFormLines(80).join("\n")
+    expect(lines).toContain(`Recurrence: ${FG_SUBTLE_HINT}←${ANSI_RESET}${BG_INPUT_PANEL}${FG_INPUT} daily ${FG_SUBTLE_HINT}→`)
+    expect(lines).not.toContain("Recurrence: daily█")
+  })
+
+  it("renders timezone as an explicit searchable field and the create action in blue", () => {
+    root = mkdtempSync(join(tmpdir(), "termlings-tui-render-test-"))
+    const tui = new WorkspaceTui(root) as any
+    tui.composerMode = "form"
+    tui.composerForm = {
+      kind: "schedule",
+      threadId: "activity",
+      target: "agent:ceo",
+      targetLocked: false,
+      message: "Check in",
+      recurrence: "daily",
+      date: "2026-03-06",
+      weekday: "mon",
+      time: "09:00",
+      timezone: "Europe/Oslo",
+      timeSegment: "hour",
+      search: {
+        timezone: {
+          open: true,
+          query: "oslo",
+          selectionIndex: 0,
+        },
+      },
+      selectedFieldIndex: 4,
+    }
+
+    const lines = tui.renderComposerFormLines(80).join("\n")
+    expect(lines).toContain("Timezone:")
+    expect(lines).toContain("oslo")
+    expect(lines).toContain("Europe/Oslo")
+    expect(lines).toContain("GMT")
+    expect(lines).toContain("\x1b[38;5;75m[Create schedule]")
+  })
+
+  it("asks for a target first on bare /schedule drafts in all activity", () => {
+    root = mkdtempSync(join(tmpdir(), "termlings-tui-render-test-"))
+    const tui = new WorkspaceTui(root) as any
+    tui.view = "messages"
+    tui.selectedThreadId = "activity"
+    tui.draft = "/schedule "
+    tui.draftCursorIndex = tui.draft.length
+
+    const lines = tui.renderComposerLines(80, tui.draft, false, tui.composerGhostHint()).join("\n")
+    expect(lines).toContain(`${FG_COMMAND_TOKEN}/schedule`)
+    expect(lines).toContain("Mention @agent first. Press Enter for details.")
+  })
+
+  it("shows a scheduled-message hint after a /schedule target is present", () => {
+    root = mkdtempSync(join(tmpdir(), "termlings-tui-render-test-"))
+    const tui = new WorkspaceTui(root) as any
+    tui.view = "messages"
+    tui.selectedThreadId = "activity"
+    tui.draft = "/schedule @Jordan "
+    tui.draftCursorIndex = tui.draft.length
+
+    const lines = tui.renderComposerLines(80, tui.draft, false, tui.composerGhostHint()).join("\n")
+    expect(lines).toContain(`${FG_COMMAND_TOKEN}/schedule`)
+    expect(lines).toContain("@Jordan")
+    expect(lines).toContain("Scheduled message. Press Enter for details.")
+  })
+
+  it("shows the schedule target identity instead of the raw thread id", () => {
+    root = mkdtempSync(join(tmpdir(), "termlings-tui-render-test-"))
+    const tui = new WorkspaceTui(root) as any
+    setSnapshot(tui, {
+      agents: [{
+        dna: "abc1234",
+        slug: "ceo",
+        name: "Jordan",
+        title: "Chief Executive Officer",
+        title_short: "CEO",
+        online: true,
+        typing: false,
+      }],
+      dmThreads: [{
+        id: "agent:ceo",
+        dna: "abc1234",
+        slug: "ceo",
+        label: "Jordan",
+        online: true,
+        typing: false,
+      }],
+    })
+    tui.composerMode = "form"
+    tui.composerForm = {
+      kind: "schedule",
+      threadId: "agent:ceo",
+      target: "agent:ceo",
+      targetLocked: true,
+      message: "",
+      recurrence: "daily",
+      date: "2026-03-06",
+      weekday: "mon",
+      time: "09:00",
+      timezone: "Europe/Oslo",
+      selectedFieldIndex: 1,
+    }
+
+    const lines = tui.renderComposerFormLines(80).join("\n")
+    expect(lines).toContain("To (thread):")
+    expect(lines).toContain("Jordan")
+    expect(lines).toContain("CEO")
+    expect(lines).not.toContain("agent:ceo")
+    expect(lines).toContain("Tip: you can also ask an agent to set up message schedules for you.")
+  })
+
+  it("renders empty text form fields as muted placeholders with a leading cursor", () => {
+    root = mkdtempSync(join(tmpdir(), "termlings-tui-render-test-"))
+    const tui = new WorkspaceTui(root) as any
+    tui.composerMode = "form"
+    tui.composerForm = {
+      kind: "schedule",
+      threadId: "activity",
+      target: "agent:ceo",
+      targetLocked: false,
+      message: "",
+      recurrence: "daily",
+      date: "2026-03-06",
+      weekday: "mon",
+      time: "09:00",
+      timezone: "Europe/Oslo",
+      selectedFieldIndex: 1,
+    }
+
+    const lines = tui.renderComposerFormLines(80).join("\n")
+    expect(lines).toContain(`Message: ${FG_CURSOR_BLOCK}█${FG_PLACEHOLDER}<Message to send>${FG_INPUT}`)
+    expect(lines).not.toContain("<Message to send>█")
   })
 })

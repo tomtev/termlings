@@ -15,7 +15,7 @@ USAGE:
 
 DAEMON MODE:
   • Checks every 60 seconds
-  • Runs due calendar events and task reminders
+  • Runs due calendar events, scheduled messages, and task reminders
   • Keeps running until Ctrl+C
   • Good for production workflows
 
@@ -26,12 +26,14 @@ EXAMPLES:
 
   # Background daemon (for production)
   $ termlings scheduler --daemon
-  📅 Starting scheduler daemon (calendar + task checks, press Ctrl+C to stop)
+  📅 Starting scheduler daemon (calendar + message + task checks, press Ctrl+C to stop)
   ✓ 09:00 Standup started
+  ✓ Scheduled DM -> agent:ceo
   ✓ Task reminder: task_... due now
 
 USE WHEN:
   • Need to auto-start meetings/tasks on schedule
+  • Need one-time, hourly, daily, or weekly DMs
   • Need due/overdue task reminders
   • Running a 24/7 agent team
   • Want hands-off calendar execution
@@ -41,6 +43,8 @@ USE WHEN:
 
   const { executeScheduledCalendarEvents, formatExecutionResults } =
     await import("../engine/calendar-scheduler.js");
+  const { executeScheduledMessages } =
+    await import("../engine/message-scheduler.js");
   const { executeScheduledTaskChecks, formatTaskScheduleExecutionResults } =
     await import("../engine/task-scheduler.js");
 
@@ -54,7 +58,7 @@ USE WHEN:
     });
 
     // Run as background daemon (keeps running)
-    console.log("📅 Starting scheduler daemon (calendar + task checks, press Ctrl+C to stop)");
+    console.log("📅 Starting scheduler daemon (calendar + message + task checks, press Ctrl+C to stop)");
 
     const runTick = () => {
       const calendarResults = executeScheduledCalendarEvents();
@@ -63,6 +67,14 @@ USE WHEN:
           if (!result.executed) continue;
           const agentList = result.agentsNotified.join(", ");
           console.log(`✓ Calendar "${result.title}" -> ${result.agentsNotified.length} agent(s): ${agentList}`);
+        }
+      }
+
+      const messageResults = executeScheduledMessages();
+      if (messageResults.length > 0) {
+        for (const result of messageResults) {
+          if (!result.executed) continue;
+          console.log(`✓ Scheduled message (${result.recurrence}) -> ${result.target}`);
         }
       }
 
@@ -100,20 +112,30 @@ USE WHEN:
   } else {
     // Single check
     const calendarResults = executeScheduledCalendarEvents();
+    const messageResults = executeScheduledMessages();
     const taskResults = executeScheduledTaskChecks();
 
     if (calendarResults.length > 0) {
       console.log(formatExecutionResults(calendarResults));
     }
 
-    if (taskResults.length > 0) {
+    if (messageResults.length > 0) {
       if (calendarResults.length > 0) {
+        console.log("");
+      }
+      for (const result of messageResults) {
+        console.log(`Scheduled message (${result.recurrence}) -> ${result.target}`);
+      }
+    }
+
+    if (taskResults.length > 0) {
+      if (calendarResults.length > 0 || messageResults.length > 0) {
         console.log("");
       }
       console.log(formatTaskScheduleExecutionResults(taskResults));
     }
 
-    if (calendarResults.length === 0 && taskResults.length === 0) {
+    if (calendarResults.length === 0 && messageResults.length === 0 && taskResults.length === 0) {
       console.log("No scheduled work to execute");
     }
     process.exit(0);
