@@ -15,13 +15,14 @@ import {
 import { spawnSync } from "child_process"
 import { tmpdir } from "os"
 import { join } from "path"
+import { fileURLToPath } from "url"
 import type { Cookie, HealthCheckResponse } from "./browser-types.js"
 import { getTermlingsDir } from "./ipc.js"
-import { getAvatarCSS, renderLayeredSVG } from "../index.js"
-import { readSession } from "../workspace/state.js"
+import { getAvatarCSS, renderLayeredSVG, renderSVG } from "../index.js"
 
 export interface BrowserTab {
   id: string
+  targetId?: string
   title?: string
   url?: string
   type?: string
@@ -97,6 +98,9 @@ function readBrowserLockMetadata(lockPath: string): BrowserLockMetadata | null {
 export class BrowserClient {
   private readonly cdpTarget: string
   private readonly timeout: number
+  private commandTabId: string | null = null
+  private tabIdentityScript: string | null = null
+  private tabIdentityScriptBuiltAt = 0
   private cursorScript: string | null = null
   private cursorScriptBuiltAt = 0
   private cursorLastX: number | null = null
@@ -139,10 +143,7 @@ export class BrowserClient {
     } = {}
   ): Promise<void> {
     await this.withSelectedTab(options.tabId, async () => {
-      this.captureCursorAnchorFromPage()
       this.runAgentBrowser(["open", url], options.timeout)
-      await this.ensureInPageAvatarCursor()
-      await this.recoverCursorAfterPotentialNavigation()
     })
   }
 
@@ -187,32 +188,23 @@ export class BrowserClient {
     options: { tabId?: string; selector?: string; ref?: string } = {}
   ): Promise<void> {
     await this.withSelectedTab(options.tabId, async () => {
-      await this.ensureInPageAvatarCursor()
-      this.captureCursorAnchorFromPage()
       if (options.ref && options.ref.trim().length > 0) {
         const ref = options.ref.startsWith("@") ? options.ref : `@${options.ref}`
         this.runAgentBrowser(["type", ref, text])
-        await this.recoverCursorAfterPotentialNavigation()
         return
       }
 
       if (options.selector && options.selector.trim().length > 0) {
-        await this.animateCursorToSelector(options.selector)
         this.runAgentBrowser(["type", options.selector, text])
-        await this.recoverCursorAfterPotentialNavigation()
         return
       }
 
       this.runAgentBrowser(["keyboard", "type", text])
-      await this.recoverCursorAfterPotentialNavigation()
     })
   }
 
   async focusSelector(selector: string, options: { tabId?: string } = {}): Promise<void> {
     await this.withSelectedTab(options.tabId, async () => {
-      await this.ensureInPageAvatarCursor()
-      this.captureCursorAnchorFromPage()
-      await this.animateCursorToSelector(selector)
       const selectorJson = JSON.stringify(selector)
       const result = this.runAgentBrowser([
         "eval",
@@ -239,7 +231,6 @@ export class BrowserClient {
       if (state && state.ok === false) {
         throw new Error(`Element not found for focus selector: ${selector}`)
       }
-      await this.recoverCursorAfterPotentialNavigation()
     })
   }
 
@@ -248,11 +239,7 @@ export class BrowserClient {
    */
   async clickSelector(selector: string, options: { tabId?: string } = {}): Promise<void> {
     await this.withSelectedTab(options.tabId, async () => {
-      await this.ensureInPageAvatarCursor()
-      this.captureCursorAnchorFromPage()
-      await this.animateCursorToSelector(selector)
       this.runAgentBrowser(["click", selector])
-      await this.recoverCursorAfterPotentialNavigation()
     })
   }
 
@@ -261,7 +248,6 @@ export class BrowserClient {
    */
   async extractText(options: { tabId?: string; raw?: boolean } = {}): Promise<string> {
     return await this.withSelectedTab(options.tabId, async () => {
-      await this.ensureInPageAvatarCursor()
       const data = this.runAgentBrowser(["get", "text", "body"])
       if (typeof data === "string") return data
       if (data && typeof data === "object") {
@@ -284,7 +270,6 @@ export class BrowserClient {
     tabId?: string
   } = {}): Promise<unknown> {
     return await this.withSelectedTab(options.tabId, async () => {
-      await this.ensureInPageAvatarCursor()
       const args = ["snapshot"]
       if (options.interactive) args.push("-i")
       if (options.compact) args.push("-c")
@@ -299,7 +284,6 @@ export class BrowserClient {
    */
   async getCookies(options: { tabId?: string } = {}): Promise<Cookie[]> {
     return await this.withSelectedTab(options.tabId, async () => {
-      await this.ensureInPageAvatarCursor()
       const data = this.runAgentBrowser(["cookies"])
       if (data && typeof data === "object") {
         const record = data as Record<string, unknown>
@@ -318,7 +302,6 @@ export class BrowserClient {
     options: { tabId?: string } = {}
   ): Promise<unknown> {
     return await this.withSelectedTab(options.tabId, async () => {
-      await this.ensureInPageAvatarCursor()
       const data = this.runAgentBrowser(["eval", script])
       if (data && typeof data === "object") {
         const record = data as Record<string, unknown>
@@ -337,7 +320,6 @@ export class BrowserClient {
     options: { tabId?: string } = {}
   ): Promise<void> {
     await this.withSelectedTab(options.tabId, async () => {
-      await this.ensureInPageAvatarCursor()
       this.runAgentBrowser(["wait", selector])
     })
   }
@@ -353,25 +335,25 @@ export class BrowserClient {
 
   async createTab(url?: string): Promise<string> {
     return await this.withBrowserLock(async () => {
-      this.captureCursorAnchorFromPage()
       const tabId = this.createTabUnlocked(url)
       if (tabId) {
-        this.selectTabUnlocked(tabId)
         const ownerKey = this.resolveTabOwnerKey()
         if (ownerKey) {
           this.recordOwnerTabUnlocked(ownerKey, tabId)
         }
+        this.lastSelectedTabId = tabId
+        await this.withCommandTab(tabId, async () => {
+          await this.ensureTabIdentityOnSelectedTab()
+        })
       }
-      await this.ensureInPageAvatarCursor()
-      await this.recoverCursorAfterPotentialNavigation()
       return tabId
     })
   }
 
   async closeTab(tabId: string): Promise<void> {
     await this.withBrowserLock(async () => {
-      const index = this.normalizeTabId(tabId)
-      this.runAgentBrowser(["tab", "close", String(index)])
+      const stableTabId = this.resolveTabRefUnlocked(tabId)
+      this.runAgentBrowser(["tab", "close", stableTabId])
     })
   }
 
@@ -385,30 +367,21 @@ export class BrowserClient {
 
   async typeIntoRef(tabId: string, ref: string, text: string): Promise<void> {
     await this.withSelectedTab(tabId, async () => {
-      await this.ensureInPageAvatarCursor()
-      this.captureCursorAnchorFromPage()
       const target = ref.startsWith("@") ? ref : `@${ref}`
       this.runAgentBrowser(["type", target, text])
-      await this.recoverCursorAfterPotentialNavigation()
     })
   }
 
   async pressKey(tabId: string, key: string, _ref?: string): Promise<void> {
     await this.withSelectedTab(tabId, async () => {
-      await this.ensureInPageAvatarCursor()
-      this.captureCursorAnchorFromPage()
       this.runAgentBrowser(["press", key])
-      await this.recoverCursorAfterPotentialNavigation()
     })
   }
 
   async clickRef(tabId: string, ref: string): Promise<void> {
     await this.withSelectedTab(tabId, async () => {
-      await this.ensureInPageAvatarCursor()
-      this.captureCursorAnchorFromPage()
       const target = ref.startsWith("@") ? ref : `@${ref}`
       this.runAgentBrowser(["click", target])
-      await this.recoverCursorAfterPotentialNavigation()
     })
   }
 
@@ -422,12 +395,30 @@ export class BrowserClient {
     return this.lastSelectedTabId
   }
 
-  private normalizeTabId(tabId: string): number {
+  private normalizeTabRef(tabId: string): string {
     const trimmed = String(tabId || "").trim()
-    if (!/^\d+$/.test(trimmed)) {
-      throw new Error(`Invalid tab index: ${tabId}`)
+    if (!trimmed) {
+      throw new Error(`Invalid tab reference: ${tabId}`)
     }
-    return Number.parseInt(trimmed, 10)
+    return trimmed
+  }
+
+  private resolveStableTabId(tab: BrowserTab): string {
+    const targetId = (tab.targetId || "").trim()
+    if (targetId) return targetId
+    return this.normalizeTabRef(tab.id)
+  }
+
+  private resolveTabRefUnlocked(tabRef: string): string {
+    const normalized = this.normalizeTabRef(tabRef)
+    const tabs = this.listTabsUnlocked()
+    const byStableId = tabs.find((tab) => this.resolveStableTabId(tab) === normalized)
+    if (byStableId) return this.resolveStableTabId(byStableId)
+    if (/^\d+$/.test(normalized)) {
+      const byDisplayId = tabs.find((tab) => tab.id === normalized)
+      if (byDisplayId) return this.resolveStableTabId(byDisplayId)
+    }
+    throw new Error(`Invalid tab reference: ${tabRef}`)
   }
 
   private async withSelectedTab<T>(tabId: string | undefined, run: () => Promise<T>): Promise<T> {
@@ -436,7 +427,7 @@ export class BrowserClient {
       let resolvedTabId: string | null = null
 
       if (typeof tabId === "string" && tabId.trim().length > 0) {
-        resolvedTabId = String(this.normalizeTabId(tabId))
+        resolvedTabId = this.resolveTabRefUnlocked(tabId)
         if (ownerKey) {
           this.recordOwnerTabUnlocked(ownerKey, resolvedTabId)
         }
@@ -445,19 +436,33 @@ export class BrowserClient {
       }
 
       if (resolvedTabId) {
-        this.selectTabUnlocked(resolvedTabId)
         this.lastSelectedTabId = resolvedTabId
       } else {
         this.lastSelectedTabId = null
       }
 
-      const result = await run()
+      return await this.withCommandTab(resolvedTabId, async () => {
+        const result = await run()
 
-      if (ownerKey && resolvedTabId) {
-        this.recordOwnerTabUnlocked(ownerKey, resolvedTabId)
-      }
-      return result
+        if (resolvedTabId) {
+          if (ownerKey) {
+            this.recordOwnerTabUnlocked(ownerKey, resolvedTabId)
+          }
+          await this.ensureTabIdentityOnSelectedTab()
+        }
+        return result
+      })
     })
+  }
+
+  private async withCommandTab<T>(tabId: string | null, run: () => Promise<T>): Promise<T> {
+    const previous = this.commandTabId
+    this.commandTabId = tabId
+    try {
+      return await run()
+    } finally {
+      this.commandTabId = previous
+    }
   }
 
   private lockFilePath(): string {
@@ -561,6 +566,7 @@ export class BrowserClient {
       const isActive = typeof tab.active === "boolean" ? tab.active : active === tabIndex
       return {
         id: String(tabIndex),
+        targetId: typeof tab.targetId === "string" ? tab.targetId : undefined,
         title: typeof tab.title === "string" ? tab.title : undefined,
         url: typeof tab.url === "string" ? tab.url : undefined,
         active: isActive,
@@ -576,8 +582,8 @@ export class BrowserClient {
     const data = this.runAgentBrowser(args)
     if (data && typeof data === "object") {
       const record = data as Record<string, unknown>
-      if (typeof record.index === "number") {
-        return String(record.index)
+      if (typeof record.targetId === "string" && record.targetId.trim().length > 0) {
+        return record.targetId.trim()
       }
     }
 
@@ -585,12 +591,12 @@ export class BrowserClient {
     if (tabs.length === 0) return ""
     const lastTab = tabs[tabs.length - 1]
     if (!lastTab) return ""
-    return lastTab.id
+    return this.resolveStableTabId(lastTab)
   }
 
   private selectTabUnlocked(tabId: string): void {
-    const index = this.normalizeTabId(tabId)
-    this.runAgentBrowser(["tab", String(index)])
+    const stableTabId = this.resolveTabRefUnlocked(tabId)
+    this.runAgentBrowser(["tab", stableTabId])
   }
 
   private tabOwnerStatePath(): string {
@@ -613,7 +619,7 @@ export class BrowserClient {
       for (const [ownerKey, raw] of Object.entries(rawOwners)) {
         const tabIdRaw = typeof raw?.tabId === "string" ? raw.tabId.trim() : ""
         const updatedAt = typeof raw?.updatedAt === "number" ? raw.updatedAt : 0
-        if (!tabIdRaw || !/^\d+$/.test(tabIdRaw) || updatedAt <= 0) continue
+        if (!tabIdRaw || updatedAt <= 0) continue
         owners[ownerKey] = {
           tabId: tabIdRaw,
           updatedAt,
@@ -639,7 +645,7 @@ export class BrowserClient {
     }
     for (const [ownerKey, owner] of Object.entries(state.owners || {})) {
       const tabId = (owner.tabId || "").trim()
-      if (!tabId || !/^\d+$/.test(tabId)) continue
+      if (!tabId) continue
       const updatedAt = typeof owner.updatedAt === "number" && owner.updatedAt > 0
         ? owner.updatedAt
         : now
@@ -689,18 +695,9 @@ export class BrowserClient {
     this.writeTabOwnerStateUnlocked(state)
   }
 
-  private isBlankLikeTab(tab: BrowserTab): boolean {
-    const url = (tab.url || "").trim().toLowerCase()
-    const title = (tab.title || "").trim().toLowerCase()
-    if (!url || url === "about:blank") return true
-    if (url.startsWith("chrome://newtab")) return true
-    if (!title) return true
-    return false
-  }
-
   private resolveOrAssignOwnerTabUnlocked(ownerKey: string): string | null {
     const tabs = this.listTabsUnlocked()
-    const knownTabIds = new Set(tabs.map((tab) => tab.id))
+    const knownTabIds = new Set(tabs.map((tab) => this.resolveStableTabId(tab)))
     const state = this.readTabOwnerStateUnlocked()
     this.pruneTabOwnerStateUnlocked(state, knownTabIds)
 
@@ -712,32 +709,10 @@ export class BrowserClient {
       return existing.tabId
     }
 
-    const claimedByOthers = new Set<string>()
-    for (const [otherOwner, assignment] of Object.entries(state.owners)) {
-      if (otherOwner === ownerKey) continue
-      if (knownTabIds.has(assignment.tabId)) {
-        claimedByOthers.add(assignment.tabId)
-      }
-    }
-
-    let assignedTabId = ""
-
-    // Reuse blank/unclaimed tabs first.
-    const blankCandidate = tabs.find((tab) => !claimedByOthers.has(tab.id) && this.isBlankLikeTab(tab))
-    if (blankCandidate) {
-      assignedTabId = blankCandidate.id
-    }
-
-    // If nothing is claimed yet, allow taking the current active tab.
-    if (!assignedTabId && tabs.length > 0 && claimedByOthers.size === 0) {
-      const active = tabs.find((tab) => Boolean(tab.active || tab.current || tab.selected || tab.focused))
-      assignedTabId = (active || tabs[0])?.id || ""
-    }
-
-    // Otherwise create an isolated tab for this owner.
-    if (!assignedTabId) {
-      assignedTabId = this.createTabUnlocked("about:blank")
-    }
+    // Agent sessions get isolated tabs by default. Reusing Chrome's initial
+    // bootstrap tab is unreliable in headed mode and can leave background
+    // navigation stuck on about:blank.
+    let assignedTabId = this.createTabUnlocked("about:blank")
 
     if (!assignedTabId) {
       this.writeTabOwnerStateUnlocked(state)
@@ -803,27 +778,31 @@ export class BrowserClient {
     }
   }
 
+  private browserRunnerPath(): string {
+    return fileURLToPath(new URL("./browser-runner.mjs", import.meta.url))
+  }
+
   private runAgentBrowser(commandArgs: string[], timeoutOverride?: number): unknown {
     const timeout = typeof timeoutOverride === "number" && timeoutOverride > 0
       ? timeoutOverride
       : this.timeout
 
     const args = [
-      "--native",
-      "--json",
+      this.browserRunnerPath(),
       "--cdp",
       this.cdpTarget,
       ...commandArgs,
     ]
 
     const frontmostApp = this.captureFrontmostMacApp()
-    const proc = spawnSync("agent-browser", args, {
+    const proc = spawnSync("node", args, {
       encoding: "utf8",
       timeout,
       maxBuffer: 50 * 1024 * 1024,
       env: {
         ...process.env,
-        AGENT_BROWSER_DEFAULT_TIMEOUT: String(Math.max(1_000, Math.min(25_000, timeout))),
+        TERMLINGS_BROWSER_TIMEOUT_MS: String(Math.max(1_000, Math.min(25_000, timeout))),
+        ...(this.commandTabId ? { TERMLINGS_BROWSER_SELECTED_TAB_ID: this.commandTabId } : {}),
       },
     })
     this.restoreFrontmostMacApp(frontmostApp)
@@ -831,10 +810,10 @@ export class BrowserClient {
     if (proc.error) {
       const code = (proc.error as NodeJS.ErrnoException).code
       if (code === "ENOENT") {
-        throw new Error("agent-browser CLI not found. Install with: npm install -g agent-browser && agent-browser install")
+        throw new Error("Browser runner failed to start")
       }
       if (code === "ETIMEDOUT") {
-        throw new Error(`agent-browser command timed out after ${timeout}ms`)
+        throw new Error(`Browser command timed out after ${timeout}ms`)
       }
       throw proc.error
     }
@@ -849,12 +828,12 @@ export class BrowserClient {
       if (rawOutput.length > 0) {
         throw new Error(rawOutput)
       }
-      throw new Error(`agent-browser exited with status ${proc.status}`)
+      throw new Error(`Browser runner exited with status ${proc.status}`)
     }
 
     if (!envelope) return rawOutput
     if (envelope.success === false) {
-      throw new Error(envelope.error || "agent-browser command failed")
+      throw new Error(envelope.error || "Browser command failed")
     }
     return envelope.data
   }
@@ -874,34 +853,18 @@ export class BrowserClient {
   private resolveAvatarCandidateSlugs(): string[] {
     const slug = (process.env.TERMLINGS_AGENT_SLUG || "").trim()
     if (slug) return [slug]
-
-    const watcherSlug = this.resolveWatcherAgentSlug()
-    if (watcherSlug) return [watcherSlug]
-
     return []
   }
 
-  private resolveWatcherAgentSlug(): string | null {
-    if ((process.env.TERMLINGS_BROWSER_CURSOR_WATCHER || "").trim() !== "1") return null
-
-    try {
-      const tabs = this.listTabsUnlocked()
-      const activeTab = tabs.find((tab) => Boolean(tab.active || tab.current || tab.selected || tab.focused))
-      if (!activeTab) return null
-
-      const owners = this.readTabOwnerStateUnlocked().owners
-      const owner = Object.values(owners).find((entry) => entry.tabId === activeTab.id)
-      if (!owner?.agentSlug) return null
-
-      if (owner.sessionId) {
-        const session = readSession(owner.sessionId)
-        if (!session) return null
-      }
-
-      return owner.agentSlug
-    } catch {
-      return null
+  private resolveTabIdentityLabel(): string | null {
+    const name = (process.env.TERMLINGS_AGENT_NAME || "").trim()
+    if (name) {
+      return name.length > 18 ? `${name.slice(0, 17)}…` : name
     }
+
+    const slug = (process.env.TERMLINGS_AGENT_SLUG || "").trim()
+    if (!slug) return null
+    return slug.length > 18 ? `${slug.slice(0, 17)}…` : slug
   }
 
   private readAgentDNA(slug: string): string | null {
@@ -914,6 +877,145 @@ export class BrowserClient {
       return match?.[1]?.toLowerCase() || null
     } catch {
       return null
+    }
+  }
+
+  private readPreferredAgentDna(): string | null {
+    const fromEnv = (process.env.TERMLINGS_AGENT_DNA || "").trim().toLowerCase()
+    if (/^[0-9a-f]{6,16}$/.test(fromEnv)) {
+      return fromEnv
+    }
+
+    for (const slug of this.resolveAvatarCandidateSlugs()) {
+      const dna = this.readAgentDNA(slug)
+      if (dna) return dna
+    }
+
+    return null
+  }
+
+  private svgToDataUrl(svg: string): string {
+    const compact = svg
+      .replace(/\r?\n+/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim()
+    return `data:image/svg+xml,${encodeURIComponent(compact)}`
+  }
+
+  private buildTabIdentityFavicon(): { iconHref: string; signature: string } {
+    const agentDna = this.readPreferredAgentDna()
+    if (agentDna) {
+      try {
+        const svg = renderSVG(agentDna, 2, 0, "auto", 0)
+        return {
+          iconHref: this.svgToDataUrl(svg),
+          signature: `dna-svg:${agentDna}`,
+        }
+      } catch {
+        // fall through to label-only favicon below
+      }
+    }
+
+    const label = this.resolveTabIdentityLabel() || "A"
+    const glyph = label.slice(0, 1).toUpperCase()
+    const svg = [
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">`,
+      `<rect x="1" y="1" width="14" height="14" rx="3" fill="#111827"/>`,
+      `<text x="8" y="11" text-anchor="middle" font-family="monospace" font-size="8" fill="#ffffff">${glyph}</text>`,
+      `</svg>`,
+    ].join("")
+    return {
+      iconHref: this.svgToDataUrl(svg),
+      signature: `glyph:${glyph}`,
+    }
+  }
+
+  private buildTabIdentityScript(): string | null {
+    const label = this.resolveTabIdentityLabel()
+    if (!label) return null
+
+    const favicon = this.buildTabIdentityFavicon()
+    const signatureJson = JSON.stringify(`label:${label}:${favicon.signature}`)
+    const prefixJson = JSON.stringify(`[${label}] `)
+    const iconHrefJson = JSON.stringify(favicon.iconHref)
+
+    return `(() => {
+  const GLOBAL_KEY = "__termlingsTabIdentity";
+  const ICON_ID = "__termlingsTabIdentityIcon";
+  const signature = ${signatureJson};
+  const iconHref = ${iconHrefJson};
+  const titlePrefix = ${prefixJson};
+  const root = document.documentElement || document;
+  if (!root) return { ok: false, reason: "no-root" };
+
+  const previous = window[GLOBAL_KEY];
+  if (previous && previous.signature === signature && typeof previous.apply === "function") {
+    previous.apply();
+    return { ok: true, reused: true, title: document.title };
+  }
+
+  const state = {
+    signature,
+    titlePrefix,
+    iconHref,
+    originalTitle: "",
+    apply() {
+      const head = document.head || document.getElementsByTagName("head")[0] || root;
+      if (head) {
+        let icon = document.getElementById(ICON_ID);
+        if (!icon || icon.tagName !== "LINK") {
+          icon = document.createElement("link");
+          icon.id = ICON_ID;
+          icon.setAttribute("data-termlings-tab-identity", "1");
+          head.appendChild(icon);
+        }
+        icon.setAttribute("rel", "icon");
+        icon.setAttribute("type", "image/svg+xml");
+        if (icon.getAttribute("href") !== iconHref) {
+          icon.setAttribute("href", iconHref);
+        }
+      }
+
+      const currentTitle = typeof document.title === "string" ? document.title : "";
+      if (!currentTitle.startsWith(titlePrefix)) {
+        state.originalTitle = currentTitle || state.originalTitle || "Browser";
+      }
+
+      const baseTitle = (state.originalTitle || currentTitle || "Browser").trim() || "Browser";
+      const nextTitle = titlePrefix + baseTitle;
+      if (currentTitle !== nextTitle) {
+        document.title = nextTitle;
+      }
+    },
+  };
+  window[GLOBAL_KEY] = state;
+  state.apply();
+  return { ok: true, title: document.title };
+})()`
+  }
+
+  private async ensureTabIdentityOnSelectedTab(force = false): Promise<void> {
+    try {
+      const now = Date.now()
+      if (!this.tabIdentityScript || force || now - this.tabIdentityScriptBuiltAt > 2_500) {
+        this.tabIdentityScript = this.buildTabIdentityScript()
+        this.tabIdentityScriptBuiltAt = now
+      }
+
+      if (!this.tabIdentityScript) return
+
+      const attempts = force ? 4 : 2
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        try {
+          this.runAgentBrowser(["eval", this.tabIdentityScript])
+          return
+        } catch {
+          if (attempt >= attempts - 1) return
+          await this.sleep(120)
+        }
+      }
+    } catch {
+      // best-effort only
     }
   }
 

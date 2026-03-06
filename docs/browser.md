@@ -10,7 +10,7 @@ Default values are optimized for human-in-the-loop operations:
 - Workspace-scoped persistent profile (one profile per project)
 - Shared browser instance for all agents (coordination via tabs)
 - Operator takeover is always possible in the visible browser
-- In-page avatar cursor auto-reinjection watchdog while browser is running
+- Owned tabs get an agent favicon and title prefix automatically
 
 This default is ideal for login-heavy workflows, approvals, and assisted browsing.
 
@@ -114,16 +114,15 @@ termlings browser check-login [--tab <index>]
 termlings browser request-help "Need manual login"
 ```
 
-`termlings browser click ...` automatically animates the in-page avatar cursor toward the target before issuing the click (single command, no separate cursor call needed).
-`termlings browser focus ...` and selector-based `termlings browser type ...` use the same pre-action cursor movement.
-Cursor identity now follows only the connected agent session (`TERMLINGS_AGENT_SLUG`); if no connected agent is available, the cursor overlay is hidden.
+Owned tabs automatically reflect the connected agent session (`TERMLINGS_AGENT_SLUG`) by stamping the tab favicon and title.
+Use `termlings browser cursor` only when you want a manual in-page avatar preview while debugging a page.
 
 ## Tabs and Shared Access
 
 All agents share one browser process per workspace.
 
 - `termlings browser tabs list` returns tab indexes
-- By default, when `--tab` is omitted, Termlings auto-assigns a stable tab per agent session and reuses it
+- By default, when `--tab` is omitted, Termlings auto-assigns a stable tab per agent session, reuses it, and reapplies that agent's tab identity
 - Explicit `--tab <index>` overrides auto-assignment and updates that agent's tab ownership
 - Ownership state is stored in `.termlings/browser/tab-owners.json`
 - Use `--tab <index>` when you need strict/manual control
@@ -168,7 +167,7 @@ Notes:
 
 Environment toggles:
 
-- `TERMLINGS_BROWSER_INPAGE_CURSOR=true|false`: enable/disable in-page avatar cursor overlay injection (default: `true`)
+- `TERMLINGS_BROWSER_INPAGE_CURSOR=true|false`: enable/disable the optional manual in-page avatar cursor preview (default: `true`)
 - `TERMLINGS_BROWSER_PRESERVE_FOCUS=true|false`: on macOS, keep terminal/app focus while agent sessions run browser commands (default: enabled for agent sessions)
 
 TUI integration:

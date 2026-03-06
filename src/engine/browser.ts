@@ -9,19 +9,14 @@ import {
   readFileSync,
   readlinkSync,
   readdirSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from "fs"
 import { spawnSync } from "child_process"
 import { createHash } from "crypto"
-import { basename, dirname, join, resolve } from "path"
-import { fileURLToPath } from "url"
+import { basename, join } from "path"
 import { getTermlingsDir } from "./ipc.js"
 import type { BrowserConfig, ProcessState, ActivityLogEntry, ProfileReference, AgentBrowserState } from "./browser-types.js"
-
-const ENGINE_FILE_PATH = fileURLToPath(import.meta.url)
-const ENGINE_DIR = dirname(ENGINE_FILE_PATH)
 
 /**
  * Get the browser directory (.termlings/browser)
@@ -124,49 +119,6 @@ export function getBrowserConfigPath(): string {
  */
 export function getProcessStatePath(): string {
   return join(getTermlingsBrowserDir(), "process.json")
-}
-
-interface CursorWatcherState {
-  pid: number | null
-  port: number
-  status: "running" | "stopped"
-  startedAt: number | null
-  signature?: string
-}
-
-function getCursorWatcherStatePath(): string {
-  return join(getTermlingsBrowserDir(), "cursor-watcher.json")
-}
-
-function readCursorWatcherState(): CursorWatcherState | null {
-  const path = getCursorWatcherStatePath()
-  if (!existsSync(path)) return null
-  try {
-    return JSON.parse(readFileSync(path, "utf8")) as CursorWatcherState
-  } catch {
-    return null
-  }
-}
-
-function writeCursorWatcherState(state: CursorWatcherState): void {
-  writeFileSync(getCursorWatcherStatePath(), JSON.stringify(state, null, 2) + "\n")
-}
-
-function currentCursorWatcherSignature(cliPath: string): string {
-  const sourceFiles = [
-    resolve(cliPath),
-    ENGINE_FILE_PATH,
-    join(ENGINE_DIR, "browser-client.ts"),
-    join(ENGINE_DIR, "..", "commands", "browser.ts"),
-  ]
-
-  return sourceFiles.map((path) => {
-    try {
-      return `${path}:${statSync(path).mtimeMs}`
-    } catch {
-      return `${path}:missing`
-    }
-  }).join("|")
 }
 
 /**
@@ -592,83 +544,6 @@ export async function initializeBrowserDirs(): Promise<void> {
   getOrCreateProfileReference()
 }
 
-export async function stopInPageCursorWatcher(): Promise<void> {
-  const state = readCursorWatcherState()
-  if (!state || !state.pid) return
-  await terminateProcess(state.pid, 1200)
-  writeCursorWatcherState({
-    pid: null,
-    port: state.port,
-    status: "stopped",
-    startedAt: null,
-    signature: state.signature,
-  })
-}
-
-export async function ensureInPageCursorWatcher(
-  port: number,
-  options: { intervalMs?: number } = {},
-): Promise<void> {
-  const disabled = (process.env.TERMLINGS_BROWSER_INPAGE_CURSOR || "").trim().toLowerCase()
-  if (disabled === "0" || disabled === "false" || disabled === "off" || disabled === "no") {
-    await stopInPageCursorWatcher()
-    return
-  }
-
-  const existing = readCursorWatcherState()
-  const execPath = process.execPath || "bun"
-  const cliPath = process.argv[1] || join(process.cwd(), "bin", "termlings.js")
-  const signature = currentCursorWatcherSignature(cliPath)
-
-  if (
-    existing
-    && existing.status === "running"
-    && existing.pid
-    && isProcessAlive(existing.pid)
-    && existing.port === port
-    && existing.signature === signature
-  ) {
-    return
-  }
-  if (existing && existing.pid && isProcessAlive(existing.pid)) {
-    await terminateProcess(existing.pid, 800)
-  }
-
-  const spawn = (await import("bun")).spawn
-  const intervalMs = Math.max(80, Math.min(2000, Math.round(options.intervalMs ?? 240)))
-  const proc = spawn(
-    [
-      execPath,
-      cliPath,
-      "browser",
-      "__cursor-watch",
-      "--port",
-      String(port),
-      "--interval-ms",
-      String(intervalMs),
-    ],
-    {
-      detached: true,
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-      env: {
-        ...process.env,
-        TERMLINGS_BROWSER_CURSOR_WATCHER: "1",
-      },
-    },
-  )
-  proc.unref()
-
-  writeCursorWatcherState({
-    pid: proc.pid,
-    port,
-    status: "running",
-    startedAt: Date.now(),
-    signature,
-  })
-}
-
 /**
  * Start headed Chrome with CDP enabled for this workspace.
  */
@@ -803,8 +678,6 @@ export async function startBrowser(options: { headless?: boolean } = {}): Promis
  * Stop Chrome CDP browser process
  */
 export async function stopBrowser(): Promise<void> {
-  await stopInPageCursorWatcher()
-
   const state = readProcessState()
   if (!state || !state.pid) return
 
@@ -852,14 +725,14 @@ function extractTabIdFromArgs(args: unknown[]): string | undefined {
 
     if (trimmed.startsWith("--tab=")) {
       const candidate = trimmed.slice("--tab=".length).trim()
-      if (/^\d+$/.test(candidate)) return candidate
+      if (candidate) return candidate
       continue
     }
     if (trimmed === "--tab" && i + 1 < args.length) {
       const next = args[i + 1]
       if (typeof next === "string") {
         const candidate = next.trim()
-        if (/^\d+$/.test(candidate)) return candidate
+        if (candidate) return candidate
       }
     }
   }
@@ -878,7 +751,7 @@ function readAgentBrowserState(sessionId: string): AgentBrowserState | null {
 
 function resolveSessionBrowserTabId(sessionId: string): string | undefined {
   const fromAgentState = readAgentBrowserState(sessionId)?.tabId?.trim()
-  if (fromAgentState && /^\d+$/.test(fromAgentState)) {
+  if (fromAgentState) {
     return fromAgentState
   }
 
@@ -891,13 +764,13 @@ function resolveSessionBrowserTabId(sessionId: string): string | undefined {
     const owners = parsed.owners || {}
     const ownerKey = `session:${sessionId}`
     const direct = owners[ownerKey]?.tabId?.trim()
-    if (direct && /^\d+$/.test(direct)) {
+    if (direct) {
       return direct
     }
     for (const owner of Object.values(owners)) {
       const candidateSessionId = (owner?.sessionId || "").trim()
       const candidateTabId = (owner?.tabId || "").trim()
-      if (candidateSessionId === sessionId && /^\d+$/.test(candidateTabId)) {
+      if (candidateSessionId === sessionId && candidateTabId) {
         return candidateTabId
       }
     }

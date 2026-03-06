@@ -45,42 +45,10 @@ export async function handleBrowser(flags: Set<string>, positional: string[], op
     isAgentBrowserAvailable,
     logBrowserActivity,
     readProcessState,
-    ensureInPageCursorWatcher,
   } = await import("../engine/browser.js");
   const { BrowserClient } = await import("../engine/browser-client.js");
 
   const subcommand = positional[1];
-
-  if (subcommand === "__cursor-watch") {
-    const portRaw = opts.port ?? positional[2];
-    const intervalRaw = opts["interval-ms"] ?? opts.interval_ms ?? opts.intervalMs;
-    const port = Number.parseInt(String(portRaw ?? ""), 10);
-    const intervalMs = Math.max(80, Math.min(2000, Number.parseInt(String(intervalRaw ?? "240"), 10) || 240));
-    if (!Number.isFinite(port) || port <= 0) {
-      process.exit(1);
-    }
-
-    const { readProcessState } = await import("../engine/browser.js");
-    const client = new BrowserClient(port);
-    let running = true;
-    const stop = () => { running = false; };
-    process.on("SIGINT", stop);
-    process.on("SIGTERM", stop);
-
-    while (running) {
-      const state = readProcessState();
-      if (!state || state.status !== "running" || state.port !== port) {
-        break;
-      }
-      try {
-        await client.ensureAvatarCursor({ force: true });
-      } catch {
-        // best-effort watchdog
-      }
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
-    }
-    return;
-  }
 
   // Show help
   if (!subcommand || subcommand === "--help" || subcommand === "help") {
@@ -107,13 +75,13 @@ NAVIGATION:
   termlings browser extract [--tab <index>] Get visible page text
   termlings browser tabs list         List open tabs
   termlings browser overview          Show browser + tabs overview
-  Note: when --tab is omitted, agent sessions auto-pin to a stable tab
+  Note: when --tab is omitted, agent sessions auto-pin to a stable tab and stamp that tab with agent identity
 
 INTERACTION:
   termlings browser type <text> [--tab <index>] Type into focused element
   termlings browser click <selector> [--tab <index>] Click element by CSS selector
   termlings browser focus <selector> [--tab <index>] Focus element by CSS selector
-  termlings browser cursor [--tab <index>] Ensure in-page avatar cursor overlay
+  termlings browser cursor [--tab <index>] Preview optional in-page avatar cursor overlay
   termlings browser cookies list [--tab <index>] List all cookies
 
 HUMAN-IN-LOOP:
@@ -143,7 +111,7 @@ EXAMPLES:
 ENVIRONMENT:
   TERMLINGS_AGENT_NAME               Your name (auto-logged)
   TERMLINGS_AGENT_DNA                Your stable ID (auto-logged)
-  TERMLINGS_BROWSER_INPAGE_CURSOR    true/false (default: true)
+  TERMLINGS_BROWSER_INPAGE_CURSOR    true/false for optional cursor preview (default: true)
   TERMLINGS_BROWSER_PRESERVE_FOCUS   true/false (macOS, default: true for agent sessions)
 
 PROFILES:
@@ -183,10 +151,6 @@ PROFILES:
       const wasRunning = await isBrowserRunning();
       if (wasRunning) {
         console.log("✓ Browser already running");
-        const runningState = readProcessState();
-        if (runningState?.port) {
-          await ensureInPageCursorWatcher(runningState.port);
-        }
         if (headlessMode !== undefined) {
           console.log("  Requested mode ignored. Stop browser first to switch headed/headless mode.");
         }
@@ -205,13 +169,6 @@ PROFILES:
       console.log(`Profile: ${profileRef.location}`);
       console.log(`CDP endpoint: http://127.0.0.1:${port}`);
       console.log(`Runtime: agent-browser --native --cdp ${port}`);
-      await ensureInPageCursorWatcher(port);
-      try {
-        const client = new BrowserClient(port);
-        await client.ensureAvatarCursor();
-      } catch {
-        // Best-effort visual cursor setup.
-      }
       return;
     } catch (e) {
       console.error(`Error starting browser: ${e}`);
@@ -338,8 +295,6 @@ PROFILES:
     const payloadArgs = appendEffectiveTabArg(args, effectiveTabId);
     await logBrowserActivity(command, payloadArgs, result, error, effectiveTabId);
   };
-
-  await ensureInPageCursorWatcher(state.port);
 
   try {
     if (subcommand === "overview") {
@@ -533,13 +488,9 @@ PROFILES:
     }
 
     if (subcommand === "cursor") {
-      const runningState = readProcessState();
-      if (runningState?.port) {
-        await ensureInPageCursorWatcher(runningState.port);
-      }
       await client.ensureAvatarCursor({ tabId, force: true });
       await logActivity("cursor", tabId ? [`--tab=${tabId}`] : []);
-      console.log("✓ In-page avatar cursor overlay active");
+      console.log("✓ In-page avatar cursor preview active");
       return;
     }
 
