@@ -69,7 +69,7 @@ Each Termling agent gets role-specific context derived from its `SOUL.md` plus s
 ## Why Termlings? 
 There are many ways to orchestrate AI agents — but Termlings makes it feel like running a real company. Agents have roles, personalities, and report to each other through a natural org chart. 
 
-The built-in terminal UI is like an AI-native Slack: chat with your agents, track tasks, and manage scheduled events — all from your terminal.
+The built-in terminal UI is like an AI-native Slack: chat with your agents, track tasks, manage scheduled events, and create one-time or recurring DMs with `/schedule` — all from your terminal.
 
 ## Core Commands
 
@@ -86,7 +86,7 @@ The built-in terminal UI is like an AI-native Slack: chat with your agents, trac
 | `termlings avatar <dna|name>` | Render avatar identity | [docs/AVATARS.md](docs/AVATARS.md) |
 | `termlings --help` | Full command reference | CLI help |
 | `termlings --server` | Run secure HTTP API server [WIP] | [docs/SERVER.md](docs/SERVER.md) |
-| `termlings scheduler --daemon` | Run scheduler daemon (calendar/tasks) | [docs/SCHEDULER.md](docs/SCHEDULER.md) |
+| `termlings scheduler --daemon` | Run scheduler daemon (calendar/messages/tasks) | [docs/SCHEDULER.md](docs/SCHEDULER.md) |
 
 ### Agent-facing commands
 These are primarily for agents running inside sessions. You can run them manually when needed.
@@ -100,6 +100,7 @@ You should not run these commands since they mostly work inside a agent session.
 | `termlings brand <cmd>` | Manage brand profiles | [docs/BRAND.md](docs/BRAND.md) |
 | `termlings message <target> <text>` | Send DM to session/agent/human | [docs/MESSAGING.md](docs/MESSAGING.md) |
 | `termlings conversation <target>` | Read recent channel/DM history | [docs/MESSAGING.md](docs/MESSAGING.md) |
+| `termlings workflow <cmd>` | Workflow checklist commands | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) |
 | `termlings task <cmd>` | Task workflow commands | [docs/TASK.md](docs/TASK.md) |
 | `termlings calendar <cmd>` | Calendar/event workflow | [docs/CALENDAR.md](docs/CALENDAR.md) |
 | `termlings request <type>` | Ask operator for decisions/credentials | [docs/REQUESTS.md](docs/REQUESTS.md) |
@@ -130,11 +131,19 @@ You should not run these commands since they mostly work inside a agent session.
       dms/*.jsonl
       system.jsonl
       index.json
+    message-schedules/
+      schedules.json
     presence/
       tl-*.typing.json
     tasks/tasks.json
     calendar/calendar.json
+    workflows/
+      <slug>/*.json
     requests/*.json
+  workflows/
+    org/*.json
+    agents/
+      <slug>/*.json
   browser/
     config.json
     process.json
@@ -155,10 +164,14 @@ What each file/folder is for:
 - `.termlings/store/sessions/tl-*.json` - live session presence and metadata.
 - `.termlings/store/message-queue/` - transient live inboxes (`tl-*.msg.json`) and offline agent queues (`*.queue.jsonl`).
 - `.termlings/store/messages/` - append-only channel/DM/system history.
+- `.termlings/store/message-schedules/schedules.json` - one-time, hourly, daily, and weekly DM definitions.
 - `.termlings/store/presence/` - session typing/activity state.
 - `.termlings/store/tasks/tasks.json` - task list and task state.
 - `.termlings/store/calendar/calendar.json` - events and recurrence.
+- `.termlings/store/workflows/<slug>/*.json` - running workflow copies with step completion state.
 - `.termlings/store/requests/*.json` - operator request records.
+- `.termlings/workflows/org/*.json` - org-wide workflow checklists.
+- `.termlings/workflows/agents/<slug>/*.json` - agent-specific workflow checklists.
 - `.termlings/browser/config.json` - browser runtime settings (CDP port, binary, profile path).
 - `.termlings/browser/process.json` - active browser process/CDP state.
 - `.termlings/browser/profile.json` - workspace profile metadata.
@@ -187,6 +200,7 @@ This is intentionally separated so operator docs stay short.
 - [docs/TEMPLATES.md](docs/TEMPLATES.md) - local and git template references
 - [docs/MESSAGING.md](docs/MESSAGING.md) - messaging model
 - [docs/SKILLS.md](docs/SKILLS.md) - skills.sh wrapper behavior and agent workflow
+- [docs/WORKFLOWS.md](docs/WORKFLOWS.md) - workflow checklist system
 - [docs/TASK.md](docs/TASK.md) - task system
 - [docs/CALENDAR.md](docs/CALENDAR.md) - calendar system
 - [docs/REQUESTS.md](docs/REQUESTS.md) - operator request workflow

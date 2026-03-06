@@ -219,7 +219,7 @@ export async function handleInit(
     console.log(`
 🚀 Init - Initialize Termlings workspace
 
-Set up a new Termlings project with agents, tasks, calendar, and storage.
+Set up a new Termlings project with agents, workflows, tasks, calendar, and storage.
 
 REQUIREMENTS:
   At least one coding runtime must be installed and logged in:
@@ -234,6 +234,7 @@ USAGE:
 CREATES:
   .termlings/
   ├── agents/                Saved agents (avatar + metadata)
+  ├── workflows/             Reusable workflow definitions
   ├── store/                 Persistent data
   ├── brand/                 Brand profile data
   ├── browser/               Browser runtime state (history, process, config)

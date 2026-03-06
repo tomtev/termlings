@@ -191,6 +191,7 @@ Agent System:
   termlings conversation <target>     Read message history
   termlings request <type> Request decision/env var from operator
   termlings task <cmd>     Task management
+  termlings workflow <cmd> Workflow checklists
   termlings calendar <cmd> Calendar management
   termlings brand <cmd>    Brand profiles (colors/logo/voice/domain/email)
 

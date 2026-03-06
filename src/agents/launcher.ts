@@ -557,7 +557,7 @@ export async function launchAgent(
 - Use \`termlings list-agents\` to discover teammates.
 - Use \`termlings message <target> <message>\` to communicate.
 - Use \`termlings message human:<id> <message>\` to DM human operators.
-- Use \`termlings task\` and \`termlings calendar\` for task/calendar management.`
+- Use \`termlings workflow\`, \`termlings task\`, and \`termlings calendar\` for shared workflow management.`
     }
     env.TERMLINGS_CONTEXT = envContext
   }

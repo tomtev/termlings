@@ -67,6 +67,10 @@ function storeDir(root: string): string {
   return join(termlingsDir(root), "store")
 }
 
+function workflowsDir(root: string): string {
+  return join(termlingsDir(root), "workflows")
+}
+
 function sessionsDir(root: string): string {
   return join(storeDir(root), "sessions")
 }
@@ -333,7 +337,10 @@ export function ensureWorkspaceDirs(root = process.cwd()): void {
   mkdirSync(base, { recursive: true })
   mkdirSync(join(base, "agents"), { recursive: true })
   mkdirSync(join(base, "humans"), { recursive: true })
+  mkdirSync(join(workflowsDir(root), "org"), { recursive: true })
+  mkdirSync(join(workflowsDir(root), "agents"), { recursive: true })
   mkdirSync(storeDir(root), { recursive: true })
+  mkdirSync(join(storeDir(root), "workflows"), { recursive: true })
   mkdirSync(sessionsDir(root), { recursive: true })
   mkdirSync(presenceDir(root), { recursive: true })
   mkdirSync(join(base, "browser"), { recursive: true })

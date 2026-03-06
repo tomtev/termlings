@@ -57,6 +57,7 @@ USAGE:
 INCLUDES:
   - Current session identity
   - Org structure + online status
+  - Workflow summary
   - Task status summary
   - Calendar event summary
   - Brand profile summary
@@ -74,6 +75,7 @@ INCLUDES:
     { discoverLocalHumans },
     { listSessions },
     { getAllTasks },
+    { getAgentWorkflowRuns, getAllWorkflowRuns, getAllWorkflows, getOrgWorkflows, workflowRunCompleted, workflowRunProgress },
     { getAllCalendarEvents, getAgentCalendarEvents },
     { readBrand },
     { listRequests },
@@ -83,6 +85,7 @@ INCLUDES:
     import("../humans/discover.js"),
     import("../workspace/state.js"),
     import("../engine/tasks.js"),
+    import("../engine/workflows.js"),
     import("../engine/calendar.js"),
     import("../engine/brand.js"),
     import("../engine/requests.js"),
@@ -93,6 +96,9 @@ INCLUDES:
   const agents = discoverLocalAgents();
   const humans = discoverLocalHumans();
   const tasks = getAllTasks();
+  const workflowDefinitions = getAllWorkflows();
+  const orgWorkflows = getOrgWorkflows();
+  const allWorkflowRuns = getAllWorkflowRuns();
   const events = getAllCalendarEvents();
   const brand = readBrand(cwd);
   const pendingRequests = listRequests("pending");
@@ -196,6 +202,12 @@ INCLUDES:
     .sort((a, b) => b.updatedAt - a.updatedAt);
   const recentTasks = [...tasks].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 5);
 
+  const myWorkflowRuns = activeAgentSlug ? getAgentWorkflowRuns(activeAgentSlug) : [];
+  const activeWorkflowRuns = allWorkflowRuns.filter((run) => !workflowRunCompleted(run));
+  const completedWorkflowRuns = allWorkflowRuns.filter((run) => workflowRunCompleted(run));
+  const myActiveWorkflowRuns = myWorkflowRuns.filter((run) => !workflowRunCompleted(run));
+  const myCompletedWorkflowRuns = myWorkflowRuns.filter((run) => workflowRunCompleted(run));
+
   const enabledEvents = events.filter((event) => event.enabled);
   const getEventNextTs = (event: (typeof events)[number]): number => {
     if (typeof event.nextNotification === "number" && Number.isFinite(event.nextNotification)) {
@@ -266,6 +278,25 @@ INCLUDES:
         updatedAt: task.updatedAt,
         unresolvedDependencies: unresolvedDependencyCount(task),
       })),
+    },
+    workflows: {
+      totalDefinitions: workflowDefinitions.length,
+      orgDefinitions: orgWorkflows.length,
+      activeRuns: activeWorkflowRuns.length,
+      completedRuns: completedWorkflowRuns.length,
+      myActiveRuns: myActiveWorkflowRuns.length,
+      myCompletedRuns: myCompletedWorkflowRuns.length,
+      recentMine: myWorkflowRuns.slice(0, 5).map((run) => {
+        const progress = workflowRunProgress(run);
+        return {
+          ref: run.workflowRef,
+          title: run.workflowTitle,
+          updatedAt: run.updatedAt,
+          done: progress.done,
+          total: progress.total,
+          status: run.status,
+        };
+      }),
     },
     calendar: {
       totalEvents: events.length,
@@ -403,6 +434,24 @@ INCLUDES:
   }
   console.log("");
 
+  console.log("Workflows");
+  console.log(`- Definitions: ${brief.workflows.totalDefinitions} · Org definitions: ${brief.workflows.orgDefinitions} · Active runs: ${brief.workflows.activeRuns} · Completed runs: ${brief.workflows.completedRuns}`);
+  if (activeAgentSlug) {
+    console.log(`- Your workflow runs (${activeAgentSlug}): ${brief.workflows.myActiveRuns} active, ${brief.workflows.myCompletedRuns} completed`);
+  }
+
+  if (brief.workflows.recentMine.length > 0) {
+    console.log("- Your running workflows:");
+    for (const workflow of brief.workflows.recentMine) {
+      console.log(
+        `  [${workflow.ref}] ${truncate(workflow.title, 70)} · ${workflow.done}/${workflow.total} done · ${workflow.status} · ${formatRelativeAge(workflow.updatedAt, now)}`
+      );
+    }
+  } else if (activeAgentSlug) {
+    console.log("- No running workflows for your agent");
+  }
+  console.log("");
+
   console.log("Calendar");
   console.log(
     `- Total events: ${brief.calendar.totalEvents} · Enabled: ${brief.calendar.enabledEvents} · Ongoing now: ${brief.calendar.ongoingNow} · Upcoming 24h: ${brief.calendar.upcoming24h}`
@@ -486,6 +535,7 @@ INCLUDES:
   console.log("Startup Routine");
   console.log("- Run this command first in new sessions: termlings brief");
   console.log("- Then pick work: termlings task list");
+  console.log("- Check your active workflow runs: termlings workflow list --active");
   console.log("- Check timing: termlings calendar list");
   console.log("- Coordinate: termlings message <target> <text>");
 }

@@ -10,7 +10,10 @@ export * from "./messaging-util.js"
 // Calendar & Tasks
 export * from "./tasks.js"
 export * from "./calendar.js"
+export * from "./workflows.js"
 export * from "./calendar-scheduler.js"
+export * from "./message-schedules.js"
+export * from "./message-scheduler.js"
 export * from "./task-scheduler.js"
 
 // Browser Automation

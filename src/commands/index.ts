@@ -5,6 +5,7 @@
 import { handleListAgents, handleMessage } from "./messaging.js";
 import { handleTask } from "./tasks.js";
 import { handleCalendar } from "./calendar.js";
+import { handleWorkflow } from "./workflow.js";
 import { handleBrowser } from "./browser.js";
 import { handleScheduler } from "./scheduler.js";
 import { handleInit } from "./init.js";
@@ -49,6 +50,10 @@ export async function routeCommand(
 
     case "task":
       await handleTask(flags, positional);
+      return true;
+
+    case "workflow":
+      await handleWorkflow(flags, positional, opts);
       return true;
 
     case "calendar":

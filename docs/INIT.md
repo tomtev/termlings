@@ -8,8 +8,10 @@ Initialize a Termlings workspace in your project.
 bun add -g termlings@latest
 
 # one-step run without global install
-npx termlings --spawn
+npx termlings@latest --spawn
 ```
+
+Requires Bun.
 
 ## Quick Start
 
@@ -66,6 +68,10 @@ termlings spawn
 │   │   └── tasks.json           # Task definitions
 │   ├── calendar/
 │   │   └── calendar.json        # Calendar events
+│   ├── workflows/               # Running workflow copies
+├── workflows/                    # Shared checklists
+│   ├── org/
+│   └── agents/
 ├── agents/                       # Saved agent definitions
 │   └── [your agents here]
 └── browser/                      # Browser automation runtime state
@@ -186,6 +192,10 @@ You only need one of Claude or Codex installed and logged in.
 │   │   └── tasks.json    # All tasks
 │   ├── calendar/
 │   │   └── calendar.json # Calendar events
+│   ├── workflows/       # Running workflow copies
+├── workflows/
+│   ├── org/             # Org-wide workflow definitions
+│   └── agents/          # Agent-specific workflow definitions
 ├── agents/
 │   ├── [agent-name]/
 │   │   ├── SOUL.md       # Personality/role
@@ -205,8 +215,9 @@ You only need one of Claude or Codex installed and logged in.
 After initialization, you can customize:
 
 1. **Agents** - Create agents with `termlings create`
-2. **Calendar** - Set up events with `termlings calendar create`
-3. **Tasks** - Add tasks via CLI or programmatically
+2. **Workflows** - Add workflow definitions with `termlings workflow create '{"title":"...","steps":[...]}'`
+3. **Calendar** - Set up events with `termlings calendar create`
+4. **Tasks** - Add tasks via CLI or programmatically
 
 ## Best Practices
 

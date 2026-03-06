@@ -13,6 +13,7 @@ termlings brief --json
 
 - Session identity (`TERMLINGS_SESSION_ID`, active agent slug/name)
 - Org summary (humans, agents, online status, active sessions)
+- Workflow summary (org workflow count, your workflows, recent checklist progress)
 - Task summary (status counts, open/blocked/recent tasks)
 - Calendar summary (enabled/upcoming/ongoing events)
 - Brand summary (if `.termlings/brand/brand.json` exists)
@@ -26,6 +27,7 @@ Default output is terminal-friendly and grouped by section:
 - `Session`
 - `Org`
 - `Tasks`
+- `Workflows`
 - `Calendar`
 - `Brand`
 - `Requests`
@@ -45,6 +47,7 @@ Common fields:
 
 - `.org.agents[]`
 - `.tasks.recentTasks[]`
+- `.workflows.recentMine[]`
 - `.calendar.nextEvents[]`
 - `.requests.latestPending[]`
 - `.messaging.hottestChannels[]`
@@ -53,4 +56,5 @@ Common fields:
 
 - [ORG-CHART.md](ORG-CHART.md)
 - [TASK.md](TASK.md)
+- [WORKFLOWS.md](WORKFLOWS.md)
 - [CALENDAR.md](CALENDAR.md)

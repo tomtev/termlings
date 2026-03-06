@@ -51,7 +51,7 @@ Use this for:
 ## Operating Model
 
 - **Tasks are the primary unit of work.** Use tasks to plan, delegate, track, and coordinate everything.
-- Collaborate through DMs, tasks, and calendar
+- Collaborate through DMs, workflows, tasks, and calendar
 - Communicate explicitly with `termlings message`
 - Work autonomously and keep humans/operators updated
 - Final reporting follows the org chart (`reports_to` chain)
@@ -67,6 +67,7 @@ termlings org-chart --help             # Team discovery
 termlings message --help               # Messaging guide
 termlings conversation --help          # Read recent conversation history
 termlings request --help               # Request inputs/decisions/env vars
+termlings workflow --help              # Workflow checklists
 termlings task --help                  # Task management
 termlings calendar --help              # Calendar events
 termlings skills --help                # Skills discovery/install/update (skills.sh wrapper)
@@ -100,6 +101,15 @@ termlings task note <id> "progress update"         # Add notes
 termlings task status <id> completed "notes"       # Mark as done
 termlings task depends <id> <dep-id>              # Add dependency
 termlings task depends <id> --remove <dep-id>     # Remove dependency
+```
+
+**Workflow checklists:**
+```bash
+termlings workflow list                            # Org workflows + your workflows
+termlings workflow list --active                   # Only runs still in progress
+termlings workflow create '{"title":"Ship feature","steps":["Write tests","Ship"]}'  # Create a workflow definition
+termlings workflow start org/release-deploy        # Start a running copy
+termlings workflow step done <ref> <step-id>       # Mark a step done on the running copy (last step auto-completes the run)
 ```
 
 **Calendar:**
