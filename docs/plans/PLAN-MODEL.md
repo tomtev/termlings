@@ -1,4 +1,4 @@
-# Plans
+# Plan Model
 
 Plans are the strategic layer above tasks and workflows.
 
@@ -77,5 +77,9 @@ A future Plans app could become an agent-native file-based app with:
 - progress rollups
 - owner and status fields
 - CLI, TUI, and context injection support
+
+Related planning docs:
+
+- [APP-ACTIVITY.md](APP-ACTIVITY.md) - shared activity output system for core apps and future custom apps
 
 For now, plans should stay lightweight and explicit in docs.

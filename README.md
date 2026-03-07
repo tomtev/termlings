@@ -218,7 +218,7 @@ This is intentionally separated so operator docs stay short.
 - [docs/MESSAGING.md](docs/MESSAGING.md) - messaging model
 - [docs/SKILLS.md](docs/SKILLS.md) - skills.sh wrapper behavior and agent workflow
 - [docs/WORKFLOWS.md](docs/WORKFLOWS.md) - workflow checklist system
-- [docs/PLANS.md](docs/PLANS.md) - planning model and future direction
+- [docs/plans/README.md](docs/plans/README.md) - planning model and future direction
 - [docs/TASK.md](docs/TASK.md) - task system
 - [docs/CALENDAR.md](docs/CALENDAR.md) - calendar system
 - [docs/CRM.md](docs/CRM.md) - file-based CRM records and timelines
