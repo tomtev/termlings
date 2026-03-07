@@ -227,8 +227,7 @@ This is intentionally separated so operator docs stay short.
 - [docs/BRAND.md](docs/BRAND.md) - brand schema and commands
 - [docs/browser.md](docs/browser.md) - browser automation
 - [docs/DOCKER.md](docs/DOCKER.md) - full Docker-native workspace
-- [docs/API.md](docs/API.md) - HTTP API server reference
-- [docs/SERVER.md](docs/SERVER.md) - `termlings --server` design and security plan
+- [docs/SERVER.md](docs/SERVER.md) - `termlings --server` command, API, architecture, and security
 - [docs/AVATARS.md](docs/AVATARS.md) - avatar rendering
 - [docs/PRESENCE.md](docs/PRESENCE.md) - presence + typing model
 - [docs/SETTINGS.md](docs/SETTINGS.md) - workspace.json settings
