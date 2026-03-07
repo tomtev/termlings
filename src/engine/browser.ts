@@ -4,8 +4,10 @@
 
 import {
   appendFileSync,
+  closeSync,
   existsSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readlinkSync,
   readdirSync,
@@ -14,9 +16,17 @@ import {
 } from "fs"
 import { spawnSync } from "child_process"
 import { createHash } from "crypto"
-import { basename, join } from "path"
+import { basename, join, resolve, sep } from "path"
 import { getTermlingsDir } from "./ipc.js"
-import type { BrowserConfig, ProcessState, ActivityLogEntry, ProfileReference, AgentBrowserState } from "./browser-types.js"
+import type {
+  BrowserConfig,
+  ProcessState,
+  ActivityLogEntry,
+  ProfileReference,
+  AgentBrowserState,
+  AgentBrowserPresenceEndReason,
+  AgentBrowserPresenceStatus,
+} from "./browser-types.js"
 
 /**
  * Get the browser directory (.termlings/browser)
@@ -121,6 +131,10 @@ export function getProcessStatePath(): string {
   return join(getTermlingsBrowserDir(), "process.json")
 }
 
+export function getBrowserLifecycleLockPath(): string {
+  return join(getTermlingsBrowserDir(), ".lifecycle.lock")
+}
+
 /**
  * Get browser history directory (.termlings/browser/history)
  */
@@ -172,6 +186,11 @@ export const DEFAULT_BROWSER_CONFIG: BrowserConfig = {
   startupPollMs: 250,
 }
 
+const AGENT_BROWSER_STATE_VERSION = 2
+const DEFAULT_AGENT_BROWSER_STALE_MS = 300_000
+const BROWSER_LIFECYCLE_LOCK_STALE_MS = 120_000
+const BROWSER_LIFECYCLE_LOCK_WAIT_MS = 30_000
+
 /**
  * Load or create browser configuration
  */
@@ -181,18 +200,22 @@ export function getBrowserConfig(): BrowserConfig {
     try {
       const content = readFileSync(configPath, "utf8")
       const parsed = JSON.parse(content) as Partial<BrowserConfig>
-      return {
+      const resolved = {
         ...DEFAULT_BROWSER_CONFIG,
         ...parsed,
         profilePath: parsed.profilePath && parsed.profilePath.trim().length > 0
           ? parsed.profilePath
           : getBrowserProfileDir(),
       }
+      assertSafeBrowserProfilePath(resolved.profilePath)
+      return resolved
     } catch {
       return { ...DEFAULT_BROWSER_CONFIG, profilePath: getBrowserProfileDir() }
     }
   }
-  return { ...DEFAULT_BROWSER_CONFIG, profilePath: getBrowserProfileDir() }
+  const fallback = { ...DEFAULT_BROWSER_CONFIG, profilePath: getBrowserProfileDir() }
+  assertSafeBrowserProfilePath(fallback.profilePath)
+  return fallback
 }
 
 /**
@@ -207,6 +230,7 @@ export function updateBrowserConfig(config: Partial<BrowserConfig>): BrowserConf
       ? config.profilePath
       : current.profilePath,
   }
+  assertSafeBrowserProfilePath(updated.profilePath)
   writeFileSync(getBrowserConfigPath(), JSON.stringify(updated, null, 2) + "\n")
   return updated
 }
@@ -287,6 +311,84 @@ function buildStoppedProcessState(port: number, profilePath?: string): ProcessSt
     startedAt: null,
     profilePath,
     mode: "cdp",
+  }
+}
+
+interface BrowserLifecycleLockMetadata {
+  pid: number
+  createdAt: number
+}
+
+function readBrowserLifecycleLock(lockPath: string): BrowserLifecycleLockMetadata | null {
+  if (!existsSync(lockPath)) return null
+  try {
+    const raw = readFileSync(lockPath, "utf8").trim()
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<BrowserLifecycleLockMetadata>
+    const pid = typeof parsed.pid === "number" ? parsed.pid : Number.parseInt(String(parsed.pid ?? ""), 10)
+    const createdAt = typeof parsed.createdAt === "number" ? parsed.createdAt : 0
+    if (!Number.isFinite(pid) || pid <= 0) return null
+    if (!Number.isFinite(createdAt) || createdAt <= 0) return null
+    return { pid, createdAt }
+  } catch {
+    return null
+  }
+}
+
+export async function runWithBrowserLifecycleLock<T>(fn: () => Promise<T>): Promise<T> {
+  const lockPath = getBrowserLifecycleLockPath()
+  mkdirSync(getTermlingsBrowserDir(), { recursive: true })
+
+  const startedAt = Date.now()
+  let lockFd: number | null = null
+
+  while (lockFd === null) {
+    try {
+      lockFd = openSync(lockPath, "wx")
+      try {
+        writeFileSync(lockFd, JSON.stringify({ pid: process.pid, createdAt: Date.now() }) + "\n", "utf8")
+      } catch (error) {
+        try {
+          closeSync(lockFd)
+        } catch {}
+        lockFd = null
+        try {
+          if (existsSync(lockPath)) unlinkSync(lockPath)
+        } catch {}
+        throw error
+      }
+      break
+    } catch (error) {
+      const maybeErr = error as NodeJS.ErrnoException
+      if (maybeErr.code !== "EEXIST") throw error
+
+      const metadata = readBrowserLifecycleLock(lockPath)
+      const stale = !metadata
+        || !isProcessAlive(metadata.pid)
+        || Date.now() - metadata.createdAt > BROWSER_LIFECYCLE_LOCK_STALE_MS
+      if (stale) {
+        try {
+          unlinkSync(lockPath)
+        } catch {}
+        continue
+      }
+
+      if (Date.now() - startedAt > BROWSER_LIFECYCLE_LOCK_WAIT_MS) {
+        throw new Error("Timed out waiting for browser lifecycle lock")
+      }
+      await sleep(120)
+    }
+  }
+
+  try {
+    return await fn()
+  } finally {
+    try {
+      if (lockFd !== null) closeSync(lockFd)
+    } catch {}
+    try {
+      if (existsSync(lockPath)) unlinkSync(lockPath)
+    } catch {}
   }
 }
 
@@ -513,6 +615,53 @@ function resolveChromeBinary(preferredBinaryPath?: string): string {
   )
 }
 
+function defaultBrowserProfileRoots(): string[] {
+  const home = process.env.HOME || ""
+  if (!home) return []
+
+  if (process.platform === "darwin") {
+    return [
+      join(home, "Library", "Application Support", "Google", "Chrome"),
+      join(home, "Library", "Application Support", "Chromium"),
+    ]
+  }
+
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA || ""
+    return [
+      join(localAppData, "Google", "Chrome", "User Data"),
+      join(localAppData, "Chromium", "User Data"),
+    ].filter((value) => value.trim().length > 0)
+  }
+
+  return [
+    join(home, ".config", "google-chrome"),
+    join(home, ".config", "chromium"),
+  ]
+}
+
+export function isDefaultBrowserProfilePath(profilePath: string): boolean {
+  const normalized = resolve(String(profilePath || "").trim())
+  if (!normalized) return false
+  return defaultBrowserProfileRoots().some((root) => {
+    const resolvedRoot = resolve(root)
+    return normalized === resolvedRoot || normalized.startsWith(`${resolvedRoot}${sep}`)
+  })
+}
+
+export function assertSafeBrowserProfilePath(profilePath: string): void {
+  const trimmed = String(profilePath || "").trim()
+  if (!trimmed) {
+    throw new Error("Browser profile path must not be empty")
+  }
+  if (isDefaultBrowserProfilePath(trimmed)) {
+    throw new Error(
+      `Refusing to use default Chrome/Chromium profile path: ${trimmed}. `
+      + `Use the dedicated Termlings profile under ~/.termlings/chrome-profiles/.`
+    )
+  }
+}
+
 /**
  * Check if browser binary is available
  */
@@ -533,8 +682,10 @@ export async function initializeBrowserDirs(): Promise<void> {
   mkdirSync(baseDir, { recursive: true })
   mkdirSync(getActivityHistoryDir(), { recursive: true })
   mkdirSync(getAgentActivityHistoryDir(), { recursive: true })
+  mkdirSync(getAgentBrowserStateDir(), { recursive: true })
 
   const current = getBrowserConfig()
+  assertSafeBrowserProfilePath(current.profilePath)
   mkdirSync(current.profilePath, { recursive: true })
 
   if (!existsSync(getBrowserConfigPath())) {
@@ -548,149 +699,162 @@ export async function initializeBrowserDirs(): Promise<void> {
  * Start headed Chrome with CDP enabled for this workspace.
  */
 export async function startBrowser(options: { headless?: boolean } = {}): Promise<{ pid: number; port: number }> {
-  await initializeBrowserDirs()
+  return await runWithBrowserLifecycleLock(async () => {
+    await initializeBrowserDirs()
 
-  const config = getBrowserConfig()
-  const startupConfig = getStartupConfig(config)
+    const config = getBrowserConfig()
+    const startupConfig = getStartupConfig(config)
 
-  const existing = readProcessState()
-  if (existing && existing.status === "running" && existing.pid !== null) {
-    const alive = isProcessAlive(existing.pid)
-    if (alive) {
-      try {
-        const cdpInfo = await fetchCdpVersion(existing.port, 1500)
-        updateProcessState({
-          ...existing,
-          cdpWsUrl: typeof cdpInfo.webSocketDebuggerUrl === "string"
-            ? cdpInfo.webSocketDebuggerUrl
-            : existing.cdpWsUrl,
-          mode: "cdp",
-          profilePath: existing.profilePath || config.profilePath,
-        })
-        return { pid: existing.pid, port: existing.port }
-      } catch {
-        // Stale process state; terminate the stale process before restart.
-        await terminateProcess(existing.pid)
+    const existing = readProcessState()
+    if (existing && existing.status === "running" && existing.pid !== null) {
+      const alive = isProcessAlive(existing.pid)
+      if (alive) {
+        try {
+          const cdpInfo = await fetchCdpVersion(existing.port, 1500)
+          updateProcessState({
+            ...existing,
+            cdpWsUrl: typeof cdpInfo.webSocketDebuggerUrl === "string"
+              ? cdpInfo.webSocketDebuggerUrl
+              : existing.cdpWsUrl,
+            mode: "cdp",
+            profilePath: existing.profilePath || config.profilePath,
+          })
+          return { pid: existing.pid, port: existing.port }
+        } catch {
+          await terminateProcess(existing.pid)
+          updateProcessState(buildStoppedProcessState(existing.port, existing.profilePath || config.profilePath))
+        }
+      } else {
         updateProcessState(buildStoppedProcessState(existing.port, existing.profilePath || config.profilePath))
       }
-    } else {
-      updateProcessState(buildStoppedProcessState(existing.port, existing.profilePath || config.profilePath))
     }
-  }
 
-  if (!isAgentBrowserAvailable()) {
-    throw new Error("agent-browser CLI is required. Install with: npm install -g agent-browser && agent-browser install")
-  }
+    if (!isAgentBrowserAvailable()) {
+      throw new Error("agent-browser CLI is required. Install with: npm install -g agent-browser && agent-browser install")
+    }
 
-  const spawn = (await import("bun")).spawn
-  const profilePath = config.profilePath && config.profilePath.trim().length > 0
-    ? config.profilePath
-    : getBrowserProfileDir()
-  mkdirSync(profilePath, { recursive: true })
-  await terminateProcessesUsingProfile(profilePath)
-  cleanupStaleProfileLocks(profilePath)
+    const spawn = (await import("bun")).spawn
+    const profilePath = config.profilePath && config.profilePath.trim().length > 0
+      ? config.profilePath
+      : getBrowserProfileDir()
+    assertSafeBrowserProfilePath(profilePath)
+    mkdirSync(profilePath, { recursive: true })
+    await terminateProcessesUsingProfile(profilePath)
+    cleanupStaleProfileLocks(profilePath)
 
-  const binary = resolveChromeBinary(config.binaryPath)
-  const headless = options.headless === true
+    const binary = resolveChromeBinary(config.binaryPath)
+    const headless = options.headless === true
 
-  const failures: Array<Record<string, unknown>> = []
-  for (let attempt = 1; attempt <= startupConfig.attempts; attempt++) {
-    const portBase = config.port + ((attempt - 1) * 20)
-    const availablePort = await findAvailablePort(portBase)
-    const launchArgs = [
-      `--remote-debugging-port=${availablePort}`,
-      `--user-data-dir=${profilePath}`,
-      "--profile-directory=Default",
-      "--no-first-run",
-      "--disable-search-engine-choice-screen",
-      "--no-default-browser-check",
-      ...(headless ? ["--headless=new", "--disable-gpu", "--hide-scrollbars"] : []),
-      "about:blank",
-    ]
+    const failures: Array<Record<string, unknown>> = []
+    for (let attempt = 1; attempt <= startupConfig.attempts; attempt++) {
+      const portBase = config.port + ((attempt - 1) * 20)
+      const availablePort = await findAvailablePort(portBase)
+      const launchArgs = [
+        `--remote-debugging-port=${availablePort}`,
+        `--user-data-dir=${profilePath}`,
+        "--profile-directory=Default",
+        "--no-first-run",
+        "--disable-search-engine-choice-screen",
+        "--no-default-browser-check",
+        ...(headless ? ["--headless=new", "--disable-gpu", "--hide-scrollbars"] : []),
+        "about:blank",
+      ]
 
-    const proc = spawn([binary, ...launchArgs], {
-      detached: true,
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-      env: {
-        ...process.env,
-      },
-    })
-    proc.unref()
+      const proc = spawn([binary, ...launchArgs], {
+        detached: true,
+        stdin: "ignore",
+        stdout: "ignore",
+        stderr: "ignore",
+        env: {
+          ...process.env,
+        },
+      })
+      proc.unref()
 
-    const pid = proc.pid
-
-    try {
-      const cdpInfo = await waitForCdpReady(pid, availablePort, startupConfig.timeoutMs, startupConfig.pollMs)
+      const pid = proc.pid
       updateProcessState({
         pid,
         port: availablePort,
-        status: "running",
-        startedAt: Date.now(),
-        url: `http://127.0.0.1:${availablePort}`,
-        cdpWsUrl: typeof cdpInfo.webSocketDebuggerUrl === "string" ? cdpInfo.webSocketDebuggerUrl : undefined,
+        status: "starting",
+        startedAt: null,
         profilePath,
         mode: "cdp",
       })
 
-      updateProfileReference()
+      try {
+        const cdpInfo = await waitForCdpReady(pid, availablePort, startupConfig.timeoutMs, startupConfig.pollMs)
+        updateProcessState({
+          pid,
+          port: availablePort,
+          status: "running",
+          startedAt: Date.now(),
+          url: `http://127.0.0.1:${availablePort}`,
+          cdpWsUrl: typeof cdpInfo.webSocketDebuggerUrl === "string" ? cdpInfo.webSocketDebuggerUrl : undefined,
+          profilePath,
+          mode: "cdp",
+        })
 
-      return { pid, port: availablePort }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
-      const entry: Record<string, unknown> = {
-        ts: Date.now(),
-        attempt,
-        attempts: startupConfig.attempts,
-        timeoutMs: startupConfig.timeoutMs,
-        pollMs: startupConfig.pollMs,
-        pid,
-        port: availablePort,
-        profilePath,
-        binary,
-        headless,
-        error: errorMessage,
-      }
-      failures.push(entry)
-      appendStartupFailureLog(entry)
+        updateProfileReference()
 
-      await terminateProcess(pid)
-      cleanupStaleProfileLocks(profilePath)
+        return { pid, port: availablePort }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        const entry: Record<string, unknown> = {
+          ts: Date.now(),
+          attempt,
+          attempts: startupConfig.attempts,
+          timeoutMs: startupConfig.timeoutMs,
+          pollMs: startupConfig.pollMs,
+          pid,
+          port: availablePort,
+          profilePath,
+          binary,
+          headless,
+          error: errorMessage,
+        }
+        failures.push(entry)
+        appendStartupFailureLog(entry)
 
-      if (attempt < startupConfig.attempts) {
-        await sleep(Math.min(1000, 200 * attempt))
+        await terminateProcess(pid)
+        cleanupStaleProfileLocks(profilePath)
+
+        if (attempt < startupConfig.attempts) {
+          await sleep(Math.min(1000, 200 * attempt))
+        }
       }
     }
-  }
 
-  updateProcessState(buildStoppedProcessState(config.port, profilePath))
-  const lastFailure = failures[failures.length - 1]
-  const lastError = typeof lastFailure?.error === "string" ? lastFailure.error : "unknown startup error"
-  throw new Error(
-    `Chrome CDP did not become ready after ${startupConfig.attempts} attempt(s). `
-    + `Last error: ${lastError}. `
-    + `See ${getBrowserStartupErrorLogPath()} for diagnostics.`
-  )
+    updateProcessState(buildStoppedProcessState(config.port, profilePath))
+    const lastFailure = failures[failures.length - 1]
+    const lastError = typeof lastFailure?.error === "string" ? lastFailure.error : "unknown startup error"
+    throw new Error(
+      `Chrome CDP did not become ready after ${startupConfig.attempts} attempt(s). `
+      + `Last error: ${lastError}. `
+      + `See ${getBrowserStartupErrorLogPath()} for diagnostics.`
+    )
+  })
 }
 
 /**
  * Stop Chrome CDP browser process
  */
 export async function stopBrowser(): Promise<void> {
-  const state = readProcessState()
-  if (!state || !state.pid) return
+  await runWithBrowserLifecycleLock(async () => {
+    const state = readProcessState()
+    if (!state || !state.pid) return
 
-  const pid = state.pid
-  const profilePath = state.profilePath
+    const pid = state.pid
+    const profilePath = state.profilePath
 
-  await terminateProcess(pid, 3000)
+    await terminateProcess(pid, 3000)
 
-  if (profilePath) {
-    cleanupStaleProfileLocks(profilePath)
-  }
+    if (profilePath) {
+      cleanupStaleProfileLocks(profilePath)
+    }
 
-  updateProcessState(buildStoppedProcessState(state.port, state.profilePath))
+    updateProcessState(buildStoppedProcessState(state.port, state.profilePath))
+    closeActiveAgentBrowserStates("closed")
+  })
 }
 
 /**
@@ -709,11 +873,60 @@ export async function isBrowserRunning(): Promise<boolean> {
   }
 }
 
+export async function waitForBrowserReady(timeoutMs: number = 6000, pollMs: number = 150): Promise<ProcessState | null> {
+  const startedAt = Date.now()
+  const interval = Math.max(50, pollMs)
+  const minimumWaitMs = Math.min(timeoutMs, 800)
+
+  while (Date.now() - startedAt <= timeoutMs) {
+    const state = readProcessState()
+    if (state && state.status === "running" && state.pid && isProcessAlive(state.pid)) {
+      try {
+        await fetchCdpVersion(state.port, Math.min(1500, interval * 4))
+        return state
+      } catch {
+        // keep polling
+      }
+    }
+
+    if (state && state.status === "starting" && state.pid && isProcessAlive(state.pid)) {
+      try {
+        const cdpInfo = await fetchCdpVersion(state.port, Math.min(1500, interval * 4))
+        const runningState: ProcessState = {
+          ...state,
+          status: "running",
+          startedAt: state.startedAt ?? Date.now(),
+          url: state.url || `http://127.0.0.1:${state.port}`,
+          cdpWsUrl: typeof cdpInfo.webSocketDebuggerUrl === "string" ? cdpInfo.webSocketDebuggerUrl : state.cdpWsUrl,
+        }
+        updateProcessState(runningState)
+        return runningState
+      } catch {
+        // keep polling
+      }
+    }
+
+    const lifecycleLockActive = existsSync(getBrowserLifecycleLockPath())
+    const stillStarting = state?.status === "starting"
+    if (!lifecycleLockActive && !stillStarting && Date.now() - startedAt >= minimumWaitMs) {
+      return null
+    }
+
+    await sleep(interval)
+  }
+
+  return null
+}
+
 /**
  * Get the directory for per-agent browser state files
  */
 function getAgentBrowserStateDir(): string {
   return join(getTermlingsBrowserDir(), "agents")
+}
+
+function agentBrowserStatePath(sessionId: string): string {
+  return join(getAgentBrowserStateDir(), `${sessionId}.json`)
 }
 
 function extractTabIdFromArgs(args: unknown[]): string | undefined {
@@ -739,14 +952,118 @@ function extractTabIdFromArgs(args: unknown[]): string | undefined {
   return undefined
 }
 
+function isPresenceStatus(value: unknown): value is AgentBrowserPresenceStatus {
+  return value === "active" || value === "idle" || value === "closed"
+}
+
+function isPresenceEndReason(value: unknown): value is AgentBrowserPresenceEndReason {
+  return value === "idle" || value === "closed"
+}
+
+function normalizeAgentBrowserState(raw: unknown, sessionId: string, now = Date.now()): AgentBrowserState | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null
+  const data = raw as Record<string, unknown>
+  const lastActionAt = typeof data.lastActionAt === "number" && Number.isFinite(data.lastActionAt)
+    ? data.lastActionAt
+    : now
+  const lastSeenAt = typeof data.lastSeenAt === "number" && Number.isFinite(data.lastSeenAt)
+    ? data.lastSeenAt
+    : lastActionAt
+  const startedAt = typeof data.startedAt === "number" && Number.isFinite(data.startedAt)
+    ? data.startedAt
+    : lastSeenAt
+  const endedAt = typeof data.endedAt === "number" && Number.isFinite(data.endedAt)
+    ? data.endedAt
+    : undefined
+  const idleAt = typeof data.idleAt === "number" && Number.isFinite(data.idleAt)
+    ? data.idleAt
+    : undefined
+  const status = isPresenceStatus(data.status)
+    ? data.status
+    : (data.active === false || endedAt
+        ? ((isPresenceEndReason(data.endReason) ? data.endReason : idleAt ? "idle" : "closed") as AgentBrowserPresenceStatus)
+        : "active")
+  const active = typeof data.active === "boolean" ? data.active : status === "active"
+
+  return {
+    sessionId,
+    agentName: typeof data.agentName === "string" ? data.agentName : undefined,
+    agentSlug: typeof data.agentSlug === "string" ? data.agentSlug : undefined,
+    agentDna: typeof data.agentDna === "string" ? data.agentDna : undefined,
+    tabId: typeof data.tabId === "string" ? data.tabId : undefined,
+    url: typeof data.url === "string" ? data.url : undefined,
+    status,
+    active,
+    startedAt,
+    lastSeenAt,
+    lastAction: typeof data.lastAction === "string" && data.lastAction.trim().length > 0
+      ? data.lastAction
+      : "unknown",
+    lastActionAt,
+    idleAt,
+    endedAt,
+    endReason: isPresenceEndReason(data.endReason) ? data.endReason : undefined,
+  }
+}
+
+function writeAgentBrowserState(state: AgentBrowserState): void {
+  mkdirSync(getAgentBrowserStateDir(), { recursive: true })
+  writeFileSync(agentBrowserStatePath(state.sessionId), JSON.stringify({
+    version: AGENT_BROWSER_STATE_VERSION,
+    ...state,
+  }, null, 2) + "\n")
+}
+
 function readAgentBrowserState(sessionId: string): AgentBrowserState | null {
-  const path = join(getAgentBrowserStateDir(), `${sessionId}.json`)
+  const path = agentBrowserStatePath(sessionId)
   if (!existsSync(path)) return null
   try {
-    return JSON.parse(readFileSync(path, "utf-8")) as AgentBrowserState
+    return normalizeAgentBrowserState(JSON.parse(readFileSync(path, "utf-8")), sessionId)
   } catch {
     return null
   }
+}
+
+function appendBrowserActivityEntry(entry: ActivityLogEntry): void {
+  try {
+    mkdirSync(getActivityHistoryDir(), { recursive: true })
+    mkdirSync(getAgentActivityHistoryDir(), { recursive: true })
+  } catch {
+    // Ignore; append calls below will handle failures.
+  }
+
+  try {
+    appendFileSync(getActivityHistoryPath(), JSON.stringify(entry) + "\n")
+  } catch {
+    // Ignore logging errors
+  }
+
+  const agentKey = entry.agentSlug?.trim()
+    || entry.sessionId?.trim()
+    || entry.agentName?.trim()
+    || "unknown"
+  try {
+    appendFileSync(getAgentActivityHistoryPath(agentKey), JSON.stringify(entry) + "\n")
+  } catch {
+    // Ignore logging errors
+  }
+}
+
+function emitBrowserPresenceEvent(
+  state: Pick<AgentBrowserState, "sessionId" | "agentName" | "agentSlug" | "agentDna">,
+  phase: AgentBrowserPresenceEndReason | "opened",
+  ts: number,
+): void {
+  appendBrowserActivityEntry({
+    ts,
+    sessionId: state.sessionId,
+    agentName: state.agentName,
+    agentSlug: state.agentSlug,
+    agentDna: state.agentDna,
+    command: `presence-${phase}`,
+    args: [],
+    result: "success",
+  })
 }
 
 function resolveSessionBrowserTabId(sessionId: string): string | undefined {
@@ -788,9 +1105,8 @@ export function updateAgentBrowserState(command: string, args: unknown[] = [], t
   const sessionId = process.env.TERMLINGS_SESSION_ID
   if (!sessionId) return
 
-  const dir = getAgentBrowserStateDir()
   try {
-    mkdirSync(dir, { recursive: true })
+    mkdirSync(getAgentBrowserStateDir(), { recursive: true })
   } catch {
     return
   }
@@ -800,50 +1116,59 @@ export function updateAgentBrowserState(command: string, args: unknown[] = [], t
     url = args[0]
   }
 
+  const now = Date.now()
+  const existing = readAgentBrowserState(sessionId)
+  const isResumed = !existing || existing.active !== true || existing.status !== "active"
+
   const state: AgentBrowserState = {
     sessionId,
     agentName: process.env.TERMLINGS_AGENT_NAME,
+    agentSlug: process.env.TERMLINGS_AGENT_SLUG,
     agentDna: process.env.TERMLINGS_AGENT_DNA,
-    tabId: (tabId || extractTabIdFromArgs(args) || "").trim() || undefined,
+    tabId: (tabId || extractTabIdFromArgs(args) || "").trim() || existing?.tabId || undefined,
     url,
+    status: "active",
+    active: true,
+    startedAt: isResumed ? now : (existing?.startedAt || now),
+    lastSeenAt: now,
     lastAction: command,
-    lastActionAt: Date.now(),
+    lastActionAt: now,
+    idleAt: undefined,
+    endedAt: undefined,
+    endReason: undefined,
   }
 
-  try {
-    const agentsDir = join(getTermlingsDir(), "agents")
-    if (existsSync(agentsDir)) {
-      const slugs = readdirSync(agentsDir)
-      for (const slug of slugs) {
-        const soulPath = join(agentsDir, slug, "SOUL.md")
-        if (existsSync(soulPath)) {
-          const content = readFileSync(soulPath, "utf-8")
-          const dnaMatch = content.match(/dna:\s*"?([a-f0-9]+)"?/i)
-          if (dnaMatch && dnaMatch[1] === state.agentDna) {
-            state.agentSlug = slug
-            break
+  if (!state.agentSlug) {
+    try {
+      const agentsDir = join(getTermlingsDir(), "agents")
+      if (existsSync(agentsDir)) {
+        const slugs = readdirSync(agentsDir)
+        for (const slug of slugs) {
+          const soulPath = join(agentsDir, slug, "SOUL.md")
+          if (existsSync(soulPath)) {
+            const content = readFileSync(soulPath, "utf-8")
+            const dnaMatch = content.match(/dna:\s*"?([a-f0-9]+)"?/i)
+            if (dnaMatch && dnaMatch[1] === state.agentDna) {
+              state.agentSlug = slug
+              break
+            }
           }
         }
       }
+    } catch {
+      // Ignore slug resolution errors
     }
-  } catch {
-    // Ignore slug resolution errors
   }
 
   if (!url) {
-    try {
-      const existingPath = join(dir, `${sessionId}.json`)
-      if (existsSync(existingPath)) {
-        const existing = JSON.parse(readFileSync(existingPath, "utf-8")) as AgentBrowserState
-        state.url = existing.url
-      }
-    } catch {
-      // ignore
-    }
+    state.url = existing?.url
   }
 
   try {
-    writeFileSync(join(dir, `${sessionId}.json`), JSON.stringify(state, null, 2) + "\n")
+    writeAgentBrowserState(state)
+    if (isResumed) {
+      emitBrowserPresenceEvent(state, "opened", now)
+    }
   } catch {
     // Ignore write errors
   }
@@ -853,7 +1178,7 @@ export function updateAgentBrowserState(command: string, args: unknown[] = [], t
  * Read all active agent browser states
  * Returns agents that have used the browser recently (within staleness window)
  */
-export function readAgentBrowserStates(stalenessMs: number = 300_000): AgentBrowserState[] {
+export function syncAgentBrowserPresence(stalenessMs: number = DEFAULT_AGENT_BROWSER_STALE_MS): AgentBrowserState[] {
   const dir = getAgentBrowserStateDir()
   if (!existsSync(dir)) return []
 
@@ -863,12 +1188,23 @@ export function readAgentBrowserStates(stalenessMs: number = 300_000): AgentBrow
   try {
     const files = readdirSync(dir).filter((f: string) => f.endsWith(".json"))
     for (const file of files) {
+      const sessionId = file.replace(/\.json$/i, "")
+      if (!sessionId) continue
       try {
         const content = readFileSync(join(dir, file), "utf-8")
-        const state = JSON.parse(content) as AgentBrowserState
-        if (now - state.lastActionAt < stalenessMs) {
-          results.push(state)
+        const state = normalizeAgentBrowserState(JSON.parse(content), sessionId, now)
+        if (!state) continue
+
+        if (state.active && now - state.lastSeenAt >= stalenessMs) {
+          state.active = false
+          state.status = "idle"
+          state.idleAt = now
+          state.endedAt = now
+          state.endReason = "idle"
+          writeAgentBrowserState(state)
+          emitBrowserPresenceEvent(state, "idle", now)
         }
+        results.push(state)
       } catch {
         // Skip unreadable files
       }
@@ -877,7 +1213,35 @@ export function readAgentBrowserStates(stalenessMs: number = 300_000): AgentBrow
     // Ignore
   }
 
-  return results.sort((a, b) => b.lastActionAt - a.lastActionAt)
+  return results.sort((a, b) => b.lastSeenAt - a.lastSeenAt)
+}
+
+export function readAgentBrowserStates(stalenessMs: number = DEFAULT_AGENT_BROWSER_STALE_MS): AgentBrowserState[] {
+  return syncAgentBrowserPresence(stalenessMs).filter((state) => state.active)
+}
+
+export function readAllAgentBrowserStates(stalenessMs: number = DEFAULT_AGENT_BROWSER_STALE_MS): AgentBrowserState[] {
+  return syncAgentBrowserPresence(stalenessMs)
+}
+
+export function closeActiveAgentBrowserStates(reason: AgentBrowserPresenceEndReason = "closed"): AgentBrowserState[] {
+  const states = syncAgentBrowserPresence()
+  const now = Date.now()
+  const closed: AgentBrowserState[] = []
+
+  for (const state of states) {
+    if (!state.active) continue
+    state.active = false
+    state.status = "closed"
+    state.endedAt = now
+    state.idleAt = undefined
+    state.endReason = reason
+    writeAgentBrowserState(state)
+    emitBrowserPresenceEvent(state, reason, now)
+    closed.push(state)
+  }
+
+  return closed
 }
 
 /**
@@ -890,12 +1254,7 @@ export function logBrowserActivity(
   error?: string,
   tabId?: string
 ): void {
-  try {
-    mkdirSync(getActivityHistoryDir(), { recursive: true })
-    mkdirSync(getAgentActivityHistoryDir(), { recursive: true })
-  } catch {
-    // Ignore; append calls below will handle failures.
-  }
+  syncAgentBrowserPresence()
 
   const entry: ActivityLogEntry = {
     ts: Date.now(),
@@ -909,21 +1268,7 @@ export function logBrowserActivity(
     error,
   }
 
-  try {
-    appendFileSync(getActivityHistoryPath(), JSON.stringify(entry) + "\n")
-  } catch {
-    // Ignore logging errors
-  }
-
-  const agentKey = process.env.TERMLINGS_AGENT_SLUG?.trim()
-    || entry.sessionId?.trim()
-    || entry.agentName?.trim()
-    || "unknown"
-  try {
-    appendFileSync(getAgentActivityHistoryPath(agentKey), JSON.stringify(entry) + "\n")
-  } catch {
-    // Ignore logging errors
-  }
+  appendBrowserActivityEntry(entry)
 
   if (result === "success") {
     updateAgentBrowserState(command, args, tabId)

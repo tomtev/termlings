@@ -372,6 +372,7 @@ async function setupDefaultRuntime(
     console.log("")
     console.log("Default model runtime for this workspace:")
     console.log(`${ANSI_MUTED}This sets the default runtime for agent spawns in .termlings/spawn.json.${ANSI_RESET}`)
+    console.log(`${ANSI_MUTED}You can change it later there for the whole workspace or per agent.${ANSI_RESET}`)
     choices.forEach((choice, index) => {
       const status = choice.installed ? "installed" : "not found"
       const recommended = choice.slug === defaultRuntime ? " (recommended)" : ""

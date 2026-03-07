@@ -18,7 +18,7 @@ import { join } from "path"
 import { fileURLToPath } from "url"
 import type { Cookie, HealthCheckResponse } from "./browser-types.js"
 import { getTermlingsDir } from "./ipc.js"
-import { getAvatarCSS, renderLayeredSVG, renderSVG } from "../index.js"
+import { getAvatarCSS, renderLayeredSVG, renderSVGSmall } from "../index.js"
 
 export interface BrowserTab {
   id: string
@@ -62,6 +62,12 @@ interface TabOwnerRecord {
 interface TabOwnerState {
   version: number
   owners: Record<string, TabOwnerRecord>
+}
+
+export const TAB_IDENTITY_TITLE_PREFIX_RE = /^(\[[^\]]+\]\s*)+/
+
+export function stripTabIdentityPrefixes(title: string): string {
+  return String(title || "").replace(TAB_IDENTITY_TITLE_PREFIX_RE, "").trimStart()
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -143,7 +149,7 @@ export class BrowserClient {
     } = {}
   ): Promise<void> {
     await this.withSelectedTab(options.tabId, async () => {
-      this.runAgentBrowser(["open", url], options.timeout)
+      this.runAgentBrowser(["open", url], options.timeout, this.buildTabIdentityInitScriptEnv())
     })
   }
 
@@ -427,9 +433,17 @@ export class BrowserClient {
       let resolvedTabId: string | null = null
 
       if (typeof tabId === "string" && tabId.trim().length > 0) {
-        resolvedTabId = this.resolveTabRefUnlocked(tabId)
+        const requestedTabId = this.resolveTabRefUnlocked(tabId)
         if (ownerKey) {
-          this.recordOwnerTabUnlocked(ownerKey, resolvedTabId)
+          const requestedOwnerKey = this.findOwnerKeyForTabUnlocked(requestedTabId)
+          if (requestedOwnerKey && requestedOwnerKey !== ownerKey) {
+            resolvedTabId = this.resolveOrAssignOwnerTabUnlocked(ownerKey)
+          } else {
+            resolvedTabId = requestedTabId
+            this.recordOwnerTabUnlocked(ownerKey, resolvedTabId)
+          }
+        } else {
+          resolvedTabId = requestedTabId
         }
       } else if (ownerKey) {
         resolvedTabId = this.resolveOrAssignOwnerTabUnlocked(ownerKey)
@@ -680,6 +694,25 @@ export class BrowserClient {
     if (sessionId) return `session:${sessionId}`
     const agentSlug = (process.env.TERMLINGS_AGENT_SLUG || "").trim()
     if (agentSlug) return `agent:${agentSlug}`
+    const agentDna = (process.env.TERMLINGS_AGENT_DNA || "").trim().toLowerCase()
+    if (/^[0-9a-f]{6,16}$/.test(agentDna)) return `dna:${agentDna}`
+    const agentName = (process.env.TERMLINGS_AGENT_NAME || "").trim()
+    if (agentName) return `name:${agentName}`
+    return null
+  }
+
+  private findOwnerKeyForTabUnlocked(tabId: string): string | null {
+    const tabs = this.listTabsUnlocked()
+    const knownTabIds = new Set(tabs.map((tab) => this.resolveStableTabId(tab)))
+    const state = this.readTabOwnerStateUnlocked()
+    this.pruneTabOwnerStateUnlocked(state, knownTabIds)
+    this.writeTabOwnerStateUnlocked(state)
+
+    for (const [ownerKey, owner] of Object.entries(state.owners)) {
+      if ((owner.tabId || "").trim() === tabId) {
+        return ownerKey
+      }
+    }
     return null
   }
 
@@ -782,7 +815,11 @@ export class BrowserClient {
     return fileURLToPath(new URL("./browser-runner.mjs", import.meta.url))
   }
 
-  private runAgentBrowser(commandArgs: string[], timeoutOverride?: number): unknown {
+  private runAgentBrowser(
+    commandArgs: string[],
+    timeoutOverride?: number,
+    extraEnv: Record<string, string> = {},
+  ): unknown {
     const timeout = typeof timeoutOverride === "number" && timeoutOverride > 0
       ? timeoutOverride
       : this.timeout
@@ -803,6 +840,7 @@ export class BrowserClient {
         ...process.env,
         TERMLINGS_BROWSER_TIMEOUT_MS: String(Math.max(1_000, Math.min(25_000, timeout))),
         ...(this.commandTabId ? { TERMLINGS_BROWSER_SELECTED_TAB_ID: this.commandTabId } : {}),
+        ...extraEnv,
       },
     })
     this.restoreFrontmostMacApp(frontmostApp)
@@ -902,11 +940,28 @@ export class BrowserClient {
     return `data:image/svg+xml,${encodeURIComponent(compact)}`
   }
 
+  private getTabIdentityScript(force = false): string | null {
+    const now = Date.now()
+    if (!this.tabIdentityScript || force || now - this.tabIdentityScriptBuiltAt > 2_500) {
+      this.tabIdentityScript = this.buildTabIdentityScript()
+      this.tabIdentityScriptBuiltAt = now
+    }
+    return this.tabIdentityScript
+  }
+
+  private buildTabIdentityInitScriptEnv(force = false): Record<string, string> {
+    const script = this.getTabIdentityScript(force)
+    if (!script) return {}
+    return {
+      TERMLINGS_BROWSER_INIT_SCRIPT_B64: Buffer.from(script, "utf8").toString("base64"),
+    }
+  }
+
   private buildTabIdentityFavicon(): { iconHref: string; signature: string } {
     const agentDna = this.readPreferredAgentDna()
     if (agentDna) {
       try {
-        const svg = renderSVG(agentDna, 2, 0, "auto", 0)
+        const svg = renderSVGSmall(agentDna, 1, 0, null, 0)
         return {
           iconHref: this.svgToDataUrl(svg),
           signature: `dna-svg:${agentDna}`,
@@ -920,8 +975,7 @@ export class BrowserClient {
     const glyph = label.slice(0, 1).toUpperCase()
     const svg = [
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">`,
-      `<rect x="1" y="1" width="14" height="14" rx="3" fill="#111827"/>`,
-      `<text x="8" y="11" text-anchor="middle" font-family="monospace" font-size="8" fill="#ffffff">${glyph}</text>`,
+      `<text x="8" y="11" text-anchor="middle" font-family="monospace" font-size="8" fill="#111827">${glyph}</text>`,
       `</svg>`,
     ].join("")
     return {
@@ -935,6 +989,7 @@ export class BrowserClient {
     if (!label) return null
 
     const favicon = this.buildTabIdentityFavicon()
+    const prefixPatternJson = JSON.stringify(TAB_IDENTITY_TITLE_PREFIX_RE.source)
     const signatureJson = JSON.stringify(`label:${label}:${favicon.signature}`)
     const prefixJson = JSON.stringify(`[${label}] `)
     const iconHrefJson = JSON.stringify(favicon.iconHref)
@@ -942,11 +997,12 @@ export class BrowserClient {
     return `(() => {
   const GLOBAL_KEY = "__termlingsTabIdentity";
   const ICON_ID = "__termlingsTabIdentityIcon";
+  const ICON_SELECTOR = 'link[rel~="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"], link[rel="mask-icon"]';
   const signature = ${signatureJson};
-  const iconHref = ${iconHrefJson};
-  const titlePrefix = ${prefixJson};
-  const root = document.documentElement || document;
-  if (!root) return { ok: false, reason: "no-root" };
+      const iconHref = ${iconHrefJson};
+      const titlePrefix = ${prefixJson};
+      const root = document.documentElement || document;
+      if (!root) return { ok: false, reason: "no-root" };
 
   const previous = window[GLOBAL_KEY];
   if (previous && previous.signature === signature && typeof previous.apply === "function") {
@@ -959,33 +1015,108 @@ export class BrowserClient {
     titlePrefix,
     iconHref,
     originalTitle: "",
+    observer: null,
+    scheduled: false,
+    normalizeTitle(rawTitle) {
+      const text = typeof rawTitle === "string" ? rawTitle : "";
+      return text.replace(new RegExp(${prefixPatternJson}), "").trimStart();
+    },
+    applyIcon(head) {
+      const existingIcons = Array.from(document.querySelectorAll(ICON_SELECTOR));
+      for (const node of existingIcons) {
+        if (!node || node.id === ICON_ID || node.getAttribute("data-termlings-tab-identity") === "1") continue;
+        node.setAttribute("data-termlings-tab-identity-disabled", "1");
+        node.setAttribute("data-termlings-original-rel", node.getAttribute("rel") || "");
+        if (node.hasAttribute("href")) {
+          node.setAttribute("data-termlings-original-href", node.getAttribute("href") || "");
+        }
+        node.setAttribute("rel", "alternate");
+        node.removeAttribute("href");
+      }
+
+      let icon = document.getElementById(ICON_ID);
+      if (!icon || icon.tagName !== "LINK") {
+        icon = document.createElement("link");
+        icon.id = ICON_ID;
+        icon.setAttribute("data-termlings-tab-identity", "1");
+      }
+      icon.setAttribute("rel", "icon");
+      icon.setAttribute("type", "image/svg+xml");
+      icon.setAttribute("sizes", "any");
+      const currentHref = icon.getAttribute("href") || "";
+      if (!currentHref.startsWith(iconHref)) {
+        this.iconNonce = (this.iconNonce || 0) + 1;
+        icon.setAttribute("href", iconHref + "#t=" + this.iconNonce);
+      }
+      if (!icon.parentNode) {
+        head.insertBefore(icon, head.firstChild || null);
+      } else if (head.firstChild !== icon) {
+        head.insertBefore(icon, head.firstChild || null);
+      }
+    },
+    ensureObserver() {
+      if (this.observer || typeof MutationObserver !== "function") return;
+      const scheduleApply = () => {
+        if (this.scheduled) return;
+        this.scheduled = true;
+        setTimeout(() => {
+          this.scheduled = false;
+          try { this.apply(); } catch {}
+        }, 0);
+      };
+      this.observer = new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          if (mutation.type === "childList") {
+            scheduleApply();
+            return;
+          }
+          if (mutation.type === "characterData") {
+            const target = mutation.target;
+            const parent = target && target.parentElement;
+            if (parent && parent.tagName === "TITLE") {
+              scheduleApply();
+              return;
+            }
+          }
+          if (mutation.type === "attributes") {
+            const target = mutation.target;
+            if (target && target.nodeType === Node.ELEMENT_NODE) {
+              const el = target;
+              const rel = (el.getAttribute && el.getAttribute("rel")) || "";
+              if ((rel && /icon/i.test(rel)) || el.id === ICON_ID) {
+                scheduleApply();
+                return;
+              }
+            }
+          }
+        }
+      });
+      this.observer.observe(document.documentElement || document, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ["href", "rel"],
+      });
+    },
     apply() {
       const head = document.head || document.getElementsByTagName("head")[0] || root;
       if (head) {
-        let icon = document.getElementById(ICON_ID);
-        if (!icon || icon.tagName !== "LINK") {
-          icon = document.createElement("link");
-          icon.id = ICON_ID;
-          icon.setAttribute("data-termlings-tab-identity", "1");
-          head.appendChild(icon);
-        }
-        icon.setAttribute("rel", "icon");
-        icon.setAttribute("type", "image/svg+xml");
-        if (icon.getAttribute("href") !== iconHref) {
-          icon.setAttribute("href", iconHref);
-        }
+        this.applyIcon(head);
       }
 
       const currentTitle = typeof document.title === "string" ? document.title : "";
-      if (!currentTitle.startsWith(titlePrefix)) {
-        state.originalTitle = currentTitle || state.originalTitle || "Browser";
+      const normalizedTitle = state.normalizeTitle(currentTitle) || "Browser";
+      if (!currentTitle.startsWith(titlePrefix) || currentTitle !== titlePrefix + normalizedTitle) {
+        state.originalTitle = normalizedTitle;
       }
 
-      const baseTitle = (state.originalTitle || currentTitle || "Browser").trim() || "Browser";
+      const baseTitle = (state.originalTitle || normalizedTitle || "Browser").trim() || "Browser";
       const nextTitle = titlePrefix + baseTitle;
       if (currentTitle !== nextTitle) {
         document.title = nextTitle;
       }
+      this.ensureObserver();
     },
   };
   window[GLOBAL_KEY] = state;
@@ -996,22 +1127,17 @@ export class BrowserClient {
 
   private async ensureTabIdentityOnSelectedTab(force = false): Promise<void> {
     try {
-      const now = Date.now()
-      if (!this.tabIdentityScript || force || now - this.tabIdentityScriptBuiltAt > 2_500) {
-        this.tabIdentityScript = this.buildTabIdentityScript()
-        this.tabIdentityScriptBuiltAt = now
-      }
+      const script = this.getTabIdentityScript(force)
+      if (!script) return
 
-      if (!this.tabIdentityScript) return
-
-      const attempts = force ? 4 : 2
+      const attempts = force ? 8 : 5
       for (let attempt = 0; attempt < attempts; attempt += 1) {
         try {
-          this.runAgentBrowser(["eval", this.tabIdentityScript])
+          this.runAgentBrowser(["eval", script], Math.min(this.timeout, 4_000))
           return
         } catch {
           if (attempt >= attempts - 1) return
-          await this.sleep(120)
+          await this.sleep(150 + attempt * 120)
         }
       }
     } catch {

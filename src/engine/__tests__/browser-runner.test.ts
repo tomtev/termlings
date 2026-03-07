@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { collectVisibleTabs, isIgnoredInternalBrowserPage } from "../browser-runner.mjs"
+import { buildBackgroundCreateTargetParams, buildDeferredInitScript, collectVisibleTabs, isIgnoredInternalBrowserPage } from "../browser-runner.mjs"
 
 function fakeTarget(id: string, url: string, title: string) {
   return {
@@ -37,5 +37,24 @@ describe("browser runner tab filtering", () => {
   it("ignores omnibox and devtools targets", () => {
     expect(isIgnoredInternalBrowserPage("chrome://omnibox-popup.top-chrome/omnibox_popup_aim.html")).toBe(true)
     expect(isIgnoredInternalBrowserPage("devtools://devtools/bundled/inspector.html")).toBe(true)
+  })
+})
+
+describe("browser runner init script deferral", () => {
+  it("wraps init script so it waits for DOM readiness before eval", () => {
+    const wrapped = buildDeferredInitScript("window.__test = 1;")
+    expect(wrapped).toContain("DOMContentLoaded")
+    expect(wrapped).toContain("window.addEventListener(\"load\"")
+    expect(wrapped).toContain("eval")
+    expect(wrapped).toContain("atob")
+  })
+})
+
+describe("browser runner background tab creation", () => {
+  it("creates new targets in the background", () => {
+    expect(buildBackgroundCreateTargetParams("https://example.com")).toEqual({
+      url: "https://example.com",
+      background: true,
+    })
   })
 })

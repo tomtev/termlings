@@ -16,7 +16,7 @@ export interface BrowserConfig {
 export interface ProcessState {
   pid: number | null
   port: number
-  status: "running" | "stopped"
+  status: "running" | "starting" | "stopped"
   startedAt: number | null
   url?: string
   cdpWsUrl?: string
@@ -35,6 +35,9 @@ export interface ActivityLogEntry {
   result: "success" | "error" | "timeout"
   error?: string
 }
+
+export type AgentBrowserPresenceStatus = "active" | "idle" | "closed"
+export type AgentBrowserPresenceEndReason = "idle" | "closed"
 
 export interface BrowserScreenshot {
   base64: string
@@ -72,6 +75,13 @@ export interface AgentBrowserState {
   agentDna?: string
   tabId?: string
   url?: string
+  status: AgentBrowserPresenceStatus
+  active: boolean
+  startedAt: number
+  lastSeenAt: number
   lastAction: string
   lastActionAt: number
+  idleAt?: number
+  endedAt?: number
+  endReason?: AgentBrowserPresenceEndReason
 }

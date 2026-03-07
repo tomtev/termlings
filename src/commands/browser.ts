@@ -42,6 +42,7 @@ export async function handleBrowser(flags: Set<string>, positional: string[], op
     startBrowser,
     stopBrowser,
     isBrowserRunning,
+    waitForBrowserReady,
     isAgentBrowserAvailable,
     logBrowserActivity,
     readProcessState,
@@ -117,6 +118,7 @@ ENVIRONMENT:
 PROFILES:
   Per-project profiles auto-created in ~/.termlings/chrome-profiles/
   Activity logged to .termlings/browser/history/all.jsonl and .termlings/browser/history/agent/<agent>.jsonl
+  Presence tracked in .termlings/browser/agents/<session>.json with active/idle/closed lifecycle
   Runtime adapter: agent-browser --native --cdp
 `);
     return;
@@ -198,6 +200,16 @@ PROFILES:
       const state = readProcessState();
       const config = getBrowserConfig();
 
+      if (!running && state?.status === "starting") {
+        console.log("Browser: starting");
+        console.log(`  Port: ${state.port}`);
+        if (state.pid) {
+          console.log(`  PID: ${state.pid}`);
+        }
+        console.log(`  Profile: ${state.profilePath || config.profilePath}`);
+        return;
+      }
+
       if (!running) {
         console.log("Browser: stopped");
         console.log(`  Profile: ${config.profilePath}`);
@@ -218,17 +230,18 @@ PROFILES:
       console.log(`  Runtime: agent-browser --native --cdp ${state?.port}`);
 
       // Show active agents
-      const { readAgentBrowserStates } = await import("../engine/browser.js");
-      const agentStates = readAgentBrowserStates();
+      const { readAllAgentBrowserStates } = await import("../engine/browser.js");
+      const agentStates = readAllAgentBrowserStates();
       if (agentStates.length > 0) {
-        console.log(`\n  Active agents:`);
+        console.log(`\n  Agent browser presence:`);
         for (const a of agentStates) {
           const name = a.agentName || a.sessionId;
           const slug = a.agentSlug ? ` (agent:${a.agentSlug})` : "";
           const ago = Math.floor((Date.now() - a.lastActionAt) / 1000);
+          const status = a.status;
           const url = a.url ? ` @ ${a.url}` : "";
           const tab = a.tabId ? ` [tab ${a.tabId}]` : "";
-          console.log(`    ${name}${slug}: ${a.lastAction}${tab} ${ago}s ago${url}`);
+          console.log(`    ${name}${slug}: ${status} · ${a.lastAction}${tab} ${ago}s ago${url}`);
         }
       }
       return;
@@ -252,7 +265,13 @@ PROFILES:
   }
 
   // Browser interaction subcommands (requires running server)
-  const state = readProcessState();
+  let state = readProcessState();
+  if ((!state || !state.pid || state.status === "starting") && waitForBrowserReady) {
+    const awaited = await waitForBrowserReady(6000, 150);
+    if (awaited) {
+      state = awaited;
+    }
+  }
   if (!state || !state.pid) {
     console.error("Browser not running. Use: termlings browser start");
     process.exit(1);

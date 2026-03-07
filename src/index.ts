@@ -912,6 +912,80 @@ export function renderTerminalSmall(
   return lines.join("\n");
 }
 
+export function renderSVGSmall(
+  dna: string,
+  pixelSize = 10,
+  frame = 0,
+  background: string | null = "auto",
+  padding = 1,
+  bw = false,
+  talkFrame = 0,
+  waveFrame = 0,
+  backside = false,
+): string {
+  const traits = decodeDNA(dna);
+  const grid = generateGridSmall(traits, frame, talkFrame, waveFrame, backside);
+
+  const { faceRgb, darkRgb, hatRgb, bgRgb } = getTraitColors(traits, bw);
+
+  const toHex = (r: number, g: number, b: number) =>
+    `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+
+  const faceHex = toHex(...faceRgb);
+  const darkHex = toHex(...darkRgb);
+  const hatHex = toHex(...hatRgb);
+  const resolvedBg = background === "auto" ? toHex(...bgRgb) : background;
+
+  const cols = 9;
+  const rows = grid.length;
+  const pad = padding;
+  const side = Math.max(cols, rows) + pad * 2;
+  const w = side * pixelSize;
+  const h = side * pixelSize;
+  const oxPx = Math.round((w - cols * pixelSize) / 2);
+  const oyPx = Math.round((h - rows * pixelSize) / 2);
+  const half = Math.round(pixelSize / 2);
+  const quarter = Math.round(pixelSize / 4);
+  const rects: string[] = [];
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const cell = grid[y]![x]!;
+      const rx = x * pixelSize + oxPx;
+      const ry = y * pixelSize + oyPx;
+      if (cell === "f") {
+        rects.push(`<rect x="${rx}" y="${ry}" width="${pixelSize}" height="${pixelSize}" fill="${faceHex}"/>`);
+      } else if (cell === "l") {
+        rects.push(`<rect x="${rx}" y="${ry}" width="${half}" height="${pixelSize}" fill="${faceHex}"/>`);
+      } else if (cell === "a") {
+        rects.push(`<rect x="${rx}" y="${ry + half}" width="${pixelSize}" height="${half}" fill="${faceHex}"/>`);
+      } else if (cell === "e" || cell === "d") {
+        rects.push(`<rect x="${rx}" y="${ry}" width="${pixelSize}" height="${pixelSize}" fill="${darkHex}"/>`);
+      } else if (cell === "s") {
+        rects.push(`<rect x="${rx}" y="${ry}" width="${pixelSize}" height="${pixelSize}" fill="${faceHex}"/>`);
+        rects.push(`<rect x="${rx}" y="${ry + half}" width="${pixelSize}" height="${half}" fill="${darkHex}"/>`);
+      } else if (cell === "n") {
+        rects.push(`<rect x="${rx}" y="${ry}" width="${pixelSize}" height="${pixelSize}" fill="${faceHex}"/>`);
+        rects.push(`<rect x="${rx + quarter}" y="${ry}" width="${half}" height="${pixelSize}" fill="${darkHex}"/>`);
+      } else if (cell === "m") {
+        rects.push(`<rect x="${rx}" y="${ry}" width="${pixelSize}" height="${pixelSize}" fill="${faceHex}"/>`);
+        rects.push(`<rect x="${rx}" y="${ry}" width="${pixelSize}" height="${half}" fill="${darkHex}"/>`);
+      } else if (cell === "q") {
+        rects.push(`<rect x="${rx}" y="${ry}" width="${pixelSize}" height="${pixelSize}" fill="${faceHex}"/>`);
+        rects.push(`<rect x="${rx + half}" y="${ry + half}" width="${half}" height="${half}" fill="${darkHex}"/>`);
+      } else if (cell === "r") {
+        rects.push(`<rect x="${rx}" y="${ry}" width="${pixelSize}" height="${pixelSize}" fill="${faceHex}"/>`);
+        rects.push(`<rect x="${rx}" y="${ry + half}" width="${half}" height="${half}" fill="${darkHex}"/>`);
+      } else if (cell === "h" || cell === "k") {
+        rects.push(`<rect x="${rx}" y="${ry}" width="${pixelSize}" height="${pixelSize}" fill="${hatHex}"/>`);
+      }
+    }
+  }
+
+  const bg = resolvedBg ? `<rect width="${w}" height="${h}" fill="${resolvedBg}"/>\n` : "";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges">\n${bg}${rects.join("\n")}\n</svg>`;
+}
+
 // ─── Termlings Logo (👾 space invader) ───
 
 type LogoPixel = "b" | "d" | "_";

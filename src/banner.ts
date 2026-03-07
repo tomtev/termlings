@@ -228,9 +228,8 @@ export async function printPostInitTeamWave(agents: TeamWaveAgent[]): Promise<vo
     await sleep(frameDelayMs);
   }
   console.log("");
-  console.log(`${muted}Setup complete. Run \`termlings\` to start your workspace.${reset}`);
-  console.log(`${muted}Run \`termlings spawn\` in another terminal to launch agents into your workspace.${reset}`);
-  console.log(`${muted}Or run \`termlings --spawn\` to open the workspace immediately while scheduler + agents start in background.${reset}`);
+  console.log(`${muted}Setup complete. Run \`termlings --spawn\` to open the workspace while scheduler + agents start in background.${reset}`);
+  console.log(`${muted}Manual option: run \`termlings\` first, then \`termlings spawn\` in another terminal when you want to launch agents.${reset}`);
   console.log("");
 }
 

@@ -32,6 +32,52 @@ function parseRunnerArgs(argv) {
   return { cdpTarget, commandArgs };
 }
 
+function decodeInitScriptFromEnv() {
+  const raw = String(process.env.TERMLINGS_BROWSER_INIT_SCRIPT_B64 || "").trim();
+  if (!raw) return null;
+  try {
+    const script = Buffer.from(raw, "base64").toString("utf8");
+    return script.trim() ? script : null;
+  } catch {
+    return null;
+  }
+}
+
+export function buildDeferredInitScript(source) {
+  if (!source || !source.trim()) return null;
+  const encoded = Buffer.from(source, "utf8").toString("base64");
+  return `(() => {
+    const run = () => {
+      try {
+        const decoded = atob(${JSON.stringify(encoded)});
+        (0, eval)(decoded);
+      } catch {}
+    };
+
+    const schedule = () => {
+      try {
+        setTimeout(run, 0);
+      } catch {
+        run();
+      }
+    };
+
+    if (document.readyState === "complete" || document.readyState === "interactive") {
+      schedule();
+      return;
+    }
+
+    const onReady = () => {
+      document.removeEventListener("DOMContentLoaded", onReady, true);
+      window.removeEventListener("load", onReady, true);
+      schedule();
+    };
+
+    document.addEventListener("DOMContentLoaded", onReady, { once: true, capture: true });
+    window.addEventListener("load", onReady, { once: true, capture: true });
+  })();`;
+}
+
 function resolveHttpBase(cdpTarget) {
   const trimmed = String(cdpTarget || "").trim();
   if (!trimmed) {
@@ -105,6 +151,13 @@ export function collectVisibleTabs(targets, options = {}) {
   }
 
   return visible;
+}
+
+export function buildBackgroundCreateTargetParams(url) {
+  return {
+    url,
+    background: true,
+  };
 }
 
 function resolveTabReference(tabRef, visibleTabs) {
@@ -517,18 +570,22 @@ async function runCommand(ctx, commandArgs) {
 
     if (subcommand === "new") {
       const url = tabArgs[0] && String(tabArgs[0]).trim().length > 0 ? String(tabArgs[0]) : "about:blank";
-      const response = await fetch(`${ctx.httpBase}/json/new?${encodeURIComponent(url)}`, {
-        method: "PUT",
-        signal: AbortSignal.timeout(ctx.timeoutMs),
-      });
-      if (!response.ok) {
-        throw new Error(`Chrome refused to create a new tab (${response.status})`);
+      const browserSession = new CDPSession(ctx.browserWsUrl, ctx.timeoutMs);
+      await browserSession.open();
+      let created;
+      try {
+        created = await browserSession.send("Target.createTarget", buildBackgroundCreateTargetParams(url), null);
+      } finally {
+        await browserSession.close();
       }
-      const created = await response.json();
+      const createdTargetId = typeof created?.targetId === "string" ? created.targetId : "";
+      if (!createdTargetId) {
+        throw new Error("Chrome did not return a target id for the new background tab");
+      }
       const refreshedTabs = collectVisibleTabs(await fetchJson(`${ctx.httpBase}/json`, ctx.timeoutMs), {
-        selectedTargetId: created.id,
+        selectedTargetId: selectedTabRef,
       });
-      const descriptor = refreshedTabs.find((tab) => tab.targetId === created.id) || resolveTabReference(created.id, refreshedTabs);
+      const descriptor = refreshedTabs.find((tab) => tab.targetId === createdTargetId) || resolveTabReference(createdTargetId, refreshedTabs);
       return {
         index: Number.parseInt(descriptor.id, 10),
         targetId: descriptor.targetId,
@@ -576,6 +633,8 @@ async function runCommand(ctx, commandArgs) {
   });
   const selectedTab = resolveTabReference(selectedTabRef, visibleTabs);
   const session = await openPageSession(ctx, selectedTab);
+  const initScript = decodeInitScriptFromEnv();
+  const deferredInitScript = initScript ? buildDeferredInitScript(initScript) : null;
 
   try {
     await session.send("Page.enable");
@@ -584,10 +643,24 @@ async function runCommand(ctx, commandArgs) {
     if (command === "open") {
       const url = rest[0];
       if (!url) throw new Error("Missing URL for open");
+      if (deferredInitScript) {
+        try {
+          await session.send("Page.addScriptToEvaluateOnNewDocument", { source: deferredInitScript });
+        } catch {
+          // best-effort only
+        }
+      }
       const loadPromise = session.waitForEvent("Page.loadEventFired", null, Math.min(ctx.timeoutMs, 8000)).catch(() => null);
       await session.send("Page.navigate", { url });
       await Promise.race([loadPromise, new Promise((resolve) => setTimeout(resolve, 250))]);
       await waitForReady(session, Math.min(ctx.timeoutMs, 8000));
+      if (initScript) {
+        try {
+          await evaluate(session, initScript);
+        } catch {
+          // best-effort only
+        }
+      }
       return {
         url: await evaluate(session, "location.href"),
         title: await evaluate(session, "document.title"),

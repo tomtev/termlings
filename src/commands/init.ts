@@ -263,9 +263,9 @@ EXAMPLES:
   (Keeps existing data, re-runs setup)
 
 NEXT STEPS:
-  1. termlings             Start the workspace UI
-  2. termlings spawn       Launch agents (run in another terminal)
-  3. termlings spawn --all Spawn all agents (background sessions)
+  1. termlings --spawn     Open workspace now + start scheduler and agents in background
+  2. termlings             Start the workspace UI only
+  3. termlings spawn       Launch agents manually from another terminal
   4. termlings org-chart   See team hierarchy
 `);
     if (!exitOnComplete) return 0;

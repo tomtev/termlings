@@ -1,13 +1,24 @@
+import { createServer, type Server } from "http"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs"
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "fs"
 import { join } from "path"
 import { tmpdir } from "os"
-import { getBrowserConfig, getBrowserStartupErrorLogPath, parseSingletonLockPid } from "../browser.js"
+import {
+  getBrowserConfig,
+  getBrowserLifecycleLockPath,
+  getBrowserStartupErrorLogPath,
+  isDefaultBrowserProfilePath,
+  parseSingletonLockPid,
+  runWithBrowserLifecycleLock,
+  updateProcessState,
+  waitForBrowserReady,
+} from "../browser.js"
 
 describe("browser startup resilience config", () => {
   const originalIpcDir = process.env.TERMLINGS_IPC_DIR
   let tempRoot = ""
   let termlingsDir = ""
+  let server: Server | null = null
 
   beforeEach(() => {
     tempRoot = mkdtempSync(join(tmpdir(), "termlings-browser-test-"))
@@ -17,6 +28,10 @@ describe("browser startup resilience config", () => {
   })
 
   afterEach(() => {
+    if (server) {
+      server.close()
+      server = null
+    }
     if (originalIpcDir === undefined) {
       delete process.env.TERMLINGS_IPC_DIR
     } else {
@@ -70,6 +85,66 @@ describe("browser startup resilience config", () => {
     expect(config.startupAttempts).toBe(5)
     expect(config.startupPollMs).toBe(400)
     expect(getBrowserStartupErrorLogPath()).toBe(join(browserDir, "startup-errors.jsonl"))
+  })
+
+  it("treats the real Chrome user-data dir as forbidden", () => {
+    const home = process.env.HOME || tempRoot
+    expect(isDefaultBrowserProfilePath(join(home, "Library", "Application Support", "Google", "Chrome"))).toBe(
+      process.platform === "darwin",
+    )
+  })
+
+  it("serializes concurrent browser lifecycle callers", async () => {
+    const order: string[] = []
+
+    const first = runWithBrowserLifecycleLock(async () => {
+      order.push("first:start")
+      await new Promise((resolve) => setTimeout(resolve, 120))
+      order.push("first:end")
+      return "first"
+    })
+
+    const second = runWithBrowserLifecycleLock(async () => {
+      order.push("second:start")
+      order.push("second:end")
+      return "second"
+    })
+
+    const results = await Promise.all([first, second])
+    expect(results).toEqual(["first", "second"])
+    expect(order).toEqual(["first:start", "first:end", "second:start", "second:end"])
+  })
+
+  it("waits for a starting browser to become ready", async () => {
+    server = createServer((req, res) => {
+      if (req.url === "/json/version") {
+        res.writeHead(200, { "content-type": "application/json" })
+        res.end(JSON.stringify({ Browser: "Chrome/1.0", webSocketDebuggerUrl: "ws://127.0.0.1:9555/devtools/browser/test" }))
+        return
+      }
+      res.writeHead(404)
+      res.end("not found")
+    })
+    await new Promise<void>((resolve) => server!.listen(9555, "127.0.0.1", resolve))
+
+    mkdirSync(join(termlingsDir, "browser"), { recursive: true })
+    writeFileSync(getBrowserLifecycleLockPath(), JSON.stringify({ pid: process.pid, createdAt: Date.now() }) + "\n", "utf8")
+    updateProcessState({
+      pid: process.pid,
+      port: 9555,
+      status: "starting",
+      startedAt: null,
+      profilePath: join(tempRoot, "profile"),
+      mode: "cdp",
+    })
+
+    const state = await waitForBrowserReady(1000, 50)
+    expect(state?.status).toBe("running")
+    expect(state?.port).toBe(9555)
+
+    try {
+      unlinkSync(getBrowserLifecycleLockPath())
+    } catch {}
   })
 })
 

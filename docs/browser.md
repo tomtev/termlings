@@ -191,7 +191,8 @@ TUI integration:
 
 - `history/all.jsonl`: global browser audit log
 - `history/agent/*.jsonl`: per-agent browser action logs
-- `agents/*.json`: last browser action per active agent
+- `history/*.jsonl`: also includes lifecycle events like `presence-opened`, `presence-idle`, and `presence-closed`
+- `agents/*.json`: explicit per-session browser presence with `status`, `active`, `startedAt`, `lastSeenAt`, `endedAt`, and the latest browser action
 
 ## Troubleshooting
 
