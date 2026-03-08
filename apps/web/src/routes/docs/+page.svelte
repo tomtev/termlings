@@ -18,6 +18,7 @@
   import Settings2 from 'lucide-svelte/icons/settings-2';
   import PanelLeft from 'lucide-svelte/icons/panel-left';
   import PanelLeftClose from 'lucide-svelte/icons/panel-left-close';
+  import { SITE_DESCRIPTION, SITE_NAME, SITE_OG_IMAGE_URL, toCanonicalUrl } from '$lib/site';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -158,6 +159,20 @@
     return DOC_META[doc.slug] ?? null;
   }
 
+  const pageTitle = $derived(
+    data.activeDoc ? `${data.activeDoc.title} — ${SITE_NAME} docs` : `${SITE_NAME} docs`
+  );
+
+  const pageDescription = $derived(
+    data.activeDoc
+      ? `${data.activeDoc.title} from the Termlings documentation.`
+      : 'Auto-synced Termlings documentation parsed from the termlings git repository.'
+  );
+
+  const canonicalUrl = $derived(
+    toCanonicalUrl(page.url.pathname === '/docs/install' ? '/docs' : page.url.pathname)
+  );
+
   const groupedDocs = $derived.by(() => {
     const groups = new Map<string, DocEntry[]>();
 
@@ -202,11 +217,23 @@
 </script>
 
 <svelte:head>
-  <title>termlings docs</title>
-  <meta
-    name="description"
-    content="Auto-synced Termlings documentation parsed from the termlings git repository."
-  />
+  <title>{pageTitle}</title>
+  <meta name="description" content={pageDescription} />
+  <link rel="canonical" href={canonicalUrl} />
+  <meta property="og:title" content={pageTitle} />
+  <meta property="og:type" content="article" />
+  <meta property="og:url" content={canonicalUrl} />
+  <meta property="og:site_name" content={SITE_NAME} />
+  <meta property="og:description" content={pageDescription} />
+  <meta property="og:image" content={SITE_OG_IMAGE_URL} />
+  <meta property="og:image:secure_url" content={SITE_OG_IMAGE_URL} />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="termlings — AI agents that build and run companies with you" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={pageTitle} />
+  <meta name="twitter:description" content={pageDescription} />
+  <meta name="twitter:image" content={SITE_OG_IMAGE_URL} />
 </svelte:head>
 
 <div class="docs-shell" class:sidebar-open={sidebarOpen}>
