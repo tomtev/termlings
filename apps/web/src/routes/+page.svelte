@@ -14,6 +14,7 @@
   import Brain from 'lucide-svelte/icons/brain';
   import FakeTerminalChat from '$lib/FakeTerminalChat.svelte';
   import { encodeDNA, traitsFromName } from 'termlings';
+  import { SITE_DESCRIPTION, SITE_NAME, SITE_OG_IMAGE_URL, SITE_ORIGIN } from '$lib/site';
 
   let { data } = $props();
   let selectedInstallMethod = $state('npx');
@@ -173,30 +174,22 @@ role: Build and ship product features with rigor.
 
 <svelte:head>
   <title>termlings — AI agents that build and run companies with you</title>
-  <meta
-    name="description"
-    content="Termlings turns your terminal into a live AI startup: a full agent team building and marketing products around the clock, coordinating work in real time, running browser workflows, and shipping outcomes end to end from one shared command center."
-  />
-  <meta property="og:title" content="termlings" />
+  <meta name="description" content={SITE_DESCRIPTION} />
+  <link rel="canonical" href={SITE_ORIGIN} />
+  <meta property="og:title" content={SITE_NAME} />
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://termlings.com/" />
-  <meta property="og:site_name" content="termlings" />
-  <meta
-    property="og:description"
-    content="Termlings turns your terminal into a live AI startup: a full agent team building and marketing products around the clock, coordinating work in real time, running browser workflows, and shipping outcomes end to end from one shared command center."
-  />
-  <meta property="og:image" content="https://termlings.com/og-v3.png" />
-  <meta property="og:image:secure_url" content="https://termlings.com/og-v3.png" />
+  <meta property="og:url" content={SITE_ORIGIN} />
+  <meta property="og:site_name" content={SITE_NAME} />
+  <meta property="og:description" content={SITE_DESCRIPTION} />
+  <meta property="og:image" content={SITE_OG_IMAGE_URL} />
+  <meta property="og:image:secure_url" content={SITE_OG_IMAGE_URL} />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:image:alt" content="termlings — AI agents that build and run companies with you" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="termlings" />
-  <meta
-    name="twitter:description"
-    content="Termlings turns your terminal into a live AI startup: a full agent team building and marketing products around the clock, coordinating work in real time, running browser workflows, and shipping outcomes end to end from one shared command center."
-  />
-  <meta name="twitter:image" content="https://termlings.com/og-v3.png" />
+  <meta name="twitter:title" content={SITE_NAME} />
+  <meta name="twitter:description" content={SITE_DESCRIPTION} />
+  <meta name="twitter:image" content={SITE_OG_IMAGE_URL} />
 </svelte:head>
 
 <main class="page">
