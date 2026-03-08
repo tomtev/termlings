@@ -149,7 +149,8 @@ role: Build and ship product features with rigor.
     },
     {
       id: 'npx-docker',
-      label: 'NPX w/ Docker',
+      label: 'docker',
+      badge: '[safer]',
       command: 'npx termlings@latest --spawn --docker',
       hint: 'Safer local mode. Docker-isolated Claude/Codex workers.'
     },
@@ -217,7 +218,10 @@ role: Build and ship product features with rigor.
                       class:active={activeInstallMethod.id === method.id}
                       onclick={() => (selectedInstallMethod = method.id)}
                     >
-                      {method.label}
+                      <span>{method.label}</span>
+                      {#if method.badge}
+                        <span class="command-tab-badge">{method.badge}</span>
+                      {/if}
                     </button>
                   {/each}
                 </div>
@@ -606,6 +610,9 @@ role: Build and ship product features with rigor.
     border-radius: 0.35rem;
     background: transparent;
     color: var(--text-subtle);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
     font-family: var(--font-mono);
     font-size: 0.68rem;
     letter-spacing: 0.06em;
@@ -625,6 +632,14 @@ role: Build and ship product features with rigor.
     border-color: color-mix(in srgb, var(--primary) 55%, transparent);
     background: color-mix(in srgb, var(--primary) 20%, var(--surface-3));
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 25%, transparent);
+  }
+
+  .command-tab-badge {
+    color: color-mix(in srgb, var(--primary) 78%, white);
+    font-size: 0.6rem;
+    letter-spacing: 0;
+    text-transform: none;
+    opacity: 0.9;
   }
 
   .command-row {
