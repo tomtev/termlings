@@ -1,21 +1,28 @@
 import { createServer, type Server } from "http"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "fs"
+import { existsSync, mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "fs"
 import { join } from "path"
 import { tmpdir } from "os"
 import {
+  buildBrowserLaunchCommand,
   getBrowserConfig,
+  getBrowserProfileDir,
   getBrowserLifecycleLockPath,
   getBrowserStartupErrorLogPath,
+  isContainerRuntime,
   isDefaultBrowserProfilePath,
   parseSingletonLockPid,
+  resolveBrowserClientTarget,
   runWithBrowserLifecycleLock,
+  shouldForceHeadlessBrowser,
   updateProcessState,
   waitForBrowserReady,
 } from "../browser.js"
 
 describe("browser startup resilience config", () => {
   const originalIpcDir = process.env.TERMLINGS_IPC_DIR
+  const originalHome = process.env.HOME
+  const originalDocker = process.env.TERMLINGS_DOCKER
   let tempRoot = ""
   let termlingsDir = ""
   let server: Server | null = null
@@ -36,6 +43,16 @@ describe("browser startup resilience config", () => {
       delete process.env.TERMLINGS_IPC_DIR
     } else {
       process.env.TERMLINGS_IPC_DIR = originalIpcDir
+    }
+    if (originalHome === undefined) {
+      delete process.env.HOME
+    } else {
+      process.env.HOME = originalHome
+    }
+    if (originalDocker === undefined) {
+      delete process.env.TERMLINGS_DOCKER
+    } else {
+      process.env.TERMLINGS_DOCKER = originalDocker
     }
     rmSync(tempRoot, { recursive: true, force: true })
   })
@@ -94,6 +111,78 @@ describe("browser startup resilience config", () => {
     )
   })
 
+  it("detects docker-like container runtimes", () => {
+    expect(isContainerRuntime({ TERMLINGS_DOCKER: "1" } as NodeJS.ProcessEnv)).toBe(true)
+    expect(isContainerRuntime({ container: "docker" } as NodeJS.ProcessEnv)).toBe(true)
+    expect(isContainerRuntime({} as NodeJS.ProcessEnv)).toBe(existsSync("/.dockerenv"))
+  })
+
+  it("adds no-sandbox for headless chromium in containers", () => {
+    const launch = buildBrowserLaunchCommand("/usr/bin/chromium", {
+      headless: true,
+      port: 9333,
+      profilePath: "/tmp/profile",
+      env: { TERMLINGS_DOCKER: "1" } as NodeJS.ProcessEnv,
+    })
+
+    expect(launch.command).toBe("/usr/bin/chromium")
+    expect(launch.args).toContain("--no-sandbox")
+    expect(launch.args).toContain("--disable-dev-shm-usage")
+    expect(launch.args).toContain("--headless=new")
+  })
+
+  it("forces headless chromium in containers without DISPLAY", () => {
+    const launch = buildBrowserLaunchCommand("/usr/bin/chromium", {
+      headless: false,
+      port: 9333,
+      profilePath: "/tmp/profile",
+      env: { TERMLINGS_DOCKER: "1" } as NodeJS.ProcessEnv,
+    })
+
+    expect(launch.command).toBe("/usr/bin/chromium")
+    expect(launch.args).toContain("--no-sandbox")
+    expect(launch.args).toContain("--headless=new")
+    expect(shouldForceHeadlessBrowser({ TERMLINGS_DOCKER: "1" } as NodeJS.ProcessEnv)).toBe(true)
+  })
+
+  it("prefers the shared host browser target from Docker workers", () => {
+    expect(
+      resolveBrowserClientTarget(
+        {
+          pid: 42,
+          port: 9222,
+          status: "running",
+          startedAt: Date.now(),
+          cdpWsUrl: "ws://127.0.0.1:9222/devtools/browser/test",
+          dockerCdpTarget: "host.docker.internal:9333",
+          sharedForDocker: true,
+          mode: "cdp",
+        },
+        { TERMLINGS_DOCKER: "1" } as NodeJS.ProcessEnv,
+      ),
+    ).toBe("host.docker.internal:9333")
+  })
+
+  it("normalizes managed Termlings profile paths to the current runtime home", () => {
+    process.env.HOME = "/home/termlings"
+    const browserDir = join(termlingsDir, "browser")
+    mkdirSync(browserDir, { recursive: true })
+    writeFileSync(
+      join(browserDir, "config.json"),
+      JSON.stringify({
+        port: 9557,
+        binaryPath: "google-chrome",
+        autoStart: false,
+        profilePath: "/Users/tommyvedvik/.termlings/chrome-profiles/foreign-profile",
+        timeout: 15000,
+      }) + "\n",
+      "utf8",
+    )
+
+    const config = getBrowserConfig()
+    expect(config.profilePath).toBe(getBrowserProfileDir())
+  })
+
   it("serializes concurrent browser lifecycle callers", async () => {
     const order: string[] = []
 
@@ -145,6 +234,37 @@ describe("browser startup resilience config", () => {
     try {
       unlinkSync(getBrowserLifecycleLockPath())
     } catch {}
+  })
+
+  it("waits for a shared host browser to become ready from Docker workers", async () => {
+    process.env.TERMLINGS_DOCKER = "1"
+
+    server = createServer((req, res) => {
+      if (req.url === "/json/version") {
+        res.writeHead(200, { "content-type": "application/json" })
+        res.end(JSON.stringify({ Browser: "Chrome/1.0", webSocketDebuggerUrl: "ws://host.docker.internal:9558/devtools/browser/test" }))
+        return
+      }
+      res.writeHead(404)
+      res.end("not found")
+    })
+    await new Promise<void>((resolve) => server!.listen(9558, "127.0.0.1", resolve))
+
+    mkdirSync(join(termlingsDir, "browser"), { recursive: true })
+    updateProcessState({
+      pid: null,
+      port: 9558,
+      status: "starting",
+      startedAt: null,
+      dockerCdpTarget: "127.0.0.1:9558",
+      sharedForDocker: true,
+      profilePath: join(tempRoot, "profile"),
+      mode: "cdp",
+    })
+
+    const state = await waitForBrowserReady(1000, 50)
+    expect(state?.status).toBe("running")
+    expect(state?.sharedForDocker).toBe(true)
   })
 })
 

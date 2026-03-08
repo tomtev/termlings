@@ -1,13 +1,19 @@
 {
   "name": "termlings",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tomtev/termlings.git"
   },
   "scripts": {
     "test": "bun test",
-    "test:watch": "bun test --watch"
+    "test:watch": "bun test --watch",
+    "web:dev": "bun --cwd apps/web dev",
+    "web:build": "bun --cwd apps/web build",
+    "web:deploy": "bun --cwd apps/web deploy",
+    "desktop:dev": "npm --prefix apps/desktop run dev",
+    "desktop:check": "npm --prefix apps/desktop run check",
+    "desktop:build": "npm --prefix apps/desktop run build"
   },
   "devDependencies": {
     "@opentui/core": "^0.1.82",
@@ -30,7 +36,10 @@
   "files": [
     "src",
     "bin",
-    "templates"
+    "templates",
+    "scripts",
+    "Dockerfile",
+    "bun.lock"
   ],
   "homepage": "https://termlings.com",
   "keywords": [

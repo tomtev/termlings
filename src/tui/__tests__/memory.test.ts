@@ -5,6 +5,7 @@ import { tmpdir } from "os"
 
 import { WorkspaceTui } from "../tui.js"
 import { appendWorkspaceMessage } from "../../workspace/state.js"
+import { appendAppActivity } from "../../engine/activity.js"
 
 describe("workspace tui memory guards", () => {
   let root = ""
@@ -40,31 +41,17 @@ describe("workspace tui memory guards", () => {
     expect(tui.pastedContentByPlaceholder.size).toBe(0)
   })
 
-  it("keeps browser activity ids stable as history grows", () => {
+  it("keeps app activity ids stable as history grows", () => {
     const tui = new WorkspaceTui(root) as any
-    const historyPath = join(root, ".termlings", "browser", "history", "all.jsonl")
-    mkdirSync(join(root, ".termlings", "browser", "history"), { recursive: true })
+    appendAppActivity({ ts: 10, app: "browser", kind: "navigate", text: "visited https://one.test", actorSlug: "developer" }, root)
+    appendAppActivity({ ts: 20, app: "browser", kind: "navigate", text: "visited https://two.test", actorSlug: "developer" }, root)
 
-    writeFileSync(
-      historyPath,
-      [
-        JSON.stringify({ ts: 10, agentSlug: "developer", command: "navigate", args: ["https://one.test"], result: "success" }),
-        JSON.stringify({ ts: 20, agentSlug: "developer", command: "navigate", args: ["https://two.test"], result: "success" }),
-        "",
-      ].join("\n"),
-      "utf8",
-    )
-
-    const first = tui.readBrowserActivityMessages(10)
+    const first = tui.readAppActivityMessages(10)
     const firstByText = new Map(first.map((message: any) => [message.text, message.id]))
 
-    appendFileSync(
-      historyPath,
-      JSON.stringify({ ts: 30, agentSlug: "developer", command: "navigate", args: ["https://three.test"], result: "success" }) + "\n",
-      "utf8",
-    )
+    appendAppActivity({ ts: 30, app: "browser", kind: "navigate", text: "visited https://three.test", actorSlug: "developer" }, root)
 
-    const second = tui.readBrowserActivityMessages(10)
+    const second = tui.readAppActivityMessages(10)
     const secondByText = new Map(second.map((message: any) => [message.text, message.id]))
 
     expect(secondByText.get("visited https://one.test")).toBe(firstByText.get("visited https://one.test"))
@@ -174,6 +161,52 @@ describe("workspace tui memory guards", () => {
 
     const loaded = tui.loadDmThreadWindow(`agent:${devDna}`, 10)
     expect(loaded.messages.map((message: any) => message.id)).toEqual(["dm-out", "dm-in"])
+    expect(loaded.hasOlder).toBe(false)
+  })
+
+  it("merges per-thread app activity into an agent thread window", () => {
+    const devDna = "abc1234"
+
+    appendWorkspaceMessage(
+      {
+        id: "dm-in",
+        ts: 2,
+        kind: "dm",
+        from: "tl-dev-1",
+        fromName: "Developer",
+        fromDna: devDna,
+        target: "human:default",
+        text: "inbound",
+      },
+      root,
+    )
+    appendAppActivity({
+      ts: 3,
+      app: "browser",
+      kind: "click",
+      text: "clicked button.publish",
+      actorSlug: "developer",
+      actorDna: devDna,
+      threadId: "agent:developer",
+      surface: "both",
+    }, root)
+
+    const tui = new WorkspaceTui(root) as any
+    tui.snapshot.dmThreads = [{
+      id: "agent:developer",
+      dna: devDna,
+      slug: "developer",
+      label: "Developer",
+      online: true,
+      typing: false,
+    }]
+    tui.rebuildSnapshotIndexes()
+
+    const loaded = tui.loadDmThreadWindow("agent:developer", 10)
+    expect(loaded.messages.map((message: any) => message.text)).toEqual([
+      "inbound",
+      "clicked button.publish",
+    ])
     expect(loaded.hasOlder).toBe(false)
   })
 })

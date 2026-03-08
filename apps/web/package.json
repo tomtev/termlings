@@ -1,0 +1,29 @@
+{
+  "name": "termlings-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "docs:sync": "node scripts/sync-docs.mjs",
+    "dev": "bun run docs:sync && svelte-kit sync && vite dev",
+    "build": "bun run docs:sync && svelte-kit sync && vite build",
+    "preview": "vite preview",
+    "deploy": "bun run build && wrangler deploy"
+  },
+  "dependencies": {
+    "lucide-svelte": "^0.577.0",
+    "marked": "^17.0.4",
+    "prismjs": "^1.30.0",
+    "stripe": "^17.0.0",
+    "termlings": "file:../.."
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@sveltejs/adapter-cloudflare": "^7.2.8",
+    "@sveltejs/kit": "^2.0.0",
+    "svelte": "^5.0.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "wrangler": "^4.0.0"
+  }
+}

@@ -17,6 +17,7 @@ import { tmpdir } from "os"
 import { join } from "path"
 import { fileURLToPath } from "url"
 import type { Cookie, HealthCheckResponse } from "./browser-types.js"
+import { findJoinedBrowserTabInviteForCurrentIdentity } from "./browser-invites.js"
 import { getTermlingsDir } from "./ipc.js"
 import { getAvatarCSS, renderLayeredSVG, renderSVGSmall } from "../index.js"
 
@@ -196,11 +197,13 @@ export class BrowserClient {
     await this.withSelectedTab(options.tabId, async () => {
       if (options.ref && options.ref.trim().length > 0) {
         const ref = options.ref.startsWith("@") ? options.ref : `@${options.ref}`
+        await this.previewCursorForRefTarget(ref)
         this.runAgentBrowser(["type", ref, text])
         return
       }
 
       if (options.selector && options.selector.trim().length > 0) {
+        await this.previewCursorForSelector(options.selector)
         this.runAgentBrowser(["type", options.selector, text])
         return
       }
@@ -211,6 +214,7 @@ export class BrowserClient {
 
   async focusSelector(selector: string, options: { tabId?: string } = {}): Promise<void> {
     await this.withSelectedTab(options.tabId, async () => {
+      await this.previewCursorForSelector(selector)
       const selectorJson = JSON.stringify(selector)
       const result = this.runAgentBrowser([
         "eval",
@@ -245,7 +249,9 @@ export class BrowserClient {
    */
   async clickSelector(selector: string, options: { tabId?: string } = {}): Promise<void> {
     await this.withSelectedTab(options.tabId, async () => {
+      await this.previewCursorForSelector(selector)
       this.runAgentBrowser(["click", selector])
+      await this.recoverCursorAfterPotentialNavigation()
     })
   }
 
@@ -374,6 +380,7 @@ export class BrowserClient {
   async typeIntoRef(tabId: string, ref: string, text: string): Promise<void> {
     await this.withSelectedTab(tabId, async () => {
       const target = ref.startsWith("@") ? ref : `@${ref}`
+      await this.previewCursorForRefTarget(target)
       this.runAgentBrowser(["type", target, text])
     })
   }
@@ -387,7 +394,9 @@ export class BrowserClient {
   async clickRef(tabId: string, ref: string): Promise<void> {
     await this.withSelectedTab(tabId, async () => {
       const target = ref.startsWith("@") ? ref : `@${ref}`
+      await this.previewCursorForRefTarget(target)
       this.runAgentBrowser(["click", target])
+      await this.recoverCursorAfterPotentialNavigation()
     })
   }
 
@@ -431,22 +440,38 @@ export class BrowserClient {
     return await this.withBrowserLock(async () => {
       const ownerKey = this.resolveTabOwnerKey()
       let resolvedTabId: string | null = null
+      let usingJoinedInvite = false
 
       if (typeof tabId === "string" && tabId.trim().length > 0) {
         const requestedTabId = this.resolveTabRefUnlocked(tabId)
+        const joinedInvite = findJoinedBrowserTabInviteForCurrentIdentity(requestedTabId)
         if (ownerKey) {
           const requestedOwnerKey = this.findOwnerKeyForTabUnlocked(requestedTabId)
-          if (requestedOwnerKey && requestedOwnerKey !== ownerKey) {
+          if (joinedInvite) {
+            resolvedTabId = joinedInvite.tabId
+            usingJoinedInvite = true
+          } else if (requestedOwnerKey && requestedOwnerKey !== ownerKey) {
             resolvedTabId = this.resolveOrAssignOwnerTabUnlocked(ownerKey)
           } else {
             resolvedTabId = requestedTabId
             this.recordOwnerTabUnlocked(ownerKey, resolvedTabId)
           }
         } else {
-          resolvedTabId = requestedTabId
+          if (joinedInvite) {
+            resolvedTabId = joinedInvite.tabId
+            usingJoinedInvite = true
+          } else {
+            resolvedTabId = requestedTabId
+          }
         }
-      } else if (ownerKey) {
-        resolvedTabId = this.resolveOrAssignOwnerTabUnlocked(ownerKey)
+      } else {
+        const joinedInvite = findJoinedBrowserTabInviteForCurrentIdentity()
+        if (joinedInvite) {
+          resolvedTabId = joinedInvite.tabId
+          usingJoinedInvite = true
+        } else if (ownerKey) {
+          resolvedTabId = this.resolveOrAssignOwnerTabUnlocked(ownerKey)
+        }
       }
 
       if (resolvedTabId) {
@@ -456,15 +481,22 @@ export class BrowserClient {
       }
 
       return await this.withCommandTab(resolvedTabId, async () => {
-        const result = await run()
-
         if (resolvedTabId) {
-          if (ownerKey) {
-            this.recordOwnerTabUnlocked(ownerKey, resolvedTabId)
-          }
           await this.ensureTabIdentityOnSelectedTab()
+          await this.setTabWorkingOnSelectedTab(true)
         }
-        return result
+
+        try {
+          return await run()
+        } finally {
+          if (resolvedTabId) {
+            await this.setTabWorkingOnSelectedTab(false)
+            if (ownerKey && !usingJoinedInvite) {
+              this.recordOwnerTabUnlocked(ownerKey, resolvedTabId)
+            }
+            await this.ensureTabIdentityOnSelectedTab()
+          }
+        }
       })
     })
   }
@@ -991,7 +1023,6 @@ export class BrowserClient {
     const favicon = this.buildTabIdentityFavicon()
     const prefixPatternJson = JSON.stringify(TAB_IDENTITY_TITLE_PREFIX_RE.source)
     const signatureJson = JSON.stringify(`label:${label}:${favicon.signature}`)
-    const prefixJson = JSON.stringify(`[${label}] `)
     const iconHrefJson = JSON.stringify(favicon.iconHref)
 
     return `(() => {
@@ -1000,7 +1031,7 @@ export class BrowserClient {
   const ICON_SELECTOR = 'link[rel~="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"], link[rel="mask-icon"]';
   const signature = ${signatureJson};
       const iconHref = ${iconHrefJson};
-      const titlePrefix = ${prefixJson};
+      const baseLabel = ${JSON.stringify(label)};
       const root = document.documentElement || document;
       if (!root) return { ok: false, reason: "no-root" };
 
@@ -1012,14 +1043,45 @@ export class BrowserClient {
 
   const state = {
     signature,
-    titlePrefix,
     iconHref,
     originalTitle: "",
     observer: null,
     scheduled: false,
+    busy: false,
+    spinnerIndex: 0,
+    spinnerTimer: null,
+    spinnerFrames: ["", ".", "..", "..."],
     normalizeTitle(rawTitle) {
       const text = typeof rawTitle === "string" ? rawTitle : "";
       return text.replace(new RegExp(${prefixPatternJson}), "").trimStart();
+    },
+    buildTitlePrefix() {
+      const suffix = this.busy
+        ? (this.spinnerFrames[this.spinnerIndex % this.spinnerFrames.length] || "")
+        : "";
+      return "[" + baseLabel + suffix + "] ";
+    },
+    startSpinner() {
+      if (this.spinnerTimer || typeof setInterval !== "function") return;
+      this.spinnerTimer = setInterval(() => {
+        if (!this.busy) return;
+        this.spinnerIndex = (this.spinnerIndex + 1) % this.spinnerFrames.length;
+        try { this.apply(); } catch {}
+      }, 450);
+    },
+    stopSpinner() {
+      if (this.spinnerTimer && typeof clearInterval === "function") {
+        clearInterval(this.spinnerTimer);
+      }
+      this.spinnerTimer = null;
+      this.spinnerIndex = 0;
+    },
+    setBusy(nextBusy) {
+      this.busy = nextBusy === true;
+      if (this.busy) this.startSpinner();
+      else this.stopSpinner();
+      this.apply();
+      return { ok: true, busy: this.busy };
     },
     applyIcon(head) {
       const existingIcons = Array.from(document.querySelectorAll(ICON_SELECTOR));
@@ -1106,6 +1168,7 @@ export class BrowserClient {
       }
 
       const currentTitle = typeof document.title === "string" ? document.title : "";
+      const titlePrefix = this.buildTitlePrefix();
       const normalizedTitle = state.normalizeTitle(currentTitle) || "Browser";
       if (!currentTitle.startsWith(titlePrefix) || currentTitle !== titlePrefix + normalizedTitle) {
         state.originalTitle = normalizedTitle;
@@ -1142,6 +1205,32 @@ export class BrowserClient {
       }
     } catch {
       // best-effort only
+    }
+  }
+
+  private async setTabWorkingOnSelectedTab(working: boolean): Promise<void> {
+    const script = `(() => {
+      const state = window.__termlingsTabIdentity;
+      if (!state) return { ok: false, reason: "missing" };
+      if (typeof state.setBusy === "function") {
+        return state.setBusy(${working ? "true" : "false"});
+      }
+      state.busy = ${working ? "true" : "false"};
+      if (typeof state.apply === "function") {
+        state.apply();
+      }
+      return { ok: true, busy: state.busy === true };
+    })()`
+
+    const attempts = working ? 2 : 1
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        this.runAgentBrowser(["eval", script], 2_000)
+        return
+      } catch {
+        if (!working || attempt >= attempts - 1) return
+        await this.ensureTabIdentityOnSelectedTab(true)
+      }
     }
   }
 
@@ -1246,7 +1335,7 @@ export class BrowserClient {
       el.style.zIndex = "2147483647";
       el.style.filter = "none";
       el.style.boxShadow = "none";
-      el.style.transition = "left 70ms linear, top 70ms linear";
+      el.style.transition = "left 55ms linear, top 55ms linear";
       el.setAttribute("data-termlings-avatar-cursor", "1");
     };
     const removeDuplicateCursors = (keep) => {
@@ -1302,7 +1391,7 @@ export class BrowserClient {
     el.style.zIndex = "2147483647";
     el.style.filter = "none";
     el.style.boxShadow = "none";
-    el.style.transition = "left 70ms linear, top 70ms linear";
+    el.style.transition = "left 55ms linear, top 55ms linear";
     const inner = el.firstElementChild;
     if (inner && inner.classList) {
       inner.classList.add("termlings-avatar-cursor-svg");
@@ -1504,27 +1593,90 @@ export class BrowserClient {
 
     const target = this.getSelectorCenter(selector)
     if (!target) return
+    await this.previewCursorAtPoint(target)
+  }
 
+  private async previewCursorForSelector(selector: string): Promise<void> {
+    if (!this.shouldInjectAvatarCursor()) return
+    await this.ensureInPageAvatarCursor()
+    await this.animateCursorToSelector(selector)
+  }
+
+  private normalizeRefForLookup(ref: string): string {
+    const trimmed = String(ref || "").trim()
+    return trimmed.startsWith("@") ? trimmed.slice(1) : trimmed
+  }
+
+  private getRefCenter(ref: string): { x: number; y: number } | null {
+    const normalizedRef = this.normalizeRefForLookup(ref)
+    if (!normalizedRef) return null
+
+    try {
+      const refJson = JSON.stringify(normalizedRef)
+      const data = this.runAgentBrowser([
+        "eval",
+        `(() => {
+          const ref = ${refJson};
+          const selectors = [
+            '[data-agent-ref="' + ref + '"]',
+            '[data-agent-browser-ref="' + ref + '"]',
+            '[data-ref="' + ref + '"]',
+            '[aria-ref="' + ref + '"]',
+            '[data-element-ref="' + ref + '"]',
+            '[aria-keyshortcuts="' + ref + '"]'
+          ];
+          const el = selectors
+            .map((selector) => document.querySelector(selector))
+            .find(Boolean);
+          if (!el) return { ok: false, reason: "not-found" };
+          try { el.scrollIntoView({ block: "center", inline: "center", behavior: "instant" }); } catch {}
+          const rect = el.getBoundingClientRect();
+          if (!rect || rect.width <= 0 || rect.height <= 0) {
+            return { ok: false, reason: "empty-rect" };
+          }
+          const clamp = (v, max) => Math.max(2, Math.min(Math.max(2, max - 2), Math.round(v)));
+          return {
+            ok: true,
+            x: clamp(rect.left + rect.width / 2, window.innerWidth),
+            y: clamp(rect.top + Math.max(4, Math.min(rect.height - 2, rect.height * 0.4)), window.innerHeight)
+          };
+        })()`,
+      ])
+      return this.extractCursorPoint(data)
+    } catch {
+      return null
+    }
+  }
+
+  private async animateCursorToRef(ref: string): Promise<void> {
+    if (!this.shouldInjectAvatarCursor()) return
+
+    const target = this.getRefCenter(ref)
+    if (!target) return
+    await this.previewCursorAtPoint(target)
+  }
+
+  private async previewCursorForRefTarget(ref: string): Promise<void> {
+    if (!this.shouldInjectAvatarCursor()) return
+    await this.ensureInPageAvatarCursor()
+    await this.animateCursorToRef(ref)
+  }
+
+  private async previewCursorAtPoint(target: { x: number; y: number }): Promise<void> {
     const startX = typeof this.cursorLastX === "number" ? this.cursorLastX : target.x
     const startY = typeof this.cursorLastY === "number" ? this.cursorLastY : target.y
-    const dx = target.x - startX
-    const dy = target.y - startY
-    const distance = Math.hypot(dx, dy)
+    const distance = Math.hypot(target.x - startX, target.y - startY)
 
-    // Keep movement visible but fast enough to avoid slowing commands.
-    const steps = Math.max(3, Math.min(11, Math.round(distance / 60)))
-    const totalMs = Math.max(120, Math.min(340, Math.round(distance * 1.4)))
-    const stepDelay = Math.max(10, Math.round(totalMs / Math.max(1, steps)))
+    const point = this.moveCursorInPage(target.x, target.y)
+    if (!point) return
 
-    for (let i = 1; i <= steps; i++) {
-      const t = i / steps
-      const eased = 1 - (1 - t) * (1 - t)
-      const x = startX + dx * eased
-      const y = startY + dy * eased
-      this.moveCursorInPage(x, y)
-      if (i < steps) {
-        await this.sleep(stepDelay)
-      }
+    // The cursor element already animates with CSS; keep only a short settle
+    // delay so the action preview is visible without making commands feel slow.
+    const settleMs = distance < 20
+      ? 0
+      : Math.max(18, Math.min(70, Math.round(distance * 0.12)))
+    if (settleMs > 0) {
+      await this.sleep(settleMs)
     }
   }
 

@@ -109,7 +109,7 @@ This model fits core apps like:
 - `task`
 - `requests`
 - `messaging` (scheduled messages, scheduler output)
-- later `calendar`, `crm`, `workflows`, `plans`
+- later `calendar`, `crm`, `workflows`, `plans`, `design`
 
 Examples:
 
@@ -125,6 +125,10 @@ Examples:
   `resolved request req-ab12cd34 (API_KEY)`
 - messaging:
   `scheduled message to agent:developer (daily at 09:00 Europe/Oslo)`
+- design:
+  `rendered hero-card to /tmp/hero.png`
+  `validated hero-card (1 warning)`
+  `exported pricing-card selection from Figma`
 
 ## Custom App API Direction
 

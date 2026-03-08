@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "fs"
 import { join } from "path"
+import { appendAppActivity, resolveAgentActivityThreadId } from "./activity.js"
 
 export type TaskStatus = "open" | "claimed" | "in-progress" | "completed" | "blocked"
 export type TaskPriority = "low" | "medium" | "high"
@@ -166,6 +167,63 @@ function bumpTaskVersion(task: Task): void {
   task.version = current + 1
 }
 
+function taskTitleSummary(task: Pick<Task, "id" | "title">): string {
+  return `${task.id}: ${task.title}`
+}
+
+function appendTaskActivity(
+  kind: string,
+  text: string,
+  options: {
+    task: Pick<Task, "id" | "title">
+    actorName?: string
+    actorSlug?: string
+    actorDna?: string
+    threadId?: string
+    level?: "summary" | "detail"
+  } = {
+    task: { id: "", title: "" },
+  },
+): void {
+  appendAppActivity({
+    ts: Date.now(),
+    app: "task",
+    kind,
+    text,
+    level: options.level || "summary",
+    surface: "both",
+    actorName: options.actorName,
+    actorSlug: options.actorSlug,
+    actorDna: options.actorDna,
+    threadId: options.threadId || resolveAgentActivityThreadId({
+      agentSlug: options.actorSlug,
+      agentDna: options.actorDna,
+    }),
+    meta: {
+      taskId: options.task.id,
+      title: options.task.title,
+    },
+  })
+}
+
+function parseCreatedByActor(creator: { createdBy: string; createdByName?: string }): {
+  actorName?: string
+  actorSlug?: string
+  threadId?: string
+} {
+  const createdBy = String(creator.createdBy || "").trim()
+  const actorName = creator.createdByName?.trim() || undefined
+  if (createdBy.startsWith("agent:")) {
+    const actorSlug = createdBy.slice("agent:".length).trim()
+    return {
+      actorName,
+      actorSlug: actorSlug || undefined,
+      threadId: actorSlug ? `agent:${actorSlug}` : undefined,
+    }
+  }
+  return { actorName }
+}
+
 /**
  * Create a new task
  */
@@ -198,6 +256,16 @@ export function createTask(
     tasks.push(task)
     return { changed: true, result: task }
   })
+
+  if (created) {
+    const actor = parseCreatedByActor(creator)
+    appendTaskActivity("created", `created task ${taskTitleSummary(created)}`, {
+      task: created,
+      actorName: actor.actorName,
+      actorSlug: actor.actorSlug,
+      threadId: actor.threadId,
+    })
+  }
 
   return created
 }
@@ -245,7 +313,7 @@ export function getUnresolvedDeps(task: Task): string[] {
  * Add a dependency: taskId is blocked by depTaskId
  */
 export function addTaskDependency(taskId: string, depTaskId: string): Task | null {
-  return mutateTasksWithRetry<Task | null>((tasks) => {
+  const updated = mutateTasksWithRetry<Task | null>((tasks) => {
     const task = tasks.find(t => t.id === taskId)
     const dep = tasks.find(t => t.id === depTaskId)
 
@@ -269,13 +337,22 @@ export function addTaskDependency(taskId: string, depTaskId: string): Task | nul
     return { changed: true, result: task }
   })
     ?? null
+
+  if (updated) {
+    appendTaskActivity("depends-added", `added dependency to task ${taskTitleSummary(updated)}`, {
+      task: updated,
+      actorName: "System",
+      level: "detail",
+    })
+  }
+  return updated
 }
 
 /**
  * Remove a dependency
  */
 export function removeTaskDependency(taskId: string, depTaskId: string): Task | null {
-  return mutateTasksWithRetry<Task | null>((tasks) => {
+  const updated = mutateTasksWithRetry<Task | null>((tasks) => {
     const task = tasks.find(t => t.id === taskId)
 
     if (!task || !task.blockedBy) return { changed: false, result: null }
@@ -289,13 +366,22 @@ export function removeTaskDependency(taskId: string, depTaskId: string): Task | 
     return { changed: true, result: task }
   })
     ?? null
+
+  if (updated) {
+    appendTaskActivity("depends-removed", `removed dependency from task ${taskTitleSummary(updated)}`, {
+      task: updated,
+      actorName: "System",
+      level: "detail",
+    })
+  }
+  return updated
 }
 
 /**
  * Claim a task (assign to agent by slug)
  */
 export function claimTask(taskId: string, agentSlug: string, agentName: string): Task | null {
-  return mutateTasksWithRetry<Task | null>((tasks) => {
+  const claimed = mutateTasksWithRetry<Task | null>((tasks) => {
     const task = tasks.find(t => t.id === taskId)
     if (!task) return { changed: false, result: null }
     if (task.status !== "open" && task.status !== "claimed") return { changed: false, result: null }
@@ -319,6 +405,15 @@ export function claimTask(taskId: string, agentSlug: string, agentName: string):
     return { changed: true, result: task }
   })
     ?? null
+
+  if (claimed) {
+    appendTaskActivity("claimed", `claimed task ${taskTitleSummary(claimed)}`, {
+      task: claimed,
+      actorName: agentName,
+      actorSlug: agentSlug,
+    })
+  }
+  return claimed
 }
 
 /**
@@ -332,7 +427,7 @@ export function updateTaskStatus(
   note?: string,
   room = "default",
 ): Task | null {
-  return mutateTasksWithRetry<Task | null>((tasks) => {
+  const updated = mutateTasksWithRetry<Task | null>((tasks) => {
     const task = tasks.find(t => t.id === taskId)
     if (!task) return { changed: false, result: null }
 
@@ -358,6 +453,15 @@ export function updateTaskStatus(
     return { changed: true, result: task }
   })
     ?? null
+
+  if (updated) {
+    appendTaskActivity("status", `set task ${taskTitleSummary(updated)} to ${status}`, {
+      task: updated,
+      actorName: agentName,
+      actorSlug: agentSlug,
+    })
+  }
+  return updated
 }
 
 /**
@@ -370,7 +474,7 @@ export function addTaskNote(
   agentName: string,
   room = "default",
 ): Task | null {
-  return mutateTasksWithRetry<Task | null>((tasks) => {
+  const updated = mutateTasksWithRetry<Task | null>((tasks) => {
     const task = tasks.find(t => t.id === taskId)
     if (!task) return { changed: false, result: null }
 
@@ -387,13 +491,24 @@ export function addTaskNote(
     return { changed: true, result: task }
   })
     ?? null
+
+  if (updated) {
+    const excerpt = text.length > 72 ? `${text.slice(0, 71)}…` : text
+    appendTaskActivity("note", `updated task ${taskTitleSummary(updated)}: ${excerpt}`, {
+      task: updated,
+      actorName: agentName,
+      actorSlug: agentSlug,
+      level: "detail",
+    })
+  }
+  return updated
 }
 
 /**
  * Assign task to agent
  */
 export function assignTask(taskId: string, agentSlug: string, agentName: string): Task | null {
-  return mutateTasksWithRetry<Task | null>((tasks) => {
+  const updated = mutateTasksWithRetry<Task | null>((tasks) => {
     const task = tasks.find(t => t.id === taskId)
     if (!task) return { changed: false, result: null }
 
@@ -412,21 +527,39 @@ export function assignTask(taskId: string, agentSlug: string, agentName: string)
     return { changed: true, result: task }
   })
     ?? null
+
+  if (updated) {
+    appendTaskActivity("assigned", `assigned task ${taskTitleSummary(updated)} to ${agentName}`, {
+      task: updated,
+      actorName: "Owner",
+      threadId: `agent:${agentSlug}`,
+    })
+  }
+  return updated
 }
 
 /**
  * Delete a task
  */
 export function deleteTask(taskId: string): boolean {
+  let removedTask: Task | null = null
   const deleted = mutateTasksWithRetry<boolean>((tasks) => {
     const filtered = tasks.filter(t => t.id !== taskId)
     if (filtered.length === tasks.length) {
       return { changed: false, result: false }
     }
+    removedTask = tasks.find((task) => task.id === taskId) || null
     tasks.length = 0
     tasks.push(...filtered)
     return { changed: true, result: true }
   })
+  if (deleted === true && removedTask) {
+    appendTaskActivity("deleted", `deleted task ${taskTitleSummary(removedTask)}`, {
+      task: removedTask,
+      actorName: "Owner",
+      level: "detail",
+    })
+  }
   return deleted === true
 }
 

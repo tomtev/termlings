@@ -38,24 +38,43 @@ npm install -g termlings@latest
 
 Runtime requirement: Bun must be installed because the `termlings` executable runs via Bun.
 
+## Repo Layout
+
+This repository is now the monorepo for the OSS Termlings stack:
+
+- `.` — core `termlings` CLI, TUI, server, docs, templates, and npm package
+- `apps/web` — termlings.com website and docs worker
+- `apps/desktop` — Tauri desktop shell that runs Termlings in sidecar PTY/API mode
+
+Useful monorepo commands:
+
+```bash
+bun test
+bun run web:build
+npm --prefix apps/desktop run check
+```
+
 ## Quick Start (Operator)
 
 Prerequisite: install and log in to at least one runtime CLI (`claude` or `codex`).
 
 ```bash
-# 1) Initialize workspace files
-termlings init
-
-# 2A) One-terminal startup
+# Fastest path
 termlings --spawn
 
-# 2A alt) One-terminal startup with a specific template on first run
+# First run with a specific template
 termlings --spawn --template personal-assistant
 
-# 2B) Or: keep workspace and spawning separate
+# Or initialize first, then start manually
+termlings init
+
+# Separate workspace and spawning
 termlings
 # in another terminal:
 termlings spawn
+
+# Optional: spawn agents inside Docker-isolated workers
+termlings --spawn --docker
 ```
 
 ## IMPORTANT!
@@ -91,10 +110,11 @@ The built-in terminal UI is like an AI-native Slack: chat with your agents, trac
 | --- | --- | --- |
 | `termlings` | Start workspace UI + auto-start scheduler daemon | README |
 | `termlings --spawn` | Open workspace UI immediately + start scheduler daemon + background spawn startup | README |
-| `termlings spawn` | Pick an agent + launch preset | [docs/AGENTS.md](docs/AGENTS.md) |
-| `termlings create` | Create a new agent in .termlings/agents | [docs/AGENTS.md](docs/AGENTS.md) |
-| `termlings agents <cmd>` | Browse/install predefined teams and agent presets | [docs/AGENTS.md](docs/AGENTS.md) |
+| `termlings spawn` | Pick an agent + launch preset | [docs/SPAWN.md](docs/SPAWN.md) |
+| `termlings create` | Create a new agent in .termlings/agents | [docs/TERMLINGS.md](docs/TERMLINGS.md) |
+| `termlings agents <cmd>` | Browse/install predefined teams and agent presets | [docs/TERMLINGS.md](docs/TERMLINGS.md) |
 | `termlings init` | Initialize `.termlings/` in current project | README |
+| `termlings machine <cmd>` | SSH into a shared remote workspace | [docs/MACHINES.md](docs/MACHINES.md) |
 | `termlings avatar <dna|name>` | Render avatar identity | [docs/AVATARS.md](docs/AVATARS.md) |
 | `termlings --help` | Full command reference | CLI help |
 | `termlings --server` | Run secure HTTP API server [WIP] | [docs/SERVER.md](docs/SERVER.md) |
@@ -195,6 +215,7 @@ What each file/folder is for:
 - `.termlings/browser/profile.json` - workspace profile metadata.
 - `.termlings/browser/history/all.jsonl` - global browser action stream.
 - `.termlings/browser/history/agent/*.jsonl` - per-agent browser action streams.
+- `.termlings/machines.json` - saved SSH machine definitions for remote shared workspaces.
 
 ## Lifecycle & Internals
 
@@ -208,8 +229,7 @@ This is intentionally separated so operator docs stay short.
 ## Documentation Index
 
 - [docs/TERMLINGS.md](docs/TERMLINGS.md) - termling identity and concepts
-- [docs/AGENTS.md](docs/AGENTS.md) - SOUL frontmatter and identity conventions
-- [docs/AGENTS.md](docs/AGENTS.md) - preset catalog and install flows
+- [docs/TERMLINGS.md](docs/TERMLINGS.md) - termling identity, SOUL conventions, and creation flows
 - [docs/SPAWN.md](docs/SPAWN.md) - launch agent runtime sessions
 - [docs/APPS.md](docs/APPS.md) - core apps, injection, and app availability
 - [docs/ORG-CHART.md](docs/ORG-CHART.md) - team hierarchy and reporting lines
@@ -226,7 +246,9 @@ This is intentionally separated so operator docs stay short.
 - [docs/SCHEDULER.md](docs/SCHEDULER.md) - scheduler daemon
 - [docs/BRAND.md](docs/BRAND.md) - brand schema and commands
 - [docs/browser.md](docs/browser.md) - browser automation
+- [docs/MACHINES.md](docs/MACHINES.md) - SSH into shared remote workspaces
 - [docs/DOCKER.md](docs/DOCKER.md) - full Docker-native workspace
+- [docs/SECURITY.md](docs/SECURITY.md) - current hardening model and safest deployment paths
 - [docs/SERVER.md](docs/SERVER.md) - `termlings --server` command, API, architecture, and security
 - [docs/AVATARS.md](docs/AVATARS.md) - avatar rendering
 - [docs/PRESENCE.md](docs/PRESENCE.md) - presence + typing model

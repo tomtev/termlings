@@ -1,0 +1,394 @@
+/* ── Fonts ── */
+@font-face {
+  font-family: "Geist Mono";
+  src: url("https://cdn.jsdelivr.net/npm/geist@1.7.0/dist/fonts/geist-mono/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Sans";
+  src: url("https://cdn.jsdelivr.net/npm/geist@1.7.0/dist/fonts/geist-sans/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Theme ── */
+:root {
+  color-scheme: dark;
+  --site-header-height: 3.6rem;
+  --background: #121015;
+  --foreground: #f3eef9;
+  --primary: #8a2be2;
+  --primary-foreground: #f9f4ff;
+  --border: rgba(186, 178, 198, 0.28);
+  --surface-1: rgba(24, 22, 29, 0.82);
+  --surface-2: rgba(30, 28, 35, 0.76);
+  --surface-3: rgba(36, 34, 42, 0.74);
+  --surface-strong: rgba(17, 13, 22, 0.92);
+  --surface-elevated: rgba(24, 19, 31, 0.9);
+  --text-muted: rgba(214, 200, 231, 0.84);
+  --text-subtle: rgba(186, 172, 206, 0.78);
+  --line-soft: rgba(186, 178, 198, 0.17);
+  --line-strong: rgba(186, 178, 198, 0.29);
+  --font-sans: "Geist Sans", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --background: #f6f3f8;
+  --foreground: #2a1d33;
+  --primary: #8a2be2;
+  --primary-foreground: #fbf7ff;
+  --border: rgba(132, 122, 148, 0.22);
+  --surface-1: rgba(252, 250, 254, 0.94);
+  --surface-2: rgba(247, 244, 251, 0.9);
+  --surface-3: rgba(242, 238, 248, 0.94);
+  --surface-strong: rgba(248, 242, 255, 0.98);
+  --surface-elevated: rgba(250, 245, 255, 0.95);
+  --text-muted: rgba(63, 49, 79, 0.84);
+  --text-subtle: rgba(117, 106, 136, 0.82);
+  --line-soft: rgba(132, 122, 148, 0.14);
+  --line-strong: rgba(132, 122, 148, 0.24);
+}
+
+@media (max-width: 720px) {
+  :root {
+    --site-header-height: 3.3rem;
+  }
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+a:hover {
+  color: inherit;
+}
+
+pre, code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  margin: 0;
+}
+
+/* ── Page ── */
+.page {
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.content {
+  max-width: 72rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 2rem 1.5rem;
+}
+
+@media (min-width: 1024px) {
+  .content {
+    padding: 3rem 2rem;
+  }
+}
+
+/* ── Cards ── */
+.card {
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.75rem;
+  background: var(--surface-1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.card-header {
+  padding: 1.5rem;
+  padding-bottom: 0.75rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.card-title {
+  font-family: var(--font-mono);
+  font-size: 2.25rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+  text-align: center;
+  color: var(--foreground);
+}
+
+@media (min-width: 640px) {
+  .card-title {
+    font-size: 3rem;
+  }
+}
+
+.card-subtitle {
+  max-width: 42rem;
+  margin: 0 auto;
+  text-align: center;
+  font-size: 1.5rem;
+  color: var(--text-muted);
+}
+
+.card-body {
+  padding: 1rem;
+}
+
+.card-body-lg {
+  padding: 1.25rem;
+}
+
+/* ── Install Bar ── */
+.install-wrap {
+  padding-bottom: 0.5rem;
+}
+
+.install-bar {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  padding: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .install-bar {
+    flex-wrap: nowrap;
+  }
+}
+
+.install-label {
+  flex-shrink: 0;
+  padding: 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  color: var(--text-muted);
+}
+
+.install-code {
+  flex: 1;
+  border-radius: 0.375rem;
+  border: 1px solid var(--line-soft);
+  background: var(--surface-3);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--foreground);
+  font-family: var(--font-mono);
+}
+
+.try-section {
+  padding: 0.5rem 0;
+}
+
+.try-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.025em;
+}
+
+.try-commands {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.bar-stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+}
+
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.bar-sub {
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--text-muted) 65%, transparent);
+  padding: 0.25rem 0.5rem 0;
+}
+
+.bar-sub code {
+  font-family: var(--font-mono);
+  background: var(--surface-3);
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.6875rem;
+}
+
+.try-hint {
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: color-mix(in srgb, var(--text-muted) 70%, transparent);
+}
+
+.try-hint code {
+  font-family: var(--font-mono);
+  background: var(--surface-3);
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.75rem;
+}
+
+/* ── Buttons ── */
+.btn-ghost {
+  display: inline-flex;
+  height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  border: 1px solid var(--line-strong);
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--foreground);
+  transition: background-color 0.15s;
+  cursor: pointer;
+}
+
+.btn-ghost:hover {
+  background: color-mix(in srgb, var(--surface-2) 92%, white 8%);
+}
+
+.btn-icon {
+  width: 2.5rem;
+  padding: 0;
+}
+
+/* ── Feature Grids ── */
+.feature-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .feature-grid.cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .feature-grid.cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.feature-title {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  color: var(--primary);
+}
+
+.feature-desc {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.feature-desc code {
+  color: var(--primary);
+  background: none;
+  padding: 0;
+  border: none;
+}
+
+.feature-card-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+/* ── Code Blocks ── */
+.code-section-title {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  color: var(--primary);
+  margin: 0;
+}
+
+.code-section-desc {
+  margin-top: 0.25rem;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.code-block {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+  border-radius: 0.375rem;
+  border: 1px solid var(--line-soft);
+  background: var(--surface-2);
+  padding: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.625;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ── Docs Link ── */
+.docs-link {
+  display: inline-flex;
+  width: 100%;
+  height: 3rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  padding: 0 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--foreground);
+  transition: background-color 0.15s;
+}
+
+.docs-link:hover {
+  background: var(--surface-strong);
+}
+
+/* ── Agent Row ── */
+.agent-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0;
+}

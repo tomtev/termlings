@@ -1,4 +1,8 @@
 node_modules
+apps/*/node_modules
+apps/*/dist
+apps/web/.svelte-kit
+apps/desktop/src-tauri/target
 .frames
 .video-frames
 .DS_Store
@@ -10,3 +14,4 @@ project-termlings/
 .termlings/
 .claude/
 .pi/
+pro.md

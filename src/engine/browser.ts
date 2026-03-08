@@ -16,6 +16,7 @@ import {
 } from "fs"
 import { spawnSync } from "child_process"
 import { createHash } from "crypto"
+import { lookup } from "node:dns/promises"
 import { basename, join, resolve, sep } from "path"
 import { getTermlingsDir } from "./ipc.js"
 import type {
@@ -26,7 +27,13 @@ import type {
   AgentBrowserState,
   AgentBrowserPresenceEndReason,
   AgentBrowserPresenceStatus,
+  BrowserTabOwnerSnapshot,
+  BrowserWorkspaceSnapshot,
+  BrowserWorkspaceTabInput,
+  BrowserWorkspaceTabSnapshot,
 } from "./browser-types.js"
+import { appendAppActivity, resolveAgentActivityThreadId } from "./activity.js"
+import { listBrowserTabInvites, readBrowserTabInvite } from "./browser-invites.js"
 
 /**
  * Get the browser directory (.termlings/browser)
@@ -73,6 +80,35 @@ export function getBrowserProfileDir(): string {
   return join(process.env.HOME || "/tmp", ".termlings", "chrome-profiles", profileName)
 }
 
+function termlingsProfileRootForHome(home: string): string {
+  return join(home || "/tmp", ".termlings", "chrome-profiles")
+}
+
+function looksLikeManagedTermlingsProfilePath(profilePath: string): boolean {
+  const normalized = resolve(String(profilePath || "").trim())
+  if (!normalized) return false
+  const marker = `${sep}.termlings${sep}chrome-profiles${sep}`
+  return normalized.includes(marker)
+}
+
+function resolveEffectiveBrowserProfilePath(profilePath?: string): string {
+  const trimmed = String(profilePath || "").trim()
+  const runtimeDefault = getBrowserProfileDir()
+  if (!trimmed) return runtimeDefault
+
+  const normalized = resolve(trimmed)
+  if (!looksLikeManagedTermlingsProfilePath(normalized)) {
+    return normalized
+  }
+
+  const currentRoot = resolve(termlingsProfileRootForHome(process.env.HOME || "/tmp"))
+  if (normalized === currentRoot || normalized.startsWith(`${currentRoot}${sep}`)) {
+    return normalized
+  }
+
+  return runtimeDefault
+}
+
 /**
  * Get or create profile reference
  */
@@ -117,6 +153,16 @@ export function updateProfileReference(): void {
   writeFileSync(getProfileReferencePath(), JSON.stringify(ref, null, 2) + "\n")
 }
 
+export function readProfileReference(): ProfileReference | null {
+  const refPath = getProfileReferencePath()
+  if (!existsSync(refPath)) return null
+  try {
+    return JSON.parse(readFileSync(refPath, "utf8")) as ProfileReference
+  } catch {
+    return null
+  }
+}
+
 /**
  * Get the browser config file path
  */
@@ -129,6 +175,10 @@ export function getBrowserConfigPath(): string {
  */
 export function getProcessStatePath(): string {
   return join(getTermlingsBrowserDir(), "process.json")
+}
+
+export function getBrowserWorkspaceSnapshotPath(): string {
+  return join(getTermlingsBrowserDir(), "workspace-state.json")
 }
 
 export function getBrowserLifecycleLockPath(): string {
@@ -190,6 +240,7 @@ const AGENT_BROWSER_STATE_VERSION = 2
 const DEFAULT_AGENT_BROWSER_STALE_MS = 300_000
 const BROWSER_LIFECYCLE_LOCK_STALE_MS = 120_000
 const BROWSER_LIFECYCLE_LOCK_WAIT_MS = 30_000
+const BROWSER_WORKSPACE_SNAPSHOT_VERSION = 1
 
 /**
  * Load or create browser configuration
@@ -203,9 +254,7 @@ export function getBrowserConfig(): BrowserConfig {
       const resolved = {
         ...DEFAULT_BROWSER_CONFIG,
         ...parsed,
-        profilePath: parsed.profilePath && parsed.profilePath.trim().length > 0
-          ? parsed.profilePath
-          : getBrowserProfileDir(),
+        profilePath: resolveEffectiveBrowserProfilePath(parsed.profilePath),
       }
       assertSafeBrowserProfilePath(resolved.profilePath)
       return resolved
@@ -226,9 +275,11 @@ export function updateBrowserConfig(config: Partial<BrowserConfig>): BrowserConf
   const updated = {
     ...current,
     ...config,
-    profilePath: config.profilePath && config.profilePath.trim().length > 0
-      ? config.profilePath
-      : current.profilePath,
+    profilePath: resolveEffectiveBrowserProfilePath(
+      config.profilePath && config.profilePath.trim().length > 0
+        ? config.profilePath
+        : current.profilePath,
+    ),
   }
   assertSafeBrowserProfilePath(updated.profilePath)
   writeFileSync(getBrowserConfigPath(), JSON.stringify(updated, null, 2) + "\n")
@@ -255,6 +306,14 @@ export function readProcessState(): ProcessState | null {
  */
 export function updateProcessState(state: ProcessState): void {
   writeFileSync(getProcessStatePath(), JSON.stringify(state, null, 2) + "\n")
+  try {
+    writeBrowserWorkspaceSnapshot({
+      tabs: state.status === "stopped" ? [] : undefined,
+      replaceTabs: state.status === "stopped",
+    })
+  } catch {
+    // ignore snapshot refresh errors
+  }
 }
 
 /**
@@ -274,8 +333,23 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-async function fetchCdpVersion(port: number, timeoutMs: number = 2000): Promise<Record<string, unknown>> {
-  const response = await fetch(`http://127.0.0.1:${port}/json/version`, {
+async function fetchCdpVersion(target: string | number, timeoutMs: number = 2000): Promise<Record<string, unknown>> {
+  const trimmed = String(target).trim()
+  let url = ""
+  if (/^\d+$/.test(trimmed)) {
+    url = `http://127.0.0.1:${trimmed}/json/version`
+  } else if (trimmed.startsWith("ws://") || trimmed.startsWith("wss://")) {
+    const parsed = new URL(trimmed)
+    const protocol = parsed.protocol === "wss:" ? "https:" : "http:"
+    url = `${protocol}//${parsed.host}/json/version`
+  } else if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    const parsed = new URL(trimmed)
+    url = `${parsed.protocol}//${parsed.host}/json/version`
+  } else {
+    url = `http://${trimmed}/json/version`
+  }
+
+  const response = await fetch(url, {
     signal: AbortSignal.timeout(timeoutMs),
   })
   if (!response.ok) {
@@ -303,15 +377,126 @@ function getStartupConfig(config: BrowserConfig): { timeoutMs: number; attempts:
   }
 }
 
+export function isContainerRuntime(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.TERMLINGS_DOCKER === "1") return true
+  if (env.container === "docker") return true
+  if (existsSync("/.dockerenv")) return true
+  return false
+}
+
+export function shouldForceHeadlessBrowser(env: NodeJS.ProcessEnv = process.env): boolean {
+  return isContainerRuntime(env) && !env.DISPLAY
+}
+
+function dockerBrowserGatewayHost(env: NodeJS.ProcessEnv = process.env): string {
+  const raw = String(env.TERMLINGS_DOCKER_BROWSER_HOST || "").trim()
+  return raw || "host.docker.internal"
+}
+
+export function resolveBrowserClientTarget(
+  state: ProcessState,
+  env: NodeJS.ProcessEnv = process.env,
+): string | number {
+  if (isContainerRuntime(env) && state.sharedForDocker && state.dockerCdpTarget) {
+    return state.dockerCdpTarget
+  }
+  return state.cdpWsUrl || state.port
+}
+
+export async function resolveDockerBrowserTargetToIp(
+  target: string,
+  resolver: (host: string, options: { family: 4 }) => Promise<{ address: string }> = lookup,
+): Promise<string> {
+  const trimmed = target.trim()
+  const hostPortMatch = trimmed.match(/^([^:/\s]+):(\d+)$/)
+  if (!hostPortMatch) {
+    return target
+  }
+
+  const host = hostPortMatch[1]
+  const port = hostPortMatch[2]
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host === "localhost") {
+    return target
+  }
+
+  try {
+    const resolved = await resolver(host, { family: 4 })
+    if (resolved?.address) {
+      return `${resolved.address}:${port}`
+    }
+  } catch {
+    // fall back to the original host if DNS resolution fails
+  }
+
+  return target
+}
+
+export async function resolveReachableBrowserClientTarget(
+  state: ProcessState,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | number> {
+  const target = resolveBrowserClientTarget(state, env)
+  if (!isContainerRuntime(env) || !state.sharedForDocker || typeof target !== "string") {
+    return target
+  }
+  return await resolveDockerBrowserTargetToIp(target)
+}
+
+export function buildBrowserLaunchCommand(
+  binary: string,
+  options: {
+    headless: boolean
+    port: number
+    profilePath: string
+    env?: NodeJS.ProcessEnv
+    remoteDebuggingAddress?: string
+  },
+): { command: string; args: string[] } {
+  const env = options.env || process.env
+  const inContainer = isContainerRuntime(env)
+  const effectiveHeadless = options.headless || shouldForceHeadlessBrowser(env)
+  const chromiumArgs = [
+    `--remote-debugging-port=${options.port}`,
+    ...(options.remoteDebuggingAddress ? [`--remote-debugging-address=${options.remoteDebuggingAddress}`] : []),
+    `--user-data-dir=${options.profilePath}`,
+    "--profile-directory=Default",
+    "--no-first-run",
+    "--disable-search-engine-choice-screen",
+    "--no-default-browser-check",
+    ...(inContainer ? ["--no-sandbox", "--disable-dev-shm-usage"] : []),
+    ...(effectiveHeadless ? ["--headless=new", "--disable-gpu", "--hide-scrollbars"] : []),
+    "about:blank",
+  ]
+
+  return {
+    command: binary,
+    args: chromiumArgs,
+  }
+}
+
 function buildStoppedProcessState(port: number, profilePath?: string): ProcessState {
   return {
     pid: null,
     port,
     status: "stopped",
     startedAt: null,
+    sharedForDocker: false,
     profilePath,
     mode: "cdp",
   }
+}
+
+function canUseSharedDockerBrowserState(
+  state: ProcessState | null | undefined,
+  env: NodeJS.ProcessEnv = process.env,
+): state is ProcessState {
+  return Boolean(
+    state
+    && isContainerRuntime(env)
+    && state.sharedForDocker
+    && typeof state.dockerCdpTarget === "string"
+    && state.dockerCdpTarget.trim().length > 0,
+  )
 }
 
 interface BrowserLifecycleLockMetadata {
@@ -505,16 +690,25 @@ async function waitForCdpReady(
 ): Promise<Record<string, unknown>> {
   const startedAt = Date.now()
   let lastError: unknown = null
+  let exitedAt: number | null = null
+  const exitGraceMs = 5000
 
   while (Date.now() - startedAt < timeoutMs) {
-    if (!isProcessAlive(pid)) {
-      throw new Error(`Chrome process exited before CDP was ready (pid ${pid}).`)
-    }
     try {
       return await fetchCdpVersion(port, Math.min(2000, pollMs * 4))
     } catch (error) {
       lastError = error
     }
+
+    if (!isProcessAlive(pid)) {
+      exitedAt = exitedAt ?? Date.now()
+      if (Date.now() - exitedAt >= exitGraceMs) {
+        throw new Error(`Chrome process exited before CDP was ready (pid ${pid}).`)
+      }
+    } else {
+      exitedAt = null
+    }
+
     await sleep(pollMs)
   }
 
@@ -683,6 +877,7 @@ export async function initializeBrowserDirs(): Promise<void> {
   mkdirSync(getActivityHistoryDir(), { recursive: true })
   mkdirSync(getAgentActivityHistoryDir(), { recursive: true })
   mkdirSync(getAgentBrowserStateDir(), { recursive: true })
+  mkdirSync(join(baseDir, "invites"), { recursive: true })
 
   const current = getBrowserConfig()
   assertSafeBrowserProfilePath(current.profilePath)
@@ -698,7 +893,7 @@ export async function initializeBrowserDirs(): Promise<void> {
 /**
  * Start headed Chrome with CDP enabled for this workspace.
  */
-export async function startBrowser(options: { headless?: boolean } = {}): Promise<{ pid: number; port: number }> {
+export async function startBrowser(options: { headless?: boolean; shareWithDocker?: boolean } = {}): Promise<{ pid: number; port: number }> {
   return await runWithBrowserLifecycleLock(async () => {
     await initializeBrowserDirs()
 
@@ -744,23 +939,20 @@ export async function startBrowser(options: { headless?: boolean } = {}): Promis
 
     const binary = resolveChromeBinary(config.binaryPath)
     const headless = options.headless === true
+    const shareWithDocker = Boolean(options.shareWithDocker) && !isContainerRuntime()
 
     const failures: Array<Record<string, unknown>> = []
     for (let attempt = 1; attempt <= startupConfig.attempts; attempt++) {
       const portBase = config.port + ((attempt - 1) * 20)
       const availablePort = await findAvailablePort(portBase)
-      const launchArgs = [
-        `--remote-debugging-port=${availablePort}`,
-        `--user-data-dir=${profilePath}`,
-        "--profile-directory=Default",
-        "--no-first-run",
-        "--disable-search-engine-choice-screen",
-        "--no-default-browser-check",
-        ...(headless ? ["--headless=new", "--disable-gpu", "--hide-scrollbars"] : []),
-        "about:blank",
-      ]
+      const launch = buildBrowserLaunchCommand(binary, {
+        headless,
+        port: availablePort,
+        profilePath,
+        remoteDebuggingAddress: shareWithDocker ? "0.0.0.0" : undefined,
+      })
 
-      const proc = spawn([binary, ...launchArgs], {
+      const proc = spawn([launch.command, ...launch.args], {
         detached: true,
         stdin: "ignore",
         stdout: "ignore",
@@ -777,6 +969,7 @@ export async function startBrowser(options: { headless?: boolean } = {}): Promis
         port: availablePort,
         status: "starting",
         startedAt: null,
+        sharedForDocker: shareWithDocker,
         profilePath,
         mode: "cdp",
       })
@@ -790,6 +983,10 @@ export async function startBrowser(options: { headless?: boolean } = {}): Promis
           startedAt: Date.now(),
           url: `http://127.0.0.1:${availablePort}`,
           cdpWsUrl: typeof cdpInfo.webSocketDebuggerUrl === "string" ? cdpInfo.webSocketDebuggerUrl : undefined,
+          dockerCdpTarget: shareWithDocker ? `${dockerBrowserGatewayHost()}:${availablePort}` : undefined,
+          sharedForDocker: shareWithDocker,
+          dockerProxyPid: null,
+          dockerProxyPort: undefined,
           profilePath,
           mode: "cdp",
         })
@@ -843,6 +1040,10 @@ export async function stopBrowser(): Promise<void> {
     const state = readProcessState()
     if (!state || !state.pid) return
 
+    if (isContainerRuntime() && state.sharedForDocker) {
+      throw new Error("This browser is managed by the host workspace. Stop it from the host runtime.")
+    }
+
     const pid = state.pid
     const profilePath = state.profilePath
 
@@ -862,11 +1063,24 @@ export async function stopBrowser(): Promise<void> {
  */
 export async function isBrowserRunning(): Promise<boolean> {
   const state = readProcessState()
-  if (!state || state.status !== "running" || !state.pid) return false
+  if (!state || state.status !== "running") return false
+
+  if (canUseSharedDockerBrowserState(state)) {
+    try {
+      const target = await resolveReachableBrowserClientTarget(state)
+      await fetchCdpVersion(target, 1500)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  if (!state.pid) return false
   if (!isProcessAlive(state.pid)) return false
 
   try {
-    await fetchCdpVersion(state.port, 1500)
+    const target = await resolveReachableBrowserClientTarget(state)
+    await fetchCdpVersion(target, 1500)
     return true
   } catch {
     return false
@@ -880,18 +1094,26 @@ export async function waitForBrowserReady(timeoutMs: number = 6000, pollMs: numb
 
   while (Date.now() - startedAt <= timeoutMs) {
     const state = readProcessState()
-    if (state && state.status === "running" && state.pid && isProcessAlive(state.pid)) {
+    if (state && state.status === "running" && (
+      canUseSharedDockerBrowserState(state)
+      || (state.pid && isProcessAlive(state.pid))
+    )) {
       try {
-        await fetchCdpVersion(state.port, Math.min(1500, interval * 4))
+        const target = await resolveReachableBrowserClientTarget(state)
+        await fetchCdpVersion(target, Math.min(1500, interval * 4))
         return state
       } catch {
         // keep polling
       }
     }
 
-    if (state && state.status === "starting" && state.pid && isProcessAlive(state.pid)) {
+    if (state && state.status === "starting" && (
+      canUseSharedDockerBrowserState(state)
+      || (state.pid && isProcessAlive(state.pid))
+    )) {
       try {
-        const cdpInfo = await fetchCdpVersion(state.port, Math.min(1500, interval * 4))
+        const target = await resolveReachableBrowserClientTarget(state)
+        const cdpInfo = await fetchCdpVersion(target, Math.min(1500, interval * 4))
         const runningState: ProcessState = {
           ...state,
           status: "running",
@@ -916,6 +1138,39 @@ export async function waitForBrowserReady(timeoutMs: number = 6000, pollMs: numb
   }
 
   return null
+}
+
+export async function ensureSharedBrowserForDocker(options: { headless?: boolean } = {}): Promise<{
+  status: "started" | "restarted" | "reused"
+  pid: number
+  port: number
+}> {
+  if (isContainerRuntime()) {
+    throw new Error("Shared Docker browser must be prepared from the host runtime.")
+  }
+
+  let state = await waitForBrowserReady(1200, 120)
+  state = state || readProcessState()
+
+  if (state && state.status === "running") {
+    const running = await isBrowserRunning()
+    if (running && state.sharedForDocker && state.pid) {
+      return {
+        status: "reused",
+        pid: state.pid,
+        port: state.port,
+      }
+    }
+
+    if (running) {
+      await stopBrowser()
+      const restarted = await startBrowser({ headless: options.headless === true, shareWithDocker: true })
+      return { status: "restarted", ...restarted }
+    }
+  }
+
+  const started = await startBrowser({ headless: options.headless === true, shareWithDocker: true })
+  return { status: "started", ...started }
 }
 
 /**
@@ -1049,12 +1304,95 @@ function appendBrowserActivityEntry(entry: ActivityLogEntry): void {
   }
 }
 
+function browserActivityText(entry: ActivityLogEntry): string | null {
+  const args = Array.isArray(entry.args) ? entry.args : []
+  const firstStringArg = args.find((arg) => typeof arg === "string" && arg.trim().length > 0)
+  const first = typeof firstStringArg === "string" ? firstStringArg.trim() : undefined
+
+  switch (entry.command) {
+    case "navigate":
+      return first ? `visited ${first}` : "visited a page"
+    case "patterns-execute": {
+      const patternId = typeof args[0] === "string" && args[0].trim() ? args[0].trim() : "pattern"
+      const url = typeof args[1] === "string" && args[1].trim() ? args[1].trim() : undefined
+      return url ? `visited ${url} via pattern ${patternId}` : `ran browser pattern ${patternId}`
+    }
+    case "focus":
+      return first ? `focused ${first}` : "focused an element"
+    case "click":
+      return first ? `clicked ${first}` : "clicked an element"
+    case "type":
+      return "typed into the page"
+    case "snapshot":
+      return "captured a page snapshot"
+    case "screenshot":
+      return "captured a screenshot"
+    case "extract":
+      return "extracted page text"
+    case "request-help":
+      return first ? `requested browser help: ${first}` : "requested browser help"
+    case "invite": {
+      const target = typeof args[0] === "string" && args[0].trim() ? args[0].trim() : "another agent"
+      return `invited ${target} into a browser tab`
+    }
+    case "accept-invite": {
+      const inviteId = typeof args[0] === "string" && args[0].trim() ? args[0].trim() : undefined
+      const invite = inviteId ? readBrowserTabInvite(inviteId) : null
+      const owner = invite?.ownerAgentName || invite?.ownerAgentSlug || "another agent"
+      return `joined ${owner}'s browser tab`
+    }
+    case "leave-invite":
+      return "left a shared browser tab"
+    case "check-login":
+      return "checked whether login is required"
+    case "cookies":
+      return "inspected browser cookies"
+    case "cursor":
+      return "previewed the browser avatar cursor"
+    case "presence-opened":
+      return "started browsing"
+    case "presence-idle":
+      return "stopped actively browsing"
+    case "presence-closed":
+      return "closed the browser session"
+    default:
+      return null
+  }
+}
+
+function emitBrowserAppActivity(entry: ActivityLogEntry): void {
+  const text = browserActivityText(entry)
+  if (!text) return
+
+  appendAppActivity({
+    ts: entry.ts,
+    app: "browser",
+    kind: entry.command,
+    text,
+    level: entry.command.startsWith("presence-") || entry.command === "cursor" ? "detail" : "summary",
+    surface: "both",
+    actorSessionId: entry.sessionId,
+    actorName: entry.agentName,
+    actorSlug: entry.agentSlug,
+    actorDna: entry.agentDna,
+    threadId: resolveAgentActivityThreadId({
+      agentSlug: entry.agentSlug,
+      agentDna: entry.agentDna,
+    }),
+    result: entry.result,
+    meta: {
+      ...(entry.tabId ? { tabId: entry.tabId } : {}),
+      ...(entry.error ? { error: entry.error } : {}),
+    },
+  })
+}
+
 function emitBrowserPresenceEvent(
   state: Pick<AgentBrowserState, "sessionId" | "agentName" | "agentSlug" | "agentDna">,
   phase: AgentBrowserPresenceEndReason | "opened",
   ts: number,
 ): void {
-  appendBrowserActivityEntry({
+  const entry: ActivityLogEntry = {
     ts,
     sessionId: state.sessionId,
     agentName: state.agentName,
@@ -1063,10 +1401,12 @@ function emitBrowserPresenceEvent(
     command: `presence-${phase}`,
     args: [],
     result: "success",
-  })
+  }
+  appendBrowserActivityEntry(entry)
+  emitBrowserAppActivity(entry)
 }
 
-function resolveSessionBrowserTabId(sessionId: string): string | undefined {
+export function resolveSessionBrowserTabId(sessionId: string): string | undefined {
   const fromAgentState = readAgentBrowserState(sessionId)?.tabId?.trim()
   if (fromAgentState) {
     return fromAgentState
@@ -1095,6 +1435,134 @@ function resolveSessionBrowserTabId(sessionId: string): string | undefined {
     return undefined
   }
   return undefined
+}
+
+function readBrowserTabOwners(): BrowserTabOwnerSnapshot[] {
+  const ownersPath = join(getTermlingsBrowserDir(), "tab-owners.json")
+  if (!existsSync(ownersPath)) return []
+  try {
+    const parsed = JSON.parse(readFileSync(ownersPath, "utf8")) as {
+      owners?: Record<string, {
+        tabId?: string
+        updatedAt?: number
+        sessionId?: string
+        agentSlug?: string
+        agentName?: string
+      }>
+    }
+    const owners = parsed.owners || {}
+    return Object.entries(owners)
+      .map(([ownerKey, raw]) => {
+        const tabId = typeof raw?.tabId === "string" ? raw.tabId.trim() : ""
+        const updatedAt = typeof raw?.updatedAt === "number" ? raw.updatedAt : 0
+        if (!tabId || updatedAt <= 0) return null
+        return {
+          ownerKey,
+          tabId,
+          updatedAt,
+          sessionId: typeof raw?.sessionId === "string" && raw.sessionId.trim() ? raw.sessionId.trim() : undefined,
+          agentSlug: typeof raw?.agentSlug === "string" && raw.agentSlug.trim() ? raw.agentSlug.trim() : undefined,
+          agentName: typeof raw?.agentName === "string" && raw.agentName.trim() ? raw.agentName.trim() : undefined,
+        } satisfies BrowserTabOwnerSnapshot
+      })
+      .filter((entry): entry is BrowserTabOwnerSnapshot => Boolean(entry))
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+  } catch {
+    return []
+  }
+}
+
+function buildBrowserWorkspaceTabs(
+  tabs: BrowserWorkspaceTabInput[],
+  owners: BrowserTabOwnerSnapshot[],
+): BrowserWorkspaceTabSnapshot[] {
+  const ownerByTabId = new Map<string, BrowserTabOwnerSnapshot>()
+  for (const owner of owners) {
+    if (!ownerByTabId.has(owner.tabId)) {
+      ownerByTabId.set(owner.tabId, owner)
+    }
+  }
+
+  const inviteCountByTabId = new Map<string, number>()
+  for (const invite of listBrowserTabInvites()) {
+    inviteCountByTabId.set(invite.tabId, (inviteCountByTabId.get(invite.tabId) || 0) + 1)
+  }
+
+  return tabs.map((tab) => {
+    const stableTabId = typeof tab.targetId === "string" && tab.targetId.trim().length > 0
+      ? tab.targetId.trim()
+      : String(tab.id || "").trim()
+    return {
+      id: String(tab.id || "").trim() || stableTabId,
+      targetId: typeof tab.targetId === "string" && tab.targetId.trim() ? tab.targetId.trim() : undefined,
+      title: typeof tab.title === "string" && tab.title.trim() ? tab.title.trim() : undefined,
+      url: typeof tab.url === "string" && tab.url.trim() ? tab.url.trim() : undefined,
+      type: typeof tab.type === "string" && tab.type.trim() ? tab.type.trim() : undefined,
+      active: Boolean(tab.active || tab.current || tab.selected || tab.focused),
+      owner: ownerByTabId.get(stableTabId),
+      inviteCount: inviteCountByTabId.get(stableTabId) || 0,
+    }
+  })
+}
+
+export function readBrowserWorkspaceSnapshot(): BrowserWorkspaceSnapshot | null {
+  const path = getBrowserWorkspaceSnapshotPath()
+  if (!existsSync(path)) return null
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as BrowserWorkspaceSnapshot
+  } catch {
+    return null
+  }
+}
+
+export function buildBrowserWorkspaceSnapshot(
+  options: {
+    tabs?: BrowserWorkspaceTabInput[]
+    replaceTabs?: boolean
+  } = {},
+): BrowserWorkspaceSnapshot {
+  const previous = readBrowserWorkspaceSnapshot()
+  const owners = readBrowserTabOwners()
+  const replaceTabs = options.replaceTabs === true
+  const tabs = Array.isArray(options.tabs)
+    ? buildBrowserWorkspaceTabs(options.tabs, owners)
+    : (!replaceTabs && previous ? previous.tabs : [])
+
+  return {
+    version: BROWSER_WORKSPACE_SNAPSHOT_VERSION,
+    generatedAt: Date.now(),
+    process: readProcessState(),
+    profile: readProfileReference(),
+    agents: readAllAgentBrowserStates(),
+    owners,
+    invites: listBrowserTabInvites().map((invite) => ({
+      id: invite.id,
+      tabId: invite.tabId,
+      status: invite.status,
+      ownerAgentSlug: invite.ownerAgentSlug,
+      ownerAgentName: invite.ownerAgentName,
+      target: invite.target,
+      targetAgentSlug: invite.targetAgentSlug,
+      targetAgentName: invite.targetAgentName,
+      acceptedByAgentSlug: invite.acceptedByAgentSlug,
+      acceptedByAgentName: invite.acceptedByAgentName,
+      tabTitle: invite.tabTitle,
+      tabUrl: invite.tabUrl,
+      updatedAt: invite.updatedAt,
+    })),
+    tabs,
+  }
+}
+
+export function writeBrowserWorkspaceSnapshot(
+  options: {
+    tabs?: BrowserWorkspaceTabInput[]
+    replaceTabs?: boolean
+  } = {},
+): BrowserWorkspaceSnapshot {
+  const snapshot = buildBrowserWorkspaceSnapshot(options)
+  writeFileSync(getBrowserWorkspaceSnapshotPath(), JSON.stringify(snapshot, null, 2) + "\n", "utf8")
+  return snapshot
 }
 
 /**
@@ -1169,6 +1637,7 @@ export function updateAgentBrowserState(command: string, args: unknown[] = [], t
     if (isResumed) {
       emitBrowserPresenceEvent(state, "opened", now)
     }
+    writeBrowserWorkspaceSnapshot()
   } catch {
     // Ignore write errors
   }
@@ -1241,6 +1710,12 @@ export function closeActiveAgentBrowserStates(reason: AgentBrowserPresenceEndRea
     closed.push(state)
   }
 
+  try {
+    writeBrowserWorkspaceSnapshot()
+  } catch {
+    // Ignore snapshot refresh errors
+  }
+
   return closed
 }
 
@@ -1266,9 +1741,11 @@ export function logBrowserActivity(
     args,
     result,
     error,
+    tabId,
   }
 
   appendBrowserActivityEntry(entry)
+  emitBrowserAppActivity(entry)
 
   if (result === "success") {
     updateAgentBrowserState(command, args, tabId)

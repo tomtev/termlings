@@ -4,7 +4,7 @@ import { getTopLevelInitOptions, listUnsupportedTopLevelFlags } from "../top-lev
 
 describe("top-level startup helpers", () => {
   it("allows --template when used with --spawn", () => {
-    const flags = new Set(["spawn", "template"])
+    const flags = new Set(["spawn", "template", "docker", "allow-host-yolo"])
 
     expect(listUnsupportedTopLevelFlags(flags)).toEqual([])
     expect(getTopLevelInitOptions(flags, { template: "personal-assistant" })).toEqual({

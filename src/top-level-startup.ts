@@ -2,6 +2,8 @@ export function listUnsupportedTopLevelFlags(flags: Set<string>): string[] {
   const allowed = new Set(["help", "h", "server", "spawn"])
   if (flags.has("spawn")) {
     allowed.add("template")
+    allowed.add("docker")
+    allowed.add("allow-host-yolo")
   }
   return Array.from(flags).filter((flag) => !allowed.has(flag))
 }

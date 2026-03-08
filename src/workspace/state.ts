@@ -472,6 +472,7 @@ export function ensureWorkspaceDirs(root = process.cwd()): void {
   mkdirSync(storeDir(root), { recursive: true })
   mkdirSync(join(storeDir(root), "crm", "records"), { recursive: true })
   mkdirSync(join(storeDir(root), "crm", "activity"), { recursive: true })
+  mkdirSync(join(storeDir(root), "activity", "thread"), { recursive: true })
   mkdirSync(join(storeDir(root), "workflows"), { recursive: true })
   mkdirSync(sessionsDir(root), { recursive: true })
   mkdirSync(presenceDir(root), { recursive: true })

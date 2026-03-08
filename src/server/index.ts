@@ -2,16 +2,19 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from
 import { createHash } from "crypto"
 import { basename, join, resolve } from "path"
 import { resolveAgentToken } from "../agents/resolve.js"
+import type { BrowserWorkspaceSnapshot } from "../engine/browser-types.js"
+import { listRequests, resolveRequest, dismissRequest } from "../engine/requests.js"
+import { queueMessage, writeMessages } from "../engine/ipc.js"
 
 import {
   appendWorkspaceMessage,
   ensureWorkspaceDirs,
   getChannels,
-  getDmThreads,
   listSessions,
   readWorkspaceMessages,
   removeSession,
   upsertSession,
+  type WorkspaceMessage,
   type WorkspaceSession,
 } from "../workspace/state.js"
 import {
@@ -43,8 +46,25 @@ interface WorkspaceAgent {
   sort_order?: number
   role?: string
   online: boolean
+  typing: boolean
   sessionIds: string[]
   source: "saved" | "ephemeral"
+}
+
+interface SessionTypingState {
+  typing: boolean
+  updatedAt: number
+  source?: "terminal"
+}
+
+interface DmThread {
+  id: string
+  dna: string
+  slug?: string
+  label: string
+  online: boolean
+  typing: boolean
+  sort_order?: number
 }
 
 interface ServerConfig {
@@ -70,6 +90,8 @@ const DEFAULT_PORT = 4173
 const DEFAULT_HOST = "127.0.0.1"
 const DEFAULT_RATE_LIMIT_PER_MINUTE = 120
 const DEFAULT_MAX_SSE_PER_CLIENT = 5
+const TYPING_STALE_MS = 12_000
+const TYPING_MESSAGE_SUPPRESS_MS = 2_000
 
 function safeReadJson<T>(filePath: string, fallback: T): T {
   if (!existsSync(filePath)) return fallback
@@ -206,7 +228,83 @@ function listSavedAgents(root: string): SavedAgent[] {
   return saved
 }
 
-function mergeAgentPresence(savedAgents: SavedAgent[], sessions: WorkspaceSession[]): WorkspaceAgent[] {
+function isHumanAddress(value?: string): boolean {
+  const normalized = String(value || "").trim().toLowerCase()
+  return normalized === "owner" || normalized === "operator" || normalized.startsWith("human:")
+}
+
+function isHumanDna(value?: string): boolean {
+  return String(value || "").trim() === "0000000"
+}
+
+function collectSessionTypingBySession(
+  root: string,
+  sessions: WorkspaceSession[],
+  messages: WorkspaceMessage[],
+): Map<string, SessionTypingState> {
+  const out = new Map<string, SessionTypingState>()
+  const now = Date.now()
+  const sessionDnaById = new Map(sessions.map((session) => [session.sessionId, session.dna]))
+  const latestMessageByDna = new Map<string, number>()
+
+  for (const message of messages) {
+    if (!message || typeof message.ts !== "number") continue
+    const fromDna = message.fromDna ?? (message.from ? sessionDnaById.get(message.from) : undefined)
+    const targetDna = message.targetDna ?? (message.target ? sessionDnaById.get(message.target) : undefined)
+    if (fromDna) {
+      const prev = latestMessageByDna.get(fromDna) ?? 0
+      if (message.ts > prev) latestMessageByDna.set(fromDna, message.ts)
+    }
+    if (targetDna) {
+      const prev = latestMessageByDna.get(targetDna) ?? 0
+      if (message.ts > prev) latestMessageByDna.set(targetDna, message.ts)
+    }
+  }
+
+  for (const session of sessions) {
+    const path = join(root, ".termlings", "store", "presence", `${session.sessionId}.typing.json`)
+    if (!existsSync(path)) {
+      out.set(session.sessionId, { typing: false, updatedAt: 0 })
+      continue
+    }
+
+    try {
+      const raw = JSON.parse(readFileSync(path, "utf8")) as {
+        typing?: unknown
+        source?: unknown
+        updatedAt?: unknown
+      }
+      const updatedAt = typeof raw.updatedAt === "number" ? raw.updatedAt : 0
+      const latestMessageTs = latestMessageByDna.get(session.dna) ?? 0
+      let typing = raw.typing === true && raw.source === "terminal"
+      if (typing && (updatedAt <= 0 || now - updatedAt > TYPING_STALE_MS)) {
+        typing = false
+      }
+      if (typing && latestMessageTs >= updatedAt) {
+        typing = false
+      }
+      if (typing && latestMessageTs > 0 && now - latestMessageTs <= TYPING_MESSAGE_SUPPRESS_MS) {
+        typing = false
+      }
+
+      out.set(session.sessionId, {
+        typing,
+        updatedAt,
+        source: typing ? "terminal" : undefined,
+      })
+    } catch {
+      out.set(session.sessionId, { typing: false, updatedAt: 0 })
+    }
+  }
+
+  return out
+}
+
+function mergeAgentPresence(
+  savedAgents: SavedAgent[],
+  sessions: WorkspaceSession[],
+  typingBySessionId: Map<string, SessionTypingState>,
+): WorkspaceAgent[] {
   const byDna = new Map<string, WorkspaceAgent>()
 
   for (const agent of savedAgents) {
@@ -220,17 +318,28 @@ function mergeAgentPresence(savedAgents: SavedAgent[], sessions: WorkspaceSessio
       sort_order: agent.sort_order,
       role: agent.role,
       online: false,
+      typing: false,
       sessionIds: [],
       source: "saved",
     })
   }
 
   for (const session of sessions) {
+    if (isHumanDna(session.dna)) {
+      continue
+    }
+
     const existing = byDna.get(session.dna)
     if (existing) {
       existing.online = true
+      if (typingBySessionId.get(session.sessionId)?.typing === true) {
+        existing.typing = true
+      }
       if (!existing.sessionIds.includes(session.sessionId)) {
         existing.sessionIds.push(session.sessionId)
+      }
+      if (!existing.name || existing.name === existing.dna) {
+        existing.name = session.name
       }
       continue
     }
@@ -240,6 +349,7 @@ function mergeAgentPresence(savedAgents: SavedAgent[], sessions: WorkspaceSessio
       name: session.name,
       dna: session.dna,
       online: true,
+      typing: typingBySessionId.get(session.sessionId)?.typing === true,
       sessionIds: [session.sessionId],
       source: "ephemeral",
     })
@@ -254,15 +364,83 @@ function mergeAgentPresence(savedAgents: SavedAgent[], sessions: WorkspaceSessio
   })
 }
 
+function buildDmThreads(
+  messages: WorkspaceMessage[],
+  agents: WorkspaceAgent[],
+  sessions: WorkspaceSession[],
+): DmThread[] {
+  const sessionDnaById = new Map(sessions.map((session) => [session.sessionId, session.dna]))
+  const agentByDna = new Map(agents.map((agent) => [agent.dna, agent]))
+  const byDna = new Map<string, DmThread>()
+
+  for (const agent of agents) {
+    const threadId = agent.agentId ? `agent:${agent.agentId}` : `agent:${agent.dna}`
+    byDna.set(agent.dna, {
+      id: threadId,
+      dna: agent.dna,
+      slug: agent.agentId,
+      label: agent.name,
+      online: agent.online,
+      typing: agent.typing,
+      sort_order: agent.sort_order,
+    })
+  }
+
+  for (const message of messages) {
+    if (message.kind !== "dm") continue
+
+    const fromDna = message.fromDna ?? (message.from ? sessionDnaById.get(message.from) : undefined)
+    const targetDna = message.targetDna ?? (message.target ? sessionDnaById.get(message.target) : undefined)
+
+    if (fromDna && !isHumanDna(fromDna) && !isHumanAddress(message.from) && !byDna.has(fromDna)) {
+      const known = agentByDna.get(fromDna)
+      const threadId = known?.agentId ? `agent:${known.agentId}` : `agent:${fromDna}`
+      byDna.set(fromDna, {
+        id: threadId,
+        dna: fromDna,
+        slug: known?.agentId,
+        label: message.fromName || known?.name || fromDna,
+        online: known?.online ?? false,
+        typing: known?.typing ?? false,
+        sort_order: known?.sort_order,
+      })
+    }
+
+    if (targetDna && !isHumanDna(targetDna) && !isHumanAddress(message.target) && !byDna.has(targetDna)) {
+      const known = agentByDna.get(targetDna)
+      const threadId = known?.agentId ? `agent:${known.agentId}` : `agent:${targetDna}`
+      byDna.set(targetDna, {
+        id: threadId,
+        dna: targetDna,
+        slug: known?.agentId,
+        label: message.targetName || known?.name || targetDna,
+        online: known?.online ?? false,
+        typing: known?.typing ?? false,
+        sort_order: known?.sort_order,
+      })
+    }
+  }
+
+  return Array.from(byDna.values()).sort((a, b) => {
+    const aOrder = a.sort_order ?? 0
+    const bOrder = b.sort_order ?? 0
+    if (aOrder !== bOrder) return aOrder - bOrder
+    if (a.online !== b.online) return a.online ? -1 : 1
+    return a.label.localeCompare(b.label)
+  })
+}
+
 function loadWorkspaceSnapshot(root: string): {
   meta: unknown
   sessions: WorkspaceSession[]
   agents: WorkspaceAgent[]
   messages: ReturnType<typeof readWorkspaceMessages>
   channels: ReturnType<typeof getChannels>
-  dmThreads: ReturnType<typeof getDmThreads>
+  dmThreads: DmThread[]
   tasks: unknown[]
   calendarEvents: unknown[]
+  requests: ReturnType<typeof listRequests>
+  browser: BrowserWorkspaceSnapshot | null
   activityUpdatedAt: number
   generatedAt: number
 } {
@@ -272,10 +450,13 @@ function loadWorkspaceSnapshot(root: string): {
   const sessions = listSessions(root)
   const messages = readWorkspaceMessages({ limit: 300 }, root)
   const channels = getChannels(root)
-  const dmThreads = getDmThreads(root)
   const tasks = safeReadJson<unknown[]>(join(root, ".termlings", "store", "tasks", "tasks.json"), [])
   const calendarEvents = safeReadJson<unknown[]>(join(root, ".termlings", "store", "calendar", "calendar.json"), [])
-  const agents = mergeAgentPresence(listSavedAgents(root), sessions)
+  const browser = safeReadJson<BrowserWorkspaceSnapshot | null>(join(root, ".termlings", "browser", "workspace-state.json"), null)
+  const typingBySessionId = collectSessionTypingBySession(root, sessions, messages)
+  const agents = mergeAgentPresence(listSavedAgents(root), sessions, typingBySessionId)
+  const dmThreads = buildDmThreads(messages, agents, sessions)
+  const requests = listRequests()
 
   const latestMessageTs = messages.length > 0 ? messages[messages.length - 1]!.ts : 0
   const latestSessionTs = sessions.reduce((max, session) => Math.max(max, session.lastSeenAt), 0)
@@ -289,6 +470,8 @@ function loadWorkspaceSnapshot(root: string): {
     dmThreads,
     tasks: tasks.slice(-200),
     calendarEvents,
+    requests,
+    browser,
     activityUpdatedAt: Math.max(latestMessageTs, latestSessionTs),
     generatedAt: Date.now(),
   }
@@ -473,6 +656,7 @@ function resolveMessageTarget(
 ): {
   resolvedTarget: string
   storageTarget: string
+  targetSlug?: string
   targetSession?: WorkspaceSession
   targetDna?: string
   targetAgentName?: string
@@ -505,6 +689,7 @@ function resolveMessageTarget(
     return {
       resolvedTarget: targetSession?.sessionId || target,
       storageTarget: `agent:${resolved.agent.slug}`,
+      targetSlug: resolved.agent.slug,
       targetSession,
       targetDna: dna,
       targetAgentName: resolved.agent.name,
@@ -743,9 +928,9 @@ export async function startServer(opts: Record<string, string>, projectRoot = pr
 
           const kind = body.kind || "chat"
           const text = body.text?.trim() || ""
-          const target = body.target
-          const from = body.from || "external"
-          const fromName = body.fromName || "External"
+          const target = typeof body.target === "string" ? body.target.trim() : undefined
+          const from = body.from || "human:default"
+          const fromName = body.fromName || "Operator"
           const fromDna = body.fromDna
 
           if (!text) {
@@ -760,51 +945,136 @@ export async function startServer(opts: Record<string, string>, projectRoot = pr
           const sessions = listSessions(context.projectRoot)
           const savedAgents = listSavedAgents(context.projectRoot)
 
-          let resolvedTarget = target
-          let storageTarget = target
-          let targetSession: WorkspaceSession | undefined
-          let targetDna: string | undefined
-          let targetName: string | undefined
-          let channel: string | undefined
+          if (kind === "chat") {
+            const channel = target?.startsWith("channel:")
+              ? (target.slice("channel:".length) || undefined)
+              : "workspace"
 
-          if (kind === "dm" && target) {
-            if (target.startsWith("human:")) {
-              resolvedTarget = target
-              targetName = "Owner"
-            } else {
-              const resolved = resolveMessageTarget(target, sessions, savedAgents)
-              resolvedTarget = resolved.resolvedTarget
-              storageTarget = resolved.storageTarget
-              targetSession = resolved.targetSession
-              targetDna = resolved.targetDna
-              targetName = resolved.targetAgentName || resolved.targetSession?.name
+            const message = appendWorkspaceMessage({
+              kind: "chat",
+              channel,
+              from,
+              fromName,
+              fromDna,
+              text,
+            }, context.projectRoot)
 
-              if (!targetSession) {
-                return finish(json(req, { error: "Target session not found (agent may be offline)" }, config, 404))
-              }
-            }
+            return finish(json(req, {
+              ok: true,
+              delivered: false,
+              projectId: context.activeProjectId,
+              message,
+            }, config))
           }
 
-          if (kind === "chat" && target?.startsWith("channel:")) {
-            channel = target.slice("channel:".length) || undefined
+          const resolved = target ? resolveMessageTarget(target, sessions, savedAgents) : {
+            resolvedTarget: target || "",
+            storageTarget: target || "",
+          }
+
+          let delivered = false
+          const queueKey = resolved.targetSlug || resolved.targetDna
+
+          if (target?.startsWith("human:")) {
+            // Human inbox lives in workspace history only.
+          } else if (resolved.targetSession) {
+            delivered = true
+            writeMessages(resolved.resolvedTarget, [{
+              from,
+              fromName,
+              text,
+              ts: Date.now(),
+            }])
+          } else if (queueKey) {
+            queueMessage(queueKey, {
+              from,
+              fromName,
+              fromDna,
+              text,
+              ts: Date.now(),
+            })
+          } else {
+            return finish(json(req, { error: "Target agent is unknown or offline" }, config, 404))
           }
 
           const message = appendWorkspaceMessage({
-            kind,
-            channel,
+            kind: "dm",
             from,
             fromName,
             fromDna,
-            target: storageTarget,
-            targetName: targetName || targetSession?.name,
-            targetDna: targetDna || targetSession?.dna,
+            target: resolved.storageTarget,
+            targetName: resolved.targetAgentName || resolved.targetSession?.name || (isHumanAddress(target) ? "Owner" : undefined),
+            targetDna: resolved.targetDna || resolved.targetSession?.dna,
             text,
           }, context.projectRoot)
 
           return finish(json(req, {
             ok: true,
+            delivered,
             projectId: context.activeProjectId,
             message,
+          }, config))
+        }
+
+        if (path === "/api/v1/requests/resolve" && method === "POST") {
+          const parsed = await readJsonBody(req, config.maxBodyBytes)
+          if (!parsed.ok) {
+            return finish(json(req, { error: parsed.error }, config, parsed.status))
+          }
+
+          const body = parsed.value as {
+            requestId?: string
+            response?: string
+            projectId?: string
+          }
+
+          const requestId = typeof body.requestId === "string" ? body.requestId.trim() : ""
+          const response = typeof body.response === "string" ? body.response.trim() : ""
+          if (!requestId || !response) {
+            return finish(json(req, { error: "requestId and response are required" }, config, 400))
+          }
+
+          const context = selectProjectContext(config, url, body)
+          projectId = context.activeProjectId
+          const request = resolveRequest(requestId, response)
+          if (!request) {
+            return finish(json(req, { error: "Request not found" }, config, 404))
+          }
+
+          return finish(json(req, {
+            ok: true,
+            projectId: context.activeProjectId,
+            request,
+          }, config))
+        }
+
+        if (path === "/api/v1/requests/dismiss" && method === "POST") {
+          const parsed = await readJsonBody(req, config.maxBodyBytes)
+          if (!parsed.ok) {
+            return finish(json(req, { error: parsed.error }, config, parsed.status))
+          }
+
+          const body = parsed.value as {
+            requestId?: string
+            projectId?: string
+          }
+
+          const requestId = typeof body.requestId === "string" ? body.requestId.trim() : ""
+          if (!requestId) {
+            return finish(json(req, { error: "requestId is required" }, config, 400))
+          }
+
+          const context = selectProjectContext(config, url, body)
+          projectId = context.activeProjectId
+          const request = dismissRequest(requestId)
+          if (!request) {
+            return finish(json(req, { error: "Request not found" }, config, 404))
+          }
+
+          return finish(json(req, {
+            ok: true,
+            projectId: context.activeProjectId,
+            request,
           }, config))
         }
 

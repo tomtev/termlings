@@ -1,0 +1,12 @@
+name = "termlings"
+main = ".svelte-kit/cloudflare/_worker.js"
+compatibility_date = "2025-02-24"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".svelte-kit/cloudflare"
+binding = "ASSETS"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "16437d1b15694139aedeafef8746328b"

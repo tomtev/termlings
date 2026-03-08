@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
+import { appendAppActivity, resolveAgentActivityThreadId } from "./activity.js"
 
 export type MessageScheduleRecurrence = "once" | "hourly" | "daily" | "weekly"
 export type MessageScheduleWeekday = "sun" | "mon" | "tue" | "wed" | "thu" | "fri" | "sat"
@@ -243,6 +244,36 @@ function addLocalDays(date: LocalDateParts, delta: number): LocalDateParts {
   }
 }
 
+function scheduleTargetThreadId(target: string, targetDna?: string): string | undefined {
+  if (target.startsWith("agent:")) {
+    const slug = target.slice("agent:".length).trim()
+    if (slug) return `agent:${slug}`
+  }
+  return resolveAgentActivityThreadId({ agentDna: targetDna })
+}
+
+function scheduleActor(createdBy: string): { actorName?: string; actorSlug?: string; actorSessionId?: string } {
+  const normalized = createdBy.trim()
+  if (normalized.startsWith("agent:")) {
+    const actorSlug = normalized.slice("agent:".length).trim()
+    return {
+      actorName: actorSlug || undefined,
+      actorSlug: actorSlug || undefined,
+      actorSessionId: normalized,
+    }
+  }
+  if (normalized.startsWith("human:")) {
+    return {
+      actorName: "Owner",
+      actorSessionId: normalized,
+    }
+  }
+  return {
+    actorName: normalized || "Owner",
+    actorSessionId: normalized || undefined,
+  }
+}
+
 export function calculateScheduledMessageNextRun(
   input: Pick<ScheduledMessage, "recurrence" | "time" | "timezone" | "date" | "weekday">,
   now = Date.now(),
@@ -447,6 +478,24 @@ export function createScheduledMessage(
   }
 
   saveScheduledMessages([...getAllScheduledMessages(root), schedule], root)
+  const actor = scheduleActor(schedule.createdBy)
+  appendAppActivity({
+    ts: schedule.createdAt,
+    app: "messaging",
+    kind: "scheduled-message-created",
+    text: `scheduled message to ${schedule.targetName || schedule.target} (${describeScheduledMessage(schedule)})`,
+    level: "summary",
+    surface: scheduleTargetThreadId(schedule.target, schedule.targetDna) ? "both" : "feed",
+    actorName: actor.actorName,
+    actorSlug: actor.actorSlug,
+    actorSessionId: actor.actorSessionId,
+    threadId: scheduleTargetThreadId(schedule.target, schedule.targetDna),
+    meta: {
+      scheduleId: schedule.id,
+      recurrence: schedule.recurrence,
+      target: schedule.target,
+    },
+  }, root)
   return schedule
 }
 

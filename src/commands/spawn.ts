@@ -6,6 +6,12 @@
 import { existsSync, readFileSync } from "fs"
 import { join } from "path"
 import { discoverLocalAgents } from "../agents/discover.js"
+import {
+  ensureDockerSpawnImage,
+  ensureDockerRuntimeHome,
+  runDockerSpawnForeground,
+  runDockerSpawnWorker,
+} from "../engine/docker-spawn.js"
 import { decodeDNA, getTraitColors } from "../index.js"
 import { ensureManagedRuntimeProcess } from "../engine/runtime-processes.js"
 
@@ -33,6 +39,10 @@ interface AgentLaunchTarget {
   presetName: string
 }
 
+interface HostYoloRiskTarget extends AgentLaunchTarget {
+  flags: string[]
+}
+
 const DEFAULT_CONFIG: SpawnConfig = {
   default: {
     runtime: "claude",
@@ -49,11 +59,11 @@ const DEFAULT_CONFIG: SpawnConfig = {
     claude: {
       default: {
         description: "Launch with full autonomy",
-        command: "termlings claude --dangerously-skip-permissions",
+        command: "termlings claude --dangerously-skip-permissions --effort medium",
       },
       auto: {
         description: "Launch with full autonomy (skip all permission prompts)",
-        command: "termlings claude --dangerously-skip-permissions",
+        command: "termlings claude --dangerously-skip-permissions --effort medium",
       },
     },
     codex: {
@@ -68,6 +78,13 @@ const DEFAULT_CONFIG: SpawnConfig = {
     },
   },
 }
+
+const DANGEROUS_HOST_FLAG_PATTERNS = [
+  "--dangerously-skip-permissions",
+  "--dangerously-bypass-approvals-and-sandbox",
+  "--sandbox danger-full-access",
+  "--ask-for-approval never",
+] as const
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
@@ -140,6 +157,10 @@ function loadSpawnConfig(projectRoot = process.cwd()): SpawnConfig | null {
     console.error("Failed to parse .termlings/spawn.json.")
     process.exit(1)
   }
+}
+
+export function loadSpawnConfigOrDefault(projectRoot = process.cwd()): SpawnConfig {
+  return loadSpawnConfig(projectRoot) || DEFAULT_CONFIG
 }
 
 function commandParts(command: string): string[] {
@@ -247,10 +268,21 @@ function formatRoute(runtimeName: string, presetName: string): string {
   return `${runtimeName}/${presetName}`
 }
 
+export function ensureRuntimeSpawnCommandDefaults(runtimeName: string, command: string): string {
+  const trimmed = command.trim()
+  if (runtimeName === "claude" && trimmed.startsWith("termlings claude")) {
+    if (!/(^|\s)--effort(?:=|\s)/.test(trimmed)) {
+      return `${trimmed} --effort medium`
+    }
+  }
+  return trimmed
+}
+
 function buildPresetCommand(config: SpawnConfig, runtimeName: string, presetName: string, extraArgs: string[]): string | null {
   const preset = resolvePreset(config, runtimeName, presetName)
   if (!preset) return null
-  return extraArgs.length > 0 ? `${preset.command} ${extraArgs.join(" ")}` : preset.command
+  const command = ensureRuntimeSpawnCommandDefaults(runtimeName, preset.command)
+  return extraArgs.length > 0 ? `${command} ${extraArgs.join(" ")}` : command
 }
 
 function formatCommandPreview(command: string): string {
@@ -284,6 +316,97 @@ function unique(items: string[]): string[] {
   return Array.from(new Set(items.map((item) => item.trim()).filter(Boolean)))
 }
 
+function dangerousFlagsInCommand(command: string): string[] {
+  const normalized = command.trim().toLowerCase()
+  const matches: string[] = []
+  for (const flag of DANGEROUS_HOST_FLAG_PATTERNS) {
+    if (normalized.includes(flag.toLowerCase())) {
+      matches.push(flag)
+    }
+  }
+  return matches
+}
+
+function collectHostYoloRiskTargets(
+  config: SpawnConfig,
+  targets: AgentLaunchTarget[],
+): HostYoloRiskTarget[] {
+  const risky: HostYoloRiskTarget[] = []
+  for (const target of targets) {
+    const preset = resolvePreset(config, target.runtimeName, target.presetName)
+    if (!preset) continue
+    const flags = dangerousFlagsInCommand(preset.command)
+    if (flags.length <= 0) continue
+    risky.push({ ...target, flags })
+  }
+  return risky
+}
+
+export function evaluateHostYoloSpawnRisk(
+  config: SpawnConfig,
+  targets: AgentLaunchTarget[],
+  options: { docker?: boolean; allowHostYolo?: boolean } = {},
+): {
+  requiresConfirmation: boolean
+  riskyTargets: HostYoloRiskTarget[]
+  dangerousFlags: string[]
+} {
+  if (options.docker || options.allowHostYolo) {
+    return { requiresConfirmation: false, riskyTargets: [], dangerousFlags: [] }
+  }
+
+  const riskyTargets = collectHostYoloRiskTargets(config, targets)
+  const dangerousFlags = unique(riskyTargets.flatMap((target) => target.flags))
+  return {
+    requiresConfirmation: riskyTargets.length > 0,
+    riskyTargets,
+    dangerousFlags,
+  }
+}
+
+function renderHostYoloSpawnWarning(
+  riskyTargets: HostYoloRiskTarget[],
+  dangerousFlags: string[],
+  commandLabel: string,
+): string {
+  const preview = riskyTargets
+    .slice(0, 4)
+    .map((target) => `${target.slug} (${formatRoute(target.runtimeName, target.presetName)})`)
+    .join(", ")
+  const extra = riskyTargets.length > 4 ? `, +${riskyTargets.length - 4} more` : ""
+  return [
+    `Security confirmation required for \`${commandLabel}\`.`,
+    `Host-native spawn is about to launch YOLO/autonomous routes on this machine: ${preview}${extra}.`,
+    `Detected dangerous flags: ${dangerousFlags.join(", ")}.`,
+    "Use `--docker` for Docker-isolated workers, or confirm that you want to continue on the host.",
+  ].join("\n")
+}
+
+export async function confirmHostYoloSpawnOrExit(
+  config: SpawnConfig,
+  targets: AgentLaunchTarget[],
+  options: { docker?: boolean; allowHostYolo?: boolean; commandLabel?: string } = {},
+): Promise<void> {
+  const { requiresConfirmation, riskyTargets, dangerousFlags } = evaluateHostYoloSpawnRisk(config, targets, options)
+  if (!requiresConfirmation) return
+
+  const commandLabel = options.commandLabel || "termlings spawn"
+  console.error(renderHostYoloSpawnWarning(riskyTargets, dangerousFlags, commandLabel))
+
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.error("Refusing host-native YOLO spawn without interactive confirmation.")
+    console.error(`Re-run interactively and confirm, pass \`--allow-host-yolo\`, or use \`${commandLabel} --docker\`.`)
+    process.exit(1)
+  }
+
+  const { confirm } = await import("../interactive-menu.js")
+  const accepted = await confirm("Continue with host-native YOLO spawn?", false)
+  if (!accepted) {
+    console.error("Host-native spawn cancelled.")
+    process.exit(1)
+  }
+}
+
 function hasCodexResumeArgs(args: string[]): boolean {
   return args.some((arg) => arg === "resume" || arg === "--last")
 }
@@ -295,11 +418,42 @@ function targetExtraArgs(runtimeName: string, baseArgs: string[], respawn: boole
   return [...baseArgs, "resume", "--last"]
 }
 
+export async function ensureDockerWorkspaceBrowser(
+  options: { quiet?: boolean } = {},
+): Promise<{ ok: boolean; status?: "started" | "restarted" | "reused"; port?: number; error?: string }> {
+  try {
+    const { isAgentBrowserAvailable, ensureSharedBrowserForDocker } = await import("../engine/browser.js")
+    if (!isAgentBrowserAvailable()) {
+      return {
+        ok: false,
+        error: "agent-browser CLI not installed; Docker agents will not be able to use the shared headed browser.",
+      }
+    }
+
+    const ensured = await ensureSharedBrowserForDocker()
+    if (!options.quiet) {
+      if (ensured.status === "started") {
+        console.log(`Started shared workspace browser for Docker agents on port ${ensured.port}.`)
+      } else if (ensured.status === "restarted") {
+        console.log(`Restarted workspace browser in Docker-share mode on port ${ensured.port}.`)
+      }
+    }
+    return { ok: true, status: ensured.status, port: ensured.port }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (!options.quiet) {
+      console.error(`Warning: failed to prepare shared workspace browser for Docker agents: ${message}`)
+    }
+    return { ok: false, error: message }
+  }
+}
+
 async function spawnAgentProcesses(
   targets: AgentLaunchTarget[],
   extraArgs: string[],
   quiet = false,
   respawn = false,
+  docker = false,
 ): Promise<void> {
   const root = process.cwd()
   const created: string[] = []
@@ -307,19 +461,33 @@ async function spawnAgentProcesses(
   const respawned: string[] = []
   const failed: Array<{ slug: string; route: string; error: string }> = []
 
+  if (docker) {
+    ensureDockerSpawnImage(Boolean(process.env.TERMLINGS_DOCKER_REBUILD === "1"))
+    ensureDockerRuntimeHome(root)
+    await ensureDockerWorkspaceBrowser({ quiet })
+  }
+
   for (const target of targets) {
     const targetArgs = targetExtraArgs(target.runtimeName, extraArgs, respawn)
     const result = await ensureManagedRuntimeProcess({
       key: `agent:${target.slug}`,
       kind: "agent",
-      args: [
-        "spawn",
-        target.runtimeName,
-        target.presetName,
-        `--agent=${target.slug}`,
-        "--inline",
-        ...targetArgs,
-      ],
+      args: docker
+        ? [
+            "spawn-docker-worker",
+            `--agent=${target.slug}`,
+            `--runtime=${target.runtimeName}`,
+            `--preset=${target.presetName}`,
+            ...targetArgs,
+          ]
+        : [
+            "spawn",
+            target.runtimeName,
+            target.presetName,
+            `--agent=${target.slug}`,
+            "--inline",
+            ...targetArgs,
+          ],
       root,
       respawn,
       agentSlug: target.slug,
@@ -382,10 +550,12 @@ USAGE:
   termlings spawn <runtime>                 Run default preset for runtime
   termlings spawn <runtime> <preset>        Run a specific preset
   termlings spawn --all [runtime] [preset]  Spawn all agents
+  termlings spawn --all --docker            Spawn all agents in Docker-isolated workers
   termlings spawn --all --respawn           Restart all running agent sessions, then launch
   termlings spawn --agent=<slug> [runtime] [preset]  Launch one specific agent
   termlings spawn --agent=<slug> --respawn  Restart this agent session if running
   termlings spawn --inline ...              Run one agent in current terminal
+  termlings spawn --all --allow-host-yolo   Skip interactive confirmation for host-native YOLO routes
 
 EXAMPLES:
   termlings spawn --all
@@ -397,6 +567,8 @@ NOTES:
   - Run this command in another terminal while \`termlings\` is open.
   - Batch launch (\`--all\`) runs detached background agent sessions.
   - Agents run as normal PTY terminal sessions that you can inspect/interact with at any time.
+  - \`--docker\` is opt-in. Current host spawn behavior stays unchanged unless you pass it.
+  - Host-native YOLO routes now require confirmation unless you pass \`--allow-host-yolo\`.
   - Inside agent sessions, requires \`manage_agents: true\` in your SOUL frontmatter.
   - If runtime/preset is omitted for batch launch, \`.termlings/spawn.json\` \`default\` + \`agents.<slug>\` routing is used.
   - Use \`--respawn\` to restart already-running agent sessions after SOUL/config changes.
@@ -415,6 +587,8 @@ NOTES:
   const quiet = flags.has("quiet")
   const inline = flags.has("inline")
   const respawn = flags.has("respawn")
+  const docker = flags.has("docker")
+  const allowHostYolo = flags.has("allow-host-yolo")
   const specificAgent = (opts.agent || "").trim()
 
   let runtimeName = positional[1]?.trim()
@@ -477,6 +651,24 @@ NOTES:
     } else if (selected.startsWith("agent:")) {
       const slug = selected.slice("agent:".length)
       const route = resolveAgentRoute(config, slug)
+      if (docker) {
+        ensureDockerSpawnImage(Boolean(process.env.TERMLINGS_DOCKER_REBUILD === "1"))
+        ensureDockerRuntimeHome(process.cwd())
+        await ensureDockerWorkspaceBrowser()
+        await runDockerSpawnForeground({
+          root: process.cwd(),
+          agentSlug: slug,
+          runtimeName: route.runtime,
+          presetName: route.preset,
+          extraArgs,
+        })
+        return
+      }
+      await confirmHostYoloSpawnOrExit(
+        config,
+        [{ slug, runtimeName: route.runtime, presetName: route.preset }],
+        { allowHostYolo, commandLabel: "termlings spawn" },
+      )
       const command = buildPresetCommand(config, route.runtime, route.preset, extraArgs)
       if (!command) {
         console.error(`Invalid spawn route for ${slug}: ${formatRoute(route.runtime, route.preset)}`)
@@ -495,6 +687,10 @@ NOTES:
   }
 
   if (!hasBatchTarget) {
+    if (docker) {
+      console.error("`--docker` requires `--all` or `--agent=<slug>`.")
+      process.exit(1)
+    }
     if (!presetName) {
       presetName = "default"
     }
@@ -504,6 +700,11 @@ NOTES:
       console.log(`Available runtimes: ${runtimes.join(", ")}`)
       process.exit(1)
     }
+    await confirmHostYoloSpawnOrExit(
+      config,
+      [{ slug: "current-terminal", runtimeName, presetName }],
+      { allowHostYolo, commandLabel: "termlings spawn" },
+    )
     await routePresetCommand(command)
     return
   }
@@ -562,6 +763,23 @@ NOTES:
       process.exit(1)
     }
     const target = launchTargets[0]!
+    if (docker) {
+      ensureDockerSpawnImage(Boolean(process.env.TERMLINGS_DOCKER_REBUILD === "1"))
+      ensureDockerRuntimeHome(process.cwd())
+      await ensureDockerWorkspaceBrowser()
+      await runDockerSpawnForeground({
+        root: process.cwd(),
+        agentSlug: target.slug,
+        runtimeName: target.runtimeName,
+        presetName: target.presetName,
+        extraArgs,
+      })
+      return
+    }
+    await confirmHostYoloSpawnOrExit(config, launchTargets, {
+      allowHostYolo,
+      commandLabel: "termlings spawn",
+    })
     const command = buildPresetCommand(config, target.runtimeName, target.presetName, extraArgs)
     if (!command) {
       console.error(`Invalid preset route: ${formatRoute(target.runtimeName, target.presetName)}`)
@@ -571,5 +789,32 @@ NOTES:
     return
   }
 
-  await spawnAgentProcesses(launchTargets, extraArgs, quiet, respawn)
+  await confirmHostYoloSpawnOrExit(config, launchTargets, {
+    docker,
+    allowHostYolo,
+    commandLabel: "termlings spawn",
+  })
+  await spawnAgentProcesses(launchTargets, extraArgs, quiet, respawn, docker)
+}
+
+export async function handleSpawnDockerWorker(
+  positional: string[],
+  opts: Record<string, string>,
+): Promise<void> {
+  const agentSlug = (opts.agent || "").trim()
+  const runtimeName = (opts.runtime || "").trim()
+  const presetName = (opts.preset || "").trim()
+
+  if (!agentSlug || !runtimeName || !presetName) {
+    console.error("Invalid internal docker spawn worker invocation.")
+    process.exit(1)
+  }
+
+  await runDockerSpawnWorker({
+    root: process.cwd(),
+    agentSlug,
+    runtimeName,
+    presetName,
+    extraArgs: positional.slice(1),
+  })
 }

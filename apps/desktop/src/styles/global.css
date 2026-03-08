@@ -1,0 +1,95 @@
+/* App layout variables */
+:root {
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 52px;
+  --titlebar-height: 38px;
+  --tab-height: 36px;
+  --bottom-bar-height: 35px;
+}
+
+html, body, #app {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+body {
+  background:
+    radial-gradient(circle at top, color-mix(in srgb, var(--secondary) 22%, transparent) 0%, transparent 42%),
+    var(--background);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted-foreground) 38%, transparent);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+/* Dropdown open animation */
+@keyframes dropdown-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-dropdown] {
+  animation: dropdown-enter 0.15s ease-out;
+}
+
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+[data-modal-backdrop] {
+  animation: fade-in 0.15s ease-out;
+}
+
+[data-modal] {
+  animation: modal-enter 0.15s ease-out;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Portal tooltip (appended to body, not clipped by overflow) */
+.portal-tooltip {
+  position: fixed;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--foreground);
+  white-space: nowrap;
+  z-index: 9999;
+  pointer-events: none;
+  box-shadow: var(--shadow-medium);
+}

@@ -44,8 +44,14 @@ export async function handleBrowser(flags: Set<string>, positional: string[], op
     isBrowserRunning,
     waitForBrowserReady,
     isAgentBrowserAvailable,
+    isContainerRuntime,
+    shouldForceHeadlessBrowser,
     logBrowserActivity,
     readProcessState,
+    resolveReachableBrowserClientTarget,
+    resolveSessionBrowserTabId,
+    buildBrowserWorkspaceSnapshot,
+    writeBrowserWorkspaceSnapshot,
   } = await import("../engine/browser.js");
   const { BrowserClient } = await import("../engine/browser-client.js");
 
@@ -75,19 +81,25 @@ NAVIGATION:
   termlings browser screenshot [--tab <index>] Capture page (returns base64)
   termlings browser extract [--tab <index>] Get visible page text
   termlings browser tabs list         List open tabs
-  termlings browser overview          Show browser + tabs overview
-  Note: when --tab is omitted, agent sessions auto-pin to a stable tab and stamp that tab with agent identity
+  termlings browser overview [--json] Show browser + tabs overview
+  Note: when --tab is omitted, accepted shared-tab invites take priority; otherwise agent sessions auto-pin to a stable tab and stamp that tab with agent identity
 
 INTERACTION:
   termlings browser type <text> [--tab <index>] Type into focused element
   termlings browser click <selector> [--tab <index>] Click element by CSS selector
   termlings browser focus <selector> [--tab <index>] Focus element by CSS selector
-  termlings browser cursor [--tab <index>] Preview optional in-page avatar cursor overlay
+  termlings browser cursor [--tab <index>] Force in-page avatar cursor preview
   termlings browser cookies list [--tab <index>] List all cookies
 
 HUMAN-IN-LOOP:
   termlings browser check-login [--tab <index>] Exit 1 if login required
   termlings browser request-help <msg> [--tab <index>] Notify operator via DM
+
+COLLABORATION:
+  termlings browser invite agent:<slug> [note...] [--tab <index>]
+  termlings browser invites            List browser tab invites relevant to you
+  termlings browser accept <invite-id> Join a shared browser tab
+  termlings browser leave [invite-id] Leave the active shared browser tab
 
 QUERY PATTERNS (reusable automation):
   termlings browser patterns list     List available patterns
@@ -112,13 +124,14 @@ EXAMPLES:
 ENVIRONMENT:
   TERMLINGS_AGENT_NAME               Your name (auto-logged)
   TERMLINGS_AGENT_DNA                Your stable ID (auto-logged)
-  TERMLINGS_BROWSER_INPAGE_CURSOR    true/false for optional cursor preview (default: true)
+  TERMLINGS_BROWSER_INPAGE_CURSOR    true/false for agent-only cursor preview before actions (default: true)
   TERMLINGS_BROWSER_PRESERVE_FOCUS   true/false (macOS, default: true for agent sessions)
 
 PROFILES:
   Per-project profiles auto-created in ~/.termlings/chrome-profiles/
   Activity logged to .termlings/browser/history/all.jsonl and .termlings/browser/history/agent/<agent>.jsonl
   Presence tracked in .termlings/browser/agents/<session>.json with active/idle/closed lifecycle
+  Remote-ready browser snapshot stored at .termlings/browser/workspace-state.json
   Runtime adapter: agent-browser --native --cdp
 `);
     return;
@@ -164,10 +177,14 @@ PROFILES:
           ? undefined
           : { headless: headlessMode }
       );
-      const effectiveHeadless = headlessMode === true;
+      writeBrowserWorkspaceSnapshot({ tabs: [], replaceTabs: true });
+      const effectiveHeadless = headlessMode === true || shouldForceHeadlessBrowser();
       const profileRef = getOrCreateProfileReference();
       console.log(`✓ Browser started (PID ${pid}, port ${port})`);
       console.log(`Mode: ${effectiveHeadless ? "headless" : "headed"}`);
+      if (headlessMode === false && effectiveHeadless) {
+        console.log("Note: no display server detected in this runtime, so browser started headless.");
+      }
       console.log(`Profile: ${profileRef.location}`);
       console.log(`CDP endpoint: http://127.0.0.1:${port}`);
       console.log(`Runtime: agent-browser --native --cdp ${port}`);
@@ -182,6 +199,7 @@ PROFILES:
     try {
       const wasRunning = await isBrowserRunning();
       await stopBrowser();
+      writeBrowserWorkspaceSnapshot({ tabs: [], replaceTabs: true });
       if (!wasRunning) {
         console.log("Browser not running");
       } else {
@@ -196,6 +214,10 @@ PROFILES:
 
   if (subcommand === "status") {
     try {
+      if (flags.has("json")) {
+        console.log(JSON.stringify(buildBrowserWorkspaceSnapshot(), null, 2));
+        return;
+      }
       const running = await isBrowserRunning();
       const state = readProcessState();
       const config = getBrowserConfig();
@@ -264,25 +286,93 @@ PROFILES:
     return;
   }
 
+  if (subcommand === "invites") {
+    const { listRelevantBrowserTabInvites } = await import("../engine/browser-invites.js");
+    const invites = listRelevantBrowserTabInvites(process.cwd());
+    const currentSessionId = (process.env.TERMLINGS_SESSION_ID || "").trim();
+    const currentAgentSlug = (process.env.TERMLINGS_AGENT_SLUG || "").trim();
+
+    if (invites.length === 0) {
+      console.log("No browser tab invites.");
+      return;
+    }
+
+    console.log(`Browser tab invites (${invites.length}):`);
+    for (const invite of invites) {
+      const incoming = currentAgentSlug && invite.targetAgentSlug === currentAgentSlug;
+      const activeShare =
+        invite.status === "accepted"
+        && ((currentSessionId && invite.acceptedBySessionId === currentSessionId)
+          || (currentAgentSlug && invite.acceptedByAgentSlug === currentAgentSlug));
+      const owner = invite.ownerAgentName || invite.ownerAgentSlug || "unknown";
+      const page = invite.tabTitle || invite.tabUrl || invite.tabId;
+      const label = activeShare ? "active" : incoming ? "incoming" : "sent";
+      console.log(`- ${invite.id} [${invite.status}] ${label}`);
+      console.log(`  owner: ${owner}`);
+      console.log(`  target: ${invite.target}`);
+      console.log(`  tab: ${invite.tabId} (${page})`);
+      if (invite.note) {
+        console.log(`  note: ${invite.note}`);
+      }
+      if (invite.status === "pending" && incoming) {
+        console.log(`  accept: termlings browser accept ${invite.id}`);
+      }
+    }
+    return;
+  }
+
+  if (subcommand === "accept") {
+    const inviteId = positional[2];
+    if (!inviteId) {
+      console.error("Usage: termlings browser accept <invite-id>");
+      process.exit(1);
+    }
+    const { acceptBrowserTabInvite } = await import("../engine/browser-invites.js");
+    const invite = acceptBrowserTabInvite(inviteId, process.cwd());
+    logBrowserActivity("accept-invite", [invite.id, `--tab=${invite.tabId}`], "success", undefined, invite.tabId);
+    writeBrowserWorkspaceSnapshot();
+    const owner = invite.ownerAgentName || invite.ownerAgentSlug || "another agent";
+    console.log(`✓ Joined ${owner}'s browser tab`);
+    console.log(`Invite: ${invite.id}`);
+    console.log(`Tab: ${invite.tabId}`);
+    if (invite.tabTitle || invite.tabUrl) {
+      console.log(`Page: ${invite.tabTitle || invite.tabUrl}`);
+    }
+    console.log("Your browser commands will now default to this shared tab until you leave it.");
+    return;
+  }
+
+  if (subcommand === "leave") {
+    const inviteId = positional[2];
+    const { leaveBrowserTabInvite } = await import("../engine/browser-invites.js");
+    const invite = leaveBrowserTabInvite(inviteId, process.cwd());
+    logBrowserActivity("leave-invite", [invite.id, `--tab=${invite.tabId}`], "success", undefined, invite.tabId);
+    writeBrowserWorkspaceSnapshot();
+    console.log(`✓ Left shared browser tab ${invite.tabId}`);
+    console.log(`Invite: ${invite.id}`);
+    return;
+  }
+
   // Browser interaction subcommands (requires running server)
   let state = readProcessState();
-  if ((!state || !state.pid || state.status === "starting") && waitForBrowserReady) {
+  if ((!state || state.status === "starting") && waitForBrowserReady) {
     const awaited = await waitForBrowserReady(6000, 150);
     if (awaited) {
       state = awaited;
     }
   }
-  if (!state || !state.pid) {
+  if (!state || state.status !== "running") {
     console.error("Browser not running. Use: termlings browser start");
     process.exit(1);
   }
-  if (!isAgentBrowserAvailable()) {
+  const requiresLocalAgentBrowser = !(isContainerRuntime() && state.sharedForDocker);
+  if (requiresLocalAgentBrowser && !isAgentBrowserAvailable()) {
     console.error("agent-browser CLI is required. Install with:");
     console.error("  npm install -g agent-browser && agent-browser install");
     process.exit(1);
   }
 
-  const client = new BrowserClient(state.cdpWsUrl || state.port);
+  const client = new BrowserClient(await resolveReachableBrowserClientTarget(state));
   const tabIdRaw = opts.tab ?? opts["tab-id"] ?? opts.tabId;
   const tabId = typeof tabIdRaw === "string" && tabIdRaw.trim().length > 0
     ? tabIdRaw.trim()
@@ -315,9 +405,17 @@ PROFILES:
     await logBrowserActivity(command, payloadArgs, result, error, effectiveTabId);
   };
 
+  const refreshWorkspaceSnapshot = async () => {
+    try {
+      const tabs = await client.getTabs();
+      return writeBrowserWorkspaceSnapshot({ tabs, replaceTabs: true });
+    } catch {
+      return writeBrowserWorkspaceSnapshot();
+    }
+  };
+
   try {
     if (subcommand === "overview") {
-      const tabs = await client.getTabs();
       let extractedText = "";
       try {
         extractedText = await client.extractText();
@@ -325,6 +423,12 @@ PROFILES:
         // Keep overview resilient if extract fails.
       }
       await logActivity("overview", []);
+      const workspaceSnapshot = await refreshWorkspaceSnapshot();
+
+      if (flags.has("json")) {
+        console.log(JSON.stringify(workspaceSnapshot, null, 2));
+        return;
+      }
 
       const stateSnapshot = readProcessState();
       const uptime = stateSnapshot?.startedAt ? Math.floor((Date.now() - stateSnapshot.startedAt) / 1000) : 0;
@@ -336,17 +440,22 @@ PROFILES:
         console.log(`  URL: ${stateSnapshot.url}`);
       }
 
-      console.log(`\nTabs (${tabs.length}):`);
-      if (tabs.length === 0) {
+      console.log(`\nTabs (${workspaceSnapshot.tabs.length}):`);
+      if (workspaceSnapshot.tabs.length === 0) {
         console.log("  (none)");
       } else {
-        const activeTab = tabs.find((tab) => isTabActive(tab));
-        tabs.forEach((tab, index) => {
-          const marker = activeTab && activeTab.id === tab.id ? " *" : "";
+        workspaceSnapshot.tabs.forEach((tab, index) => {
+          const marker = tab.active ? " *" : "";
           console.log(`  ${index + 1}. ${tab.title || "(untitled)"}${marker}`);
           console.log(`     id: ${tab.id}`);
           if (tab.url) {
             console.log(`     url: ${tab.url}`);
+          }
+          if (tab.owner?.agentName || tab.owner?.agentSlug) {
+            console.log(`     owner: ${tab.owner.agentName || `agent:${tab.owner.agentSlug}`}`);
+          }
+          if (tab.inviteCount > 0) {
+            console.log(`     invites: ${tab.inviteCount}`);
           }
         });
       }
@@ -393,6 +502,7 @@ PROFILES:
         tabId,
       });
       await logActivity("snapshot", positional.slice(2));
+      await refreshWorkspaceSnapshot();
 
       const outPath = opts.out;
       const output = JSON.stringify(snapshot, null, 2);
@@ -415,6 +525,12 @@ PROFILES:
       }
       const tabs = await client.getTabs();
       await logActivity("tabs", [action]);
+      const workspaceSnapshot = writeBrowserWorkspaceSnapshot({ tabs, replaceTabs: true });
+
+      if (flags.has("json")) {
+        console.log(JSON.stringify(workspaceSnapshot.tabs, null, 2));
+        return;
+      }
 
       if (tabs.length === 0) {
         console.log("No open tabs.");
@@ -434,6 +550,68 @@ PROFILES:
       return;
     }
 
+    if (subcommand === "invite") {
+      const rawTarget = positional[2];
+      const note = (opts.message || positional.slice(3).join(" ")).trim();
+      const sessionId = (process.env.TERMLINGS_SESSION_ID || "").trim();
+      const agentName = process.env.TERMLINGS_AGENT_NAME || "agent";
+      const agentDna = process.env.TERMLINGS_AGENT_DNA || "0000000";
+
+      if (!rawTarget) {
+        console.error("Usage: termlings browser invite agent:<slug> [note...] [--tab <index>]");
+        process.exit(1);
+      }
+      if (!sessionId) {
+        console.error("Browser invites require an active agent session.");
+        process.exit(1);
+      }
+
+      const fallbackTabId = resolveSessionBrowserTabId(sessionId);
+      const requestedTabRef = tabId || fallbackTabId;
+      if (!requestedTabRef) {
+        console.error("No current browser tab found. Use a browser command first or pass --tab <id>.");
+        process.exit(1);
+      }
+
+      const tabs = await client.getTabs();
+      const matchedTab = tabs.find((tab) => tab.targetId === requestedTabRef || tab.id === requestedTabRef);
+      if (!matchedTab) {
+        console.error(`Tab not found: ${requestedTabRef}`);
+        process.exit(1);
+      }
+
+      const stableTabId = (matchedTab.targetId || matchedTab.id || "").trim();
+      if (!stableTabId) {
+        console.error(`Could not resolve a stable tab id for: ${requestedTabRef}`);
+        process.exit(1);
+      }
+
+      const { createBrowserTabInvite } = await import("../engine/browser-invites.js");
+      const { sendMessage } = await import("../engine/messaging-util.js");
+      const invite = createBrowserTabInvite({
+        target: rawTarget,
+        tabId: stableTabId,
+        tabUrl: matchedTab.url,
+        tabTitle: matchedTab.title,
+        note: note || undefined,
+      }, process.cwd());
+
+      const owner = process.env.TERMLINGS_AGENT_NAME || process.env.TERMLINGS_AGENT_SLUG || "An agent";
+      const pageLine = invite.tabTitle || invite.tabUrl || invite.tabId;
+      const noteBlock = invite.note ? `\nNote: ${invite.note}\n` : "\n";
+      const message = `🪟 **Browser tab invite** from ${owner}\n\nInvite: \`${invite.id}\`\nTab: \`${invite.tabId}\`\nPage: ${pageLine}${noteBlock}\nRun: \`termlings browser accept ${invite.id}\`\nLeave later: \`termlings browser leave ${invite.id}\``
+
+      await sendMessage(invite.target, message, sessionId, agentName, agentDna);
+      logBrowserActivity("invite", [invite.target, invite.id, `--tab=${invite.tabId}`], "success", undefined, invite.tabId);
+      writeBrowserWorkspaceSnapshot({ tabs, replaceTabs: true });
+      console.log(`✓ Invited ${invite.target} into browser tab ${invite.tabId}`);
+      console.log(`Invite: ${invite.id}`);
+      if (invite.tabTitle || invite.tabUrl) {
+        console.log(`Page: ${invite.tabTitle || invite.tabUrl}`);
+      }
+      return;
+    }
+
     if (subcommand === "navigate") {
       const url = positional[2];
       if (!url) {
@@ -442,6 +620,7 @@ PROFILES:
       }
       await client.navigate(url, { tabId });
       await logActivity("navigate", tabId ? [url, `--tab=${tabId}`] : [url]);
+      await refreshWorkspaceSnapshot();
       console.log(`✓ Navigated to ${url}`);
       return;
     }
@@ -449,6 +628,7 @@ PROFILES:
     if (subcommand === "screenshot") {
       const base64 = await client.screenshot({ tabId });
       await logActivity("screenshot", tabId ? [`--tab=${tabId}`] : []);
+      await refreshWorkspaceSnapshot();
       const outPath = opts.out;
       if (outPath) {
         const { writeFileSync } = await import("fs");
@@ -478,6 +658,7 @@ PROFILES:
       }
       await client.typeText(text, { tabId });
       await logActivity("type", tabId ? [text, `--tab=${tabId}`] : [text]);
+      await refreshWorkspaceSnapshot();
       console.log(`✓ Typed: ${text}`);
       return;
     }
@@ -490,6 +671,7 @@ PROFILES:
       }
       await client.clickSelector(selector, { tabId });
       await logActivity("click", tabId ? [selector, `--tab=${tabId}`] : [selector]);
+      await refreshWorkspaceSnapshot();
       console.log(`✓ Clicked: ${selector}`);
       return;
     }
@@ -502,6 +684,7 @@ PROFILES:
       }
       await client.focusSelector(selector, { tabId });
       await logActivity("focus", tabId ? [selector, `--tab=${tabId}`] : [selector]);
+      await refreshWorkspaceSnapshot();
       console.log(`✓ Focused: ${selector}`);
       return;
     }
@@ -509,6 +692,7 @@ PROFILES:
     if (subcommand === "cursor") {
       await client.ensureAvatarCursor({ tabId, force: true });
       await logActivity("cursor", tabId ? [`--tab=${tabId}`] : []);
+      await refreshWorkspaceSnapshot();
       console.log("✓ In-page avatar cursor preview active");
       return;
     }
@@ -516,6 +700,7 @@ PROFILES:
     if (subcommand === "extract") {
       const text = await client.extractText({ tabId });
       await logActivity("extract", tabId ? [`--tab=${tabId}`] : []);
+      await refreshWorkspaceSnapshot();
       console.log(text);
       return;
     }
@@ -525,6 +710,7 @@ PROFILES:
       if (action === "list") {
         const cookies = await client.getCookies({ tabId });
         await logActivity("cookies", tabId ? ["list", `--tab=${tabId}`] : ["list"]);
+        await refreshWorkspaceSnapshot();
         console.log(JSON.stringify(cookies, null, 2));
         return;
       }
@@ -536,6 +722,7 @@ PROFILES:
       const { checkIfLoginRequired } = await import("../engine/browser.js");
       const needsLogin = await checkIfLoginRequired(client, tabId);
       await logActivity("check-login", tabId ? [`--tab=${tabId}`] : []);
+      await refreshWorkspaceSnapshot();
       if (needsLogin) {
         console.log("⚠️  Login required on current page");
         process.exit(1);
@@ -804,6 +991,7 @@ EXECUTE EXAMPLE:
         };
 
         await logActivity("patterns-execute", [pattern.id, navigateUrl]);
+        await refreshWorkspaceSnapshot();
 
         const outPath = opts.out;
         if (outPath) {

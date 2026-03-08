@@ -1,0 +1,23 @@
+{
+  "name": "termlings-videos",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bunx remotion studio src/index.ts",
+    "build": "bunx remotion bundle src/index.ts --out-dir dist",
+    "render": "bunx remotion render src/index.ts FakeTerminalDemo out/fake-terminal-demo.mp4",
+    "assets:fetch": "node ./scripts/fetch-assets.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.340",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.340"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "typescript": "5.7.3"
+  }
+}

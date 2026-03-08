@@ -78,13 +78,16 @@ export function buildDeferredInitScript(source) {
   })();`;
 }
 
-function resolveHttpBase(cdpTarget) {
+export function resolveHttpBase(cdpTarget) {
   const trimmed = String(cdpTarget || "").trim();
   if (!trimmed) {
     throw new Error("Missing required option: --cdp <target>");
   }
   if (/^\d+$/.test(trimmed)) {
     return `http://127.0.0.1:${trimmed}`;
+  }
+  if (/^[^/\s]+:\d+$/.test(trimmed)) {
+    return `http://${trimmed}`;
   }
   if (/^https?:\/\//i.test(trimmed)) {
     return trimmed.replace(/\/+$/, "");
@@ -95,6 +98,23 @@ function resolveHttpBase(cdpTarget) {
     return `${protocol}//${url.host}`;
   }
   throw new Error(`Unsupported CDP target: ${trimmed}`);
+}
+
+export function rewriteDevtoolsWebSocketUrl(browserWsUrl, httpBase) {
+  const source = String(browserWsUrl || "").trim();
+  if (!source) return "";
+  const base = String(httpBase || "").trim();
+  if (!base) return source;
+  try {
+    const wsUrl = new URL(source);
+    const baseUrl = new URL(base);
+    wsUrl.protocol = baseUrl.protocol === "https:" ? "wss:" : "ws:";
+    wsUrl.hostname = baseUrl.hostname;
+    wsUrl.port = baseUrl.port;
+    return wsUrl.toString();
+  } catch {
+    return source;
+  }
 }
 
 async function fetchJson(url, timeoutMs) {
@@ -818,7 +838,10 @@ async function runCommand(ctx, commandArgs) {
 async function createRunContext(cdpTarget) {
   const httpBase = resolveHttpBase(cdpTarget);
   const version = await fetchJson(`${httpBase}/json/version`, normalizeTimeoutMs(process.env.TERMLINGS_BROWSER_TIMEOUT_MS, 30000));
-  const browserWsUrl = typeof version?.webSocketDebuggerUrl === "string" ? version.webSocketDebuggerUrl : "";
+  const browserWsUrl = rewriteDevtoolsWebSocketUrl(
+    typeof version?.webSocketDebuggerUrl === "string" ? version.webSocketDebuggerUrl : "",
+    httpBase,
+  );
   if (!browserWsUrl) {
     throw new Error("Chrome did not expose a browser-level DevTools websocket");
   }

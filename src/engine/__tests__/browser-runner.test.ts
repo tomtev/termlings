@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { buildBackgroundCreateTargetParams, buildDeferredInitScript, collectVisibleTabs, isIgnoredInternalBrowserPage } from "../browser-runner.mjs"
+import {
+  buildBackgroundCreateTargetParams,
+  buildDeferredInitScript,
+  collectVisibleTabs,
+  isIgnoredInternalBrowserPage,
+  resolveHttpBase,
+  rewriteDevtoolsWebSocketUrl,
+} from "../browser-runner.mjs"
 
 function fakeTarget(id: string, url: string, title: string) {
   return {
@@ -56,5 +63,44 @@ describe("browser runner background tab creation", () => {
       url: "https://example.com",
       background: true,
     })
+  })
+})
+
+describe("browser runner websocket rewriting", () => {
+  it("accepts plain host:port cdp targets", () => {
+    expect(resolveHttpBase("host.docker.internal:9324")).toBe("http://host.docker.internal:9324")
+  })
+
+  it("normalizes numeric and websocket cdp targets to http bases", () => {
+    expect(resolveHttpBase("9224")).toBe("http://127.0.0.1:9224")
+    expect(resolveHttpBase("ws://127.0.0.1:9224/devtools/browser/test")).toBe("http://127.0.0.1:9224")
+    expect(resolveHttpBase("wss://browser.example.com/devtools/browser/test")).toBe("https://browser.example.com")
+  })
+
+  it("rejects unsupported cdp target shapes", () => {
+    expect(() => resolveHttpBase("not a target")).toThrow("Unsupported CDP target")
+  })
+
+  it("rewrites browser websocket urls through a proxied host target", () => {
+    expect(
+      rewriteDevtoolsWebSocketUrl(
+        "ws://127.0.0.1:9224/devtools/browser/abc123",
+        "http://host.docker.internal:9324",
+      ),
+    ).toBe("ws://host.docker.internal:9324/devtools/browser/abc123")
+  })
+
+  it("leaves invalid websocket urls unchanged", () => {
+    expect(rewriteDevtoolsWebSocketUrl("", "http://host.docker.internal:9324")).toBe("")
+    expect(rewriteDevtoolsWebSocketUrl("not-a-url", "http://host.docker.internal:9324")).toBe("not-a-url")
+  })
+
+  it("upgrades to secure websocket when the http base is https", () => {
+    expect(
+      rewriteDevtoolsWebSocketUrl(
+        "ws://127.0.0.1:9224/devtools/browser/secure",
+        "https://browser.example.com",
+      ),
+    ).toBe("wss://browser.example.com/devtools/browser/secure")
   })
 })

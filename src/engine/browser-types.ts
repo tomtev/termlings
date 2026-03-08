@@ -20,6 +20,10 @@ export interface ProcessState {
   startedAt: number | null
   url?: string
   cdpWsUrl?: string
+  dockerCdpTarget?: string
+  sharedForDocker?: boolean
+  dockerProxyPort?: number
+  dockerProxyPid?: number | null
   profilePath?: string
   mode?: "cdp"
 }
@@ -34,6 +38,7 @@ export interface ActivityLogEntry {
   args: unknown[]
   result: "success" | "error" | "timeout"
   error?: string
+  tabId?: string
 }
 
 export type AgentBrowserPresenceStatus = "active" | "idle" | "closed"
@@ -84,4 +89,61 @@ export interface AgentBrowserState {
   idleAt?: number
   endedAt?: number
   endReason?: AgentBrowserPresenceEndReason
+}
+
+export interface BrowserTabOwnerSnapshot {
+  ownerKey: string
+  tabId: string
+  updatedAt: number
+  sessionId?: string
+  agentSlug?: string
+  agentName?: string
+}
+
+export interface BrowserWorkspaceTabInput {
+  id: string
+  targetId?: string
+  title?: string
+  url?: string
+  type?: string
+  active?: boolean
+  current?: boolean
+  selected?: boolean
+  focused?: boolean
+}
+
+export interface BrowserWorkspaceTabSnapshot {
+  id: string
+  targetId?: string
+  title?: string
+  url?: string
+  type?: string
+  active: boolean
+  owner?: BrowserTabOwnerSnapshot
+  inviteCount: number
+}
+
+export interface BrowserWorkspaceSnapshot {
+  version: number
+  generatedAt: number
+  process: ProcessState | null
+  profile: ProfileReference | null
+  agents: AgentBrowserState[]
+  owners: BrowserTabOwnerSnapshot[]
+  invites: Array<{
+    id: string
+    tabId: string
+    status: string
+    ownerAgentSlug?: string
+    ownerAgentName?: string
+    target: string
+    targetAgentSlug: string
+    targetAgentName?: string
+    acceptedByAgentSlug?: string
+    acceptedByAgentName?: string
+    tabTitle?: string
+    tabUrl?: string
+    updatedAt: number
+  }>
+  tabs: BrowserWorkspaceTabSnapshot[]
 }

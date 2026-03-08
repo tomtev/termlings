@@ -2,6 +2,7 @@ import { discoverLocalAgents } from "../agents/discover.js"
 import { resolveAgentToken } from "../agents/resolve.js"
 import { createHash } from "crypto"
 import { existsSync, readFileSync, statSync } from "fs"
+import { readRecentAppActivityEntries, readRecentThreadActivityEntries, type AppActivityEntry } from "../engine/activity.js"
 import { getAllCalendarEvents, type CalendarEvent, type CalendarRecurrence } from "../engine/calendar.js"
 import { queueMessage, writeMessages } from "../engine/ipc.js"
 import {
@@ -31,7 +32,6 @@ import {
   type WorkspaceMessage,
   type WorkspaceSession,
 } from "../workspace/state.js"
-import { readLastJsonLines } from "../workspace/jsonl.js"
 import type {
   AgentPresence,
   AvatarBlock,
@@ -108,8 +108,8 @@ const DRAFT_BLOCK_TOKEN_PATTERN = /(?:\[Image #\d+\]|\[Pasted Content(?: #\d+)? 
 const DRAFT_BLOCK_TOKEN_GLOBAL = /\[Image #\d+\]|\[Pasted Content(?: #\d+)? \d+ chars\]/g
 const FG_RUNTIME_CLAUDE = "\x1b[38;2;217;119;87m"
 const FG_RUNTIME_CODEX = "\x1b[38;2;148;163;184m"
-const BROWSER_ACTIVITY_MAX_MESSAGES = 200
-const BROWSER_ACTIVITY_CACHE_MULTIPLIER = 3
+const APP_ACTIVITY_MAX_MESSAGES = 240
+const APP_ACTIVITY_CACHE_MULTIPLIER = 3
 const RECENT_ACTIVITY_SNAPSHOT_LIMIT = 300
 const MESSAGE_WINDOW_DEFAULT_LIMIT = 120
 const MESSAGE_WINDOW_LOAD_STEP = 120
@@ -135,17 +135,6 @@ interface SessionTypingState {
   typing: boolean
   updatedAt: number
   source?: "terminal"
-}
-
-interface BrowserActivityEntry {
-  ts: number
-  sessionId?: string
-  agentName?: string
-  agentSlug?: string
-  agentDna?: string
-  command?: string
-  args?: unknown[]
-  result?: "success" | "error" | "timeout"
 }
 
 interface WorkspaceTuiOptions {
@@ -342,9 +331,9 @@ export class WorkspaceTui {
 
   private avatarSizeMode: "large" | "small" | "tiny" = "small"
   private showBrowserActivityInFeed = true
-  private browserActivityCache: WorkspaceMessage[] = []
-  private browserActivityCacheMtimeMs = 0
-  private browserActivityCacheSize = -1
+  private appActivityCache: WorkspaceMessage[] = []
+  private appActivityCacheMtimeMs = 0
+  private appActivityCacheSize = -1
   private avatarVisibleAgentCount = 0
   private avatarTotalAgentCount = 0
   private renderScheduled = false
@@ -3064,75 +3053,76 @@ export class WorkspaceTui {
     return { delivered, record }
   }
 
-  private browserActivityHistoryPath(): string {
-    return join(this.root, ".termlings", "browser", "history", "all.jsonl")
+  private appActivityHistoryPath(): string {
+    return join(this.root, ".termlings", "store", "activity", "all.jsonl")
   }
 
-  private browserActivityEntryId(entry: BrowserActivityEntry): string {
+  private appActivityEntryId(entry: AppActivityEntry): string {
     const digest = createHash("sha1")
       .update(JSON.stringify([
         entry.ts,
-        entry.sessionId || "",
-        entry.agentSlug || "",
-        entry.agentDna || "",
-        entry.command || "",
-        entry.args || [],
+        entry.app || "",
+        entry.kind || "",
+        entry.actorSessionId || "",
+        entry.actorSlug || "",
+        entry.actorDna || "",
+        entry.threadId || "",
+        entry.text || "",
+        entry.level || "",
+        entry.surface || "",
         entry.result || "",
       ]))
       .digest("hex")
       .slice(0, 12)
-    return `browser-${digest}`
+    return `activity-${digest}`
   }
 
-  private browserActivityEntryToMessage(entry: BrowserActivityEntry): WorkspaceMessage | null {
-    if (!entry || typeof entry !== "object") return null
-    if (entry.result !== "success") return null
-    if (typeof entry.ts !== "number" || !Number.isFinite(entry.ts)) return null
-    const command = typeof entry.command === "string" ? entry.command : ""
-    if (!command) return null
+  private appActivityActorLabel(entry: AppActivityEntry): string {
+    const direct = (entry.actorName || "").trim()
+    if (direct.length > 0) return direct
 
-    let text: string | null = null
-    if (command === "navigate") {
-      const url = Array.isArray(entry.args)
-        ? entry.args.find((arg) => typeof arg === "string" && arg.trim().length > 0)
-        : null
-      if (typeof url === "string") {
-        text = `visited ${url}`
-      }
-    } else if (command === "patterns-execute") {
-      const args = Array.isArray(entry.args) ? entry.args : []
-      const patternId = typeof args[0] === "string" ? args[0] : "pattern"
-      const url = typeof args[1] === "string" ? args[1] : undefined
-      if (url) {
-        text = `visited ${url} via pattern ${patternId}`
-      }
+    const bySlug = (entry.actorSlug || "").trim()
+    if (bySlug.length > 0) {
+      const thread = this.snapshotIndexes.threadBySlug.get(bySlug.toLowerCase())
+      if (thread?.label) return thread.label
+      return bySlug
     }
+
+    const byDna = (entry.actorDna || "").trim()
+    if (byDna.length > 0) {
+      const thread = this.snapshotIndexes.threadByDna.get(byDna)
+      if (thread?.label) return thread.label
+    }
+
+    if (entry.app === "browser") return "Browser"
+    if (entry.app === "task") return "Tasks"
+    if (entry.app === "requests") return "Requests"
+    if (entry.app === "messaging") return "Messaging"
+    return entry.app.charAt(0).toUpperCase() + entry.app.slice(1)
+  }
+
+  private shouldShowAppActivityEntry(entry: AppActivityEntry, surface: "feed" | "thread"): boolean {
+    if (surface === "feed" && entry.surface === "thread") return false
+    if (surface === "thread" && entry.surface === "feed") return false
+    if (entry.app === "browser") {
+      if (!this.enabledApps.browser) return false
+      if (!this.showBrowserActivityInFeed && surface === "feed") return false
+    }
+    return true
+  }
+
+  private appActivityEntryToMessage(entry: AppActivityEntry): WorkspaceMessage | null {
+    if (!entry || typeof entry !== "object") return null
+    if (typeof entry.ts !== "number" || !Number.isFinite(entry.ts)) return null
+    const text = String(entry.text || "").trim()
     if (!text) return null
 
-    const fromName = (() => {
-      const direct = (entry.agentName || "").trim()
-      if (direct.length > 0) return direct
-
-      const bySlug = (entry.agentSlug || "").trim()
-      if (bySlug.length > 0) {
-        const thread = this.snapshotIndexes.threadBySlug.get(bySlug.toLowerCase())
-        if (thread?.label) return thread.label
-        return bySlug
-      }
-
-      const byDna = (entry.agentDna || "").trim()
-      if (byDna.length > 0) {
-        const thread = this.snapshotIndexes.threadByDna.get(byDna)
-        if (thread?.label) return thread.label
-      }
-
-      return "Browser"
-    })()
-
-    const from = (entry.sessionId || "").trim() || `browser:${(entry.agentSlug || entry.agentDna || "unknown").toString()}`
-    const fromDna = (entry.agentDna || "").trim() || this.resolveDnaByName(fromName)
+    const fromName = this.appActivityActorLabel(entry)
+    const from = (entry.actorSessionId || "").trim()
+      || `app:${entry.app}:${(entry.actorSlug || entry.actorDna || "system").toString()}`
+    const fromDna = (entry.actorDna || "").trim() || this.resolveDnaByName(fromName)
     return {
-      id: this.browserActivityEntryId(entry),
+      id: this.appActivityEntryId(entry),
       kind: "system",
       from,
       fromName,
@@ -3142,42 +3132,52 @@ export class WorkspaceTui {
     }
   }
 
-  private readBrowserActivityMessages(limit = BROWSER_ACTIVITY_MAX_MESSAGES): WorkspaceMessage[] {
-    if (!this.enabledApps.browser || !this.showBrowserActivityInFeed) return []
-
-    const historyPath = this.browserActivityHistoryPath()
+  private readAppActivityMessages(limit = APP_ACTIVITY_MAX_MESSAGES): WorkspaceMessage[] {
+    const historyPath = this.appActivityHistoryPath()
     if (!existsSync(historyPath)) {
-      this.browserActivityCache = []
-      this.browserActivityCacheMtimeMs = 0
-      this.browserActivityCacheSize = -1
+      this.appActivityCache = []
+      this.appActivityCacheMtimeMs = 0
+      this.appActivityCacheSize = -1
       return []
     }
 
     try {
       const stats = statSync(historyPath)
       if (
-        this.browserActivityCache.length > 0
-        && this.browserActivityCacheMtimeMs === stats.mtimeMs
-        && this.browserActivityCacheSize === stats.size
+        this.appActivityCache.length > 0
+        && this.appActivityCacheMtimeMs === stats.mtimeMs
+        && this.appActivityCacheSize === stats.size
       ) {
-        return this.browserActivityCache.slice(-limit)
+        return this.appActivityCache.slice(-limit)
       }
 
       const parsed: WorkspaceMessage[] = []
-      const cacheLimit = Math.max(limit, BROWSER_ACTIVITY_MAX_MESSAGES) * BROWSER_ACTIVITY_CACHE_MULTIPLIER
-      const entries = readLastJsonLines<BrowserActivityEntry>(historyPath, cacheLimit)
+      const cacheLimit = Math.max(limit, APP_ACTIVITY_MAX_MESSAGES) * APP_ACTIVITY_CACHE_MULTIPLIER
+      const entries = readRecentAppActivityEntries(cacheLimit, this.root)
       for (const entry of entries) {
-        const mapped = this.browserActivityEntryToMessage(entry)
+        if (!this.shouldShowAppActivityEntry(entry, "feed")) continue
+        const mapped = this.appActivityEntryToMessage(entry)
         if (mapped) parsed.push(mapped)
       }
 
-      this.browserActivityCache = parsed.slice(-cacheLimit)
-      this.browserActivityCacheMtimeMs = stats.mtimeMs
-      this.browserActivityCacheSize = stats.size
-      return this.browserActivityCache.slice(-limit)
+      this.appActivityCache = parsed.slice(-cacheLimit)
+      this.appActivityCacheMtimeMs = stats.mtimeMs
+      this.appActivityCacheSize = stats.size
+      return this.appActivityCache.slice(-limit)
     } catch {
-      return this.browserActivityCache.slice(-limit)
+      return this.appActivityCache.slice(-limit)
     }
+  }
+
+  private readThreadActivityMessages(threadId: string, limit: number): WorkspaceMessage[] {
+    const entries = readRecentThreadActivityEntries(threadId, limit, this.root)
+    const parsed: WorkspaceMessage[] = []
+    for (const entry of entries) {
+      if (!this.shouldShowAppActivityEntry(entry, "thread")) continue
+      const mapped = this.appActivityEntryToMessage(entry)
+      if (mapped) parsed.push(mapped)
+    }
+    return parsed
   }
 
   private async reloadSnapshot(): Promise<void> {
@@ -3205,8 +3205,8 @@ export class WorkspaceTui {
       }
 
       const workspaceMessages = readWorkspaceMessages({ limit: RECENT_ACTIVITY_SNAPSHOT_LIMIT }, this.root)
-      const browserActivityMessages = this.readBrowserActivityMessages()
-      const messages = [...workspaceMessages, ...browserActivityMessages]
+      const appActivityMessages = this.readAppActivityMessages()
+      const messages = [...workspaceMessages, ...appActivityMessages]
         .sort((a, b) => {
           if (a.ts !== b.ts) return a.ts - b.ts
           return a.id.localeCompare(b.id)
@@ -3573,9 +3573,9 @@ export class WorkspaceTui {
   private loadActivityWindow(limit: number): { messages: WorkspaceMessage[]; hasOlder: boolean } {
     const rawLimit = Math.max(1, limit + 1)
     const workspaceMessages = readWorkspaceMessages({ limit: rawLimit }, this.root)
-    const browserActivityMessages = this.readBrowserActivityMessages(rawLimit)
+    const appActivityMessages = this.readAppActivityMessages(rawLimit)
     const byId = new Map<string, WorkspaceMessage>()
-    for (const message of [...workspaceMessages, ...browserActivityMessages]) {
+    for (const message of [...workspaceMessages, ...appActivityMessages]) {
       byId.set(message.id, message)
     }
     const combined = Array.from(byId.values()).sort((a, b) => {
@@ -3619,6 +3619,7 @@ export class WorkspaceTui {
         match: (message) => this.isOperatorAgentDmForThread(message, thread.dna),
       }),
     )
+    combined.push(...this.readThreadActivityMessages(threadId, rawLimit))
 
     const byId = new Map<string, WorkspaceMessage>()
     for (const message of combined) {

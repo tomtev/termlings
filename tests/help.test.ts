@@ -38,6 +38,7 @@ describe("renderTopLevelHelp", () => {
   it("shows enabled app commands in top-level help", () => {
     const help = renderTopLevelHelp(BUILTIN_WORKSPACE_APPS)
 
+    expect(help.includes("termlings machine <cmd>")).toBe(true)
     expect(help.includes("termlings brief")).toBe(true)
     expect(help.includes("termlings message <target> <text>")).toBe(true)
     expect(help.includes("termlings crm <cmd>")).toBe(true)

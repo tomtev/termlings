@@ -13,7 +13,7 @@ import { handleScheduler } from "./scheduler.js";
 import { handleInit } from "./init.js";
 import { handleCreate } from "./create.js";
 import { handleAvatar } from "./avatar.js";
-import { handleSpawn } from "./spawn.js";
+import { handleSpawn, handleSpawnDockerWorker } from "./spawn.js";
 import { handleRequest } from "./request.js";
 import { handleOrgChart } from "./org-chart.js";
 import { handleBrief } from "./brief.js";
@@ -22,6 +22,7 @@ import { handleConversation } from "./conversation.js";
 import { handleSkills } from "./skills.js";
 import { handleAgents } from "./agents.js";
 import { handleCrm } from "./crm.js";
+import { handleMachine } from "./machine.js";
 
 export async function routeCommand(
   positional: string[],
@@ -112,8 +113,16 @@ export async function routeCommand(
       await handleSpawn(flags, positional, opts);
       return true;
 
+    case "spawn-docker-worker":
+      await handleSpawnDockerWorker(positional, opts);
+      return true;
+
     case "request":
       await handleRequest(flags, positional, opts);
+      return true;
+
+    case "machine":
+      await handleMachine(flags, positional, opts);
       return true;
   }
 

@@ -8,6 +8,7 @@ import { join } from "path"
 import { getTermlingsDir } from "./ipc.js"
 import { randomBytes } from "crypto"
 import { writeEnvVarForScope, type EnvScope } from "./env.js"
+import { appendAppActivity, resolveAgentActivityThreadId } from "./activity.js"
 
 export type RequestType = "env" | "confirm" | "choice"
 export type RequestStatus = "pending" | "resolved" | "dismissed"
@@ -45,6 +46,55 @@ export interface AgentRequest {
   // resolution
   resolvedAt?: number
   response?: string      // the value, "yes"/"no", or chosen option
+}
+
+function requestThreadId(request: Pick<AgentRequest, "fromSlug" | "fromDna">): string | undefined {
+  return resolveAgentActivityThreadId({
+    agentSlug: request.fromSlug,
+    agentDna: request.fromDna,
+  })
+}
+
+function requestSummary(request: Pick<AgentRequest, "id" | "type" | "varName" | "question" | "reason">): string {
+  if (request.type === "env") {
+    return request.varName ? `${request.id} (${request.varName})` : request.id
+  }
+  if (request.type === "confirm") {
+    return request.question ? `${request.id} (${request.question})` : request.id
+  }
+  const label = request.question || request.reason
+  return label ? `${request.id} (${label})` : request.id
+}
+
+function appendRequestActivity(
+  kind: string,
+  text: string,
+  request: AgentRequest,
+  actor: {
+    actorName?: string
+    actorSlug?: string
+    actorSessionId?: string
+    actorDna?: string
+  },
+): void {
+  appendAppActivity({
+    ts: Date.now(),
+    app: "requests",
+    kind,
+    text,
+    level: kind === "created" ? "summary" : "detail",
+    surface: "both",
+    actorName: actor.actorName,
+    actorSlug: actor.actorSlug,
+    actorSessionId: actor.actorSessionId,
+    actorDna: actor.actorDna,
+    threadId: requestThreadId(request),
+    meta: {
+      requestId: request.id,
+      requestType: request.type,
+      status: request.status,
+    },
+  })
 }
 
 function getRequestsDir(): string {
@@ -138,6 +188,12 @@ export function createRequest(req: Omit<AgentRequest, "id" | "status" | "ts">): 
     ts: Date.now(),
   }
   writeFileSync(join(dir, `${request.id}.json`), JSON.stringify(request, null, 2) + "\n")
+  appendRequestActivity("created", `created request ${requestSummary(request)}`, request, {
+    actorName: request.fromName,
+    actorSlug: request.fromSlug,
+    actorSessionId: request.from,
+    actorDna: request.fromDna,
+  })
   return request
 }
 
@@ -220,6 +276,13 @@ export function resolveRequest(id: string, response: string): AgentRequest | nul
     writeEnvVarForScope(outcome.request.varName!, response, scope)
   }
 
+  if (outcome.resolvedNow) {
+    appendRequestActivity("resolved", `resolved request ${requestSummary(outcome.request)}`, outcome.request, {
+      actorName: "Owner",
+      actorSessionId: "human:default",
+    })
+  }
+
   return outcome.request
 }
 
@@ -241,6 +304,12 @@ export function dismissRequest(id: string): AgentRequest | null {
     },
   )
   if (!outcome) return null
+  if (outcome.dismissedNow) {
+    appendRequestActivity("dismissed", `dismissed request ${requestSummary(outcome.request)}`, outcome.request, {
+      actorName: "Owner",
+      actorSessionId: "human:default",
+    })
+  }
   return outcome.request
 }
 

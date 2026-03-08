@@ -188,6 +188,8 @@ termlings browser click "button.submit" --tab <index>
 - Termlings wraps `agent-browser --native --cdp <target>` under the hood (`<target>` is the active CDP endpoint).
 - Defaults are optimized for human-in-the-loop operations: headed browser + workspace-scoped persistent profile.
 - For scraping/CI operations, start headless: `termlings browser start --headless`.
+- In Docker or other no-display runtimes, `termlings browser start` and `termlings browser start --headed` automatically fall back to headless mode.
+- In those runtimes, do not treat headed mode as a blocker. Proceed headlessly unless the user explicitly says they require a visible browser window.
 - Headless mode still uses CDP for control; it only removes the visible browser window.
 - Use `termlings browser tabs list` and `--tab <index>` to reduce cross-agent tab collisions.
 

@@ -25,7 +25,11 @@ async function ensureSchedulerDaemon(root: string): Promise<void> {
   }
 }
 
-async function startSpawnAllInBackground(root: string): Promise<{ ok: boolean; pid?: number; error?: string }> {
+async function startSpawnAllInBackground(
+  root: string,
+  docker = false,
+  allowHostYolo = false,
+): Promise<{ ok: boolean; pid?: number; error?: string }> {
   const [{ join, resolve }, { spawn }] = await Promise.all([
     import("path"),
     import("child_process"),
@@ -36,6 +40,12 @@ async function startSpawnAllInBackground(root: string): Promise<{ ok: boolean; p
     : join(root, "bin", "termlings.js");
   const command = (process.execPath || "").trim() || "bun";
   const commandArgs = [cliEntry, "spawn", "--all", "--quiet"];
+  if (docker) {
+    commandArgs.push("--docker");
+  }
+  if (allowHostYolo) {
+    commandArgs.push("--allow-host-yolo");
+  }
   const sessionEnv = {
     ...(process.env as Record<string, string | undefined>),
   };
@@ -92,6 +102,8 @@ const VALUE_FLAGS = new Set([
   "token", "cors-origin", "cors_origin", "allowed-projects", "allowed_projects",
   "max-body-kb", "max_body_kb", "rate-limit", "rate_limit", "sse-max", "sse_max",
   "agent", "account", "folder", "scope", "type", "status", "stage", "tags", "query", "attrs",
+  "user", "dir", "remoteDir", "identity", "description", "mode",
+  "docker-shell", "docker_shell", "container-dir", "container_dir", "containerDir",
 ]);
 
 // Check if first arg is an agent name
@@ -228,9 +240,56 @@ try {
           process.exit(1);
         }
         const root = process.cwd();
+        const dockerStartup = flags.has("docker");
+        const allowHostYolo = flags.has("allow-host-yolo");
+        const {
+          loadSpawnConfigOrDefault,
+          confirmHostYoloSpawnOrExit,
+          ensureDockerWorkspaceBrowser,
+        } = await import("./commands/spawn.js");
+        const config = loadSpawnConfigOrDefault(root);
+        await confirmHostYoloSpawnOrExit(
+          config,
+          agents.map((agent) => {
+            const route = config.agents[agent.name] || config.default;
+            return {
+              slug: agent.name,
+              runtimeName: route.runtime,
+              presetName: route.preset,
+            };
+          }),
+          {
+            docker: dockerStartup,
+            allowHostYolo,
+            commandLabel: "termlings --spawn",
+          },
+        );
         await ensureSchedulerDaemon(root);
         const { appendWorkspaceMessage } = await import("./workspace/state.js");
-        const startupSpawn = await startSpawnAllInBackground(root);
+        if (dockerStartup) {
+          const browserPreparation = await ensureDockerWorkspaceBrowser({ quiet: true });
+          if (browserPreparation.ok) {
+            const actionText = browserPreparation.status === "restarted"
+              ? "Restarted shared browser for Docker agents."
+              : browserPreparation.status === "reused"
+                ? "Shared browser ready for Docker agents."
+                : "Started shared browser for Docker agents.";
+            appendWorkspaceMessage({
+              kind: "system",
+              from: "system",
+              fromName: "Browser",
+              text: actionText,
+            }, root);
+          } else if (browserPreparation.error) {
+            appendWorkspaceMessage({
+              kind: "system",
+              from: "system",
+              fromName: "Browser",
+              text: `Shared Docker browser unavailable: ${browserPreparation.error}`,
+            }, root);
+          }
+        }
+        const startupSpawn = await startSpawnAllInBackground(root, dockerStartup, allowHostYolo);
         if (startupSpawn.ok) {
           appendWorkspaceMessage({
             kind: "system",

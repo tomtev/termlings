@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y \
   less \
   procps \
   ripgrep \
+  xauth \
+  xvfb \
   unzip \
   xz-utils \
   && rm -rf /var/lib/apt/lists/*
