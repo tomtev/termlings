@@ -364,21 +364,47 @@ export function evaluateHostYoloSpawnRisk(
   }
 }
 
-function renderHostYoloSpawnWarning(
+export function renderHostYoloSpawnApproval(
+  config: SpawnConfig,
   riskyTargets: HostYoloRiskTarget[],
   dangerousFlags: string[],
   commandLabel: string,
+  options: { useAnsi?: boolean } = {},
 ): string {
-  const preview = riskyTargets
-    .slice(0, 4)
-    .map((target) => `${target.slug} (${formatRoute(target.runtimeName, target.presetName)})`)
-    .join(", ")
-  const extra = riskyTargets.length > 4 ? `, +${riskyTargets.length - 4} more` : ""
+  const muted = options.useAnsi ? "\x1b[38;5;245m" : ""
+  const warning = options.useAnsi ? "\x1b[38;5;214m" : ""
+  const reset = options.useAnsi ? "\x1b[0m" : ""
+  const localAgents = discoverLocalAgents()
+  const agentMeta = new Map(localAgents.map((agent) => [agent.name, agent]))
+  const previewTargets = riskyTargets.slice(0, 6)
+  const extraCount = Math.max(0, riskyTargets.length - previewTargets.length)
+  const routeLines = previewTargets.flatMap((target) => {
+    const agent = agentMeta.get(target.slug)
+    const displayName = (agent?.soul?.name || target.slug).trim()
+    const title = (agent?.soul?.title_short || agent?.soul?.title || agent?.soul?.role || "").trim()
+    const label = title ? `${displayName} - ${title}` : displayName
+    const accent = options.useAnsi ? (accentColorFromDna(agent?.soul?.dna) || "") : ""
+    const command = buildPresetCommand(config, target.runtimeName, target.presetName, []) || "(invalid command)"
+    return [
+      `  ${accent}${label}${reset}`,
+      `    ${muted}${formatCommandPreview(command)}${reset}`,
+    ]
+  })
+  if (extraCount > 0) {
+    routeLines.push(`  ... ${extraCount} more`)
+  }
+  const agentLabel = riskyTargets.length === 1 ? "agent" : "agents"
   return [
-    `Security confirmation required for \`${commandLabel}\`.`,
-    `Host-native spawn is about to launch YOLO/autonomous routes on this machine: ${preview}${extra}.`,
-    `Detected dangerous flags: ${dangerousFlags.join(", ")}.`,
-    "Use `--docker` for Docker-isolated workers, or confirm that you want to continue on the host.",
+    `Host launch approval required for \`${commandLabel}\`.`,
+    "",
+    `Termlings is about to launch ${riskyTargets.length} ${agentLabel} on this machine using host-native autonomous routes.`,
+    "Resolved routes from `.termlings/spawn.json`:",
+    ...routeLines,
+    "",
+    `${warning}Dangerous flags detected: ${dangerousFlags.join(", ")}${reset}`,
+    "Proceed with caution.",
+    `${warning}Run in Docker for better safety: \`termlings --spawn --docker\`${reset}`,
+    "Change defaults: edit `.termlings/spawn.json`",
   ].join("\n")
 }
 
@@ -391,16 +417,35 @@ export async function confirmHostYoloSpawnOrExit(
   if (!requiresConfirmation) return
 
   const commandLabel = options.commandLabel || "termlings spawn"
-  console.error(renderHostYoloSpawnWarning(riskyTargets, dangerousFlags, commandLabel))
+  const interactive = process.stdin.isTTY && process.stdout.isTTY
+  const approvalText = renderHostYoloSpawnApproval(config, riskyTargets, dangerousFlags, commandLabel, {
+    useAnsi: interactive,
+  })
+  if (interactive) {
+    const { getTermlingsVersion, renderBanner } = await import("../banner.js")
+    const reset = "\x1b[0m"
+    const bold = "\x1b[1m"
+    const muted = "\x1b[38;5;245m"
+    const purple = "\x1b[38;2;138;43;226m"
+    console.log("")
+    console.log(renderBanner([
+      `${purple}${bold}termlings${reset} ${muted}v${getTermlingsVersion()}${reset}`,
+    ]))
+    console.log("")
+    console.log(approvalText)
+    console.log("")
+  } else {
+    console.error(approvalText)
+  }
 
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+  if (!interactive) {
     console.error("Refusing host-native YOLO spawn without interactive confirmation.")
     console.error(`Re-run interactively and confirm, pass \`--allow-host-yolo\`, or use \`${commandLabel} --docker\`.`)
     process.exit(1)
   }
 
   const { confirm } = await import("../interactive-menu.js")
-  const accepted = await confirm("Continue with host-native YOLO spawn?", false)
+  const accepted = await confirm("Approve host-native launch for these agents?", false)
   if (!accepted) {
     console.error("Host-native spawn cancelled.")
     process.exit(1)
@@ -454,6 +499,7 @@ async function spawnAgentProcesses(
   quiet = false,
   respawn = false,
   docker = false,
+  allowHostYolo = false,
 ): Promise<void> {
   const root = process.cwd()
   const created: string[] = []
@@ -487,6 +533,7 @@ async function spawnAgentProcesses(
             `--agent=${target.slug}`,
             "--inline",
             ...targetArgs,
+            ...(allowHostYolo ? ["--allow-host-yolo"] : []),
           ],
       root,
       respawn,
@@ -794,7 +841,7 @@ NOTES:
     allowHostYolo,
     commandLabel: "termlings spawn",
   })
-  await spawnAgentProcesses(launchTargets, extraArgs, quiet, respawn, docker)
+  await spawnAgentProcesses(launchTargets, extraArgs, quiet, respawn, docker, allowHostYolo)
 }
 
 export async function handleSpawnDockerWorker(

@@ -8,7 +8,11 @@ import { launchWorkspaceTui } from "./tui/tui.js";
 import { getUpdateNotice } from "./update-check.js";
 import { loadTermlingsEnv } from "./engine/env.js";
 import { renderTopLevelHelp } from "./help.js";
-import { getTopLevelInitOptions, listUnsupportedTopLevelFlags } from "./top-level-startup.js";
+import {
+  buildTopLevelSpawnWorkerInvocation,
+  getTopLevelInitOptions,
+  listUnsupportedTopLevelFlags,
+} from "./top-level-startup.js";
 
 async function ensureSchedulerDaemon(root: string): Promise<void> {
   const { ensureManagedRuntimeProcess } = await import("./engine/runtime-processes.js");
@@ -30,22 +34,16 @@ async function startSpawnAllInBackground(
   docker = false,
   allowHostYolo = false,
 ): Promise<{ ok: boolean; pid?: number; error?: string }> {
-  const [{ join, resolve }, { spawn }] = await Promise.all([
-    import("path"),
+  const [{ spawn }] = await Promise.all([
     import("child_process"),
   ]);
-
-  const cliEntry = (process.argv[1] || "").trim().length > 0
-    ? resolve(process.argv[1]!)
-    : join(root, "bin", "termlings.js");
-  const command = (process.execPath || "").trim() || "bun";
-  const commandArgs = [cliEntry, "spawn", "--all", "--quiet"];
-  if (docker) {
-    commandArgs.push("--docker");
-  }
-  if (allowHostYolo) {
-    commandArgs.push("--allow-host-yolo");
-  }
+  const { command, args: commandArgs } = buildTopLevelSpawnWorkerInvocation({
+    root,
+    argv1: process.argv[1],
+    execPath: process.execPath,
+    docker,
+    allowHostYolo,
+  });
   const sessionEnv = {
     ...(process.env as Record<string, string | undefined>),
   };
@@ -289,7 +287,7 @@ try {
             }, root);
           }
         }
-        const startupSpawn = await startSpawnAllInBackground(root, dockerStartup, allowHostYolo);
+        const startupSpawn = await startSpawnAllInBackground(root, dockerStartup, true);
         if (startupSpawn.ok) {
           appendWorkspaceMessage({
             kind: "system",

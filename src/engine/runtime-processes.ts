@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from "fs"
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "fs"
 import { join, resolve } from "path"
 import { spawn } from "child_process"
 import { ensureWorkspaceDirs } from "../workspace/state.js"
@@ -17,6 +17,7 @@ export interface ManagedRuntimeProcess {
   agentSlug?: string
   runtimeName?: string
   presetName?: string
+  logPath?: string
 }
 
 interface ManagedRuntimeProcessState {
@@ -76,6 +77,24 @@ function legacyRuntimeLogDir(root: string): string {
   return join(root, ".termlings", "store", "runtime-logs")
 }
 
+function managedRuntimeLogDir(root: string): string {
+  return join(root, ".termlings", "store", "managed-runtime-logs")
+}
+
+function managedRuntimeLogPath(root: string, key: string): string {
+  const safeKey = key.replace(/[^a-zA-Z0-9._-]+/g, "-")
+  return join(managedRuntimeLogDir(root), `${safeKey}.log`)
+}
+
+function normalizeLogPath(root: string, rawLogPath: unknown): string | undefined {
+  const logPath = asString(rawLogPath).trim()
+  if (!logPath) return undefined
+  const normalized = resolve(logPath)
+  const managedDir = `${resolve(managedRuntimeLogDir(root))}/`
+  if (!normalized.startsWith(managedDir)) return undefined
+  return normalized
+}
+
 function emptyState(): ManagedRuntimeProcessState {
   return {
     version: STATE_VERSION,
@@ -132,6 +151,8 @@ function normalizeProcess(raw: unknown): ManagedRuntimeProcess | null {
   const kind = kindRaw === "agent" || kindRaw === "scheduler" ? kindRaw : ""
   if (!key || !kind || !Number.isFinite(pid) || pid <= 0 || !command || !cwd) return null
 
+  const logPath = normalizeLogPath(cwd, data.logPath)
+
   return {
     key,
     kind,
@@ -144,6 +165,7 @@ function normalizeProcess(raw: unknown): ManagedRuntimeProcess | null {
     agentSlug: asString(data.agentSlug).trim() || undefined,
     runtimeName: asString(data.runtimeName).trim() || undefined,
     presetName: asString(data.presetName).trim() || undefined,
+    ...(logPath ? { logPath } : {}),
   }
 }
 
@@ -282,28 +304,51 @@ function detachedInvocation(args: string[], root: string): {
   }
 }
 
+function openManagedRuntimeLogFile(root: string, key: string): { logPath: string; fd: number } {
+  const logDir = managedRuntimeLogDir(root)
+  mkdirSync(logDir, { recursive: true })
+  const logPath = managedRuntimeLogPath(root, key)
+  const fd = openSync(logPath, "a")
+  return { logPath, fd }
+}
+
 function launchDetachedTermlings(
   args: string[],
+  key: string,
   root: string,
-): { ok: boolean; pid?: number; error?: string; commandLine?: string } {
+): { ok: boolean; pid?: number; error?: string; commandLine?: string; logPath?: string } {
   const invocation = detachedInvocation(args, root)
+  let logFd: number | null = null
+  let logPath = ""
   try {
+    const openedLog = openManagedRuntimeLogFile(root, key)
+    logFd = openedLog.fd
+    logPath = openedLog.logPath
     const child = spawn(invocation.command, invocation.commandArgs, {
       cwd: root,
       detached: true,
-      stdio: "ignore",
+      stdio: ["ignore", logFd, logFd],
       env: buildDetachedEnv(),
     })
 
     child.unref()
+    try {
+      closeSync(logFd)
+    } catch {}
+    logFd = null
 
     const pid = child.pid
     if (!Number.isFinite(pid) || (pid ?? 0) <= 0) {
       return { ok: false, error: "Failed to start detached process." }
     }
 
-    return { ok: true, pid: pid as number, commandLine: invocation.commandLine }
+    return { ok: true, pid: pid as number, commandLine: invocation.commandLine, logPath }
   } catch (error) {
+    if (logFd !== null) {
+      try {
+        closeSync(logFd)
+      } catch {}
+    }
     const message = error instanceof Error ? error.message : String(error)
     return {
       ok: false,
@@ -329,7 +374,7 @@ export async function ensureManagedRuntimeProcess(
     removeManagedRuntimeProcess(existing.key, root)
   }
 
-  const launched = launchDetachedTermlings(options.args, root)
+  const launched = launchDetachedTermlings(options.args, options.key, root)
   if (!launched.ok || !launched.pid) {
     return { ok: false, created: false, respawned: false, error: launched.error || "failed to launch process" }
   }
@@ -360,6 +405,7 @@ export async function ensureManagedRuntimeProcess(
       agentSlug: options.agentSlug,
       runtimeName: options.runtimeName,
       presetName: options.presetName,
+      logPath: launched.logPath,
     },
     root,
   )

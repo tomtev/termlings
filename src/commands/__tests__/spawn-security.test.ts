@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { ensureRuntimeSpawnCommandDefaults, evaluateHostYoloSpawnRisk } from "../spawn.js"
+import {
+  ensureRuntimeSpawnCommandDefaults,
+  evaluateHostYoloSpawnRisk,
+  renderHostYoloSpawnApproval,
+} from "../spawn.js"
 
 describe("spawn host yolo confirmation", () => {
   const config = {
@@ -72,6 +76,32 @@ describe("spawn host yolo confirmation", () => {
 
     expect(result.requiresConfirmation).toBe(false)
     expect(result.riskyTargets).toEqual([])
+  })
+
+  it("renders an approval summary with routes, commands, and spawn.json guidance", () => {
+    const result = evaluateHostYoloSpawnRisk(config, [
+      { slug: "developer", runtimeName: "claude", presetName: "default" },
+      { slug: "research", runtimeName: "codex", presetName: "default" },
+    ])
+
+    expect(
+      renderHostYoloSpawnApproval(config, result.riskyTargets, result.dangerousFlags, "termlings --spawn"),
+    ).toContain("Host launch approval required for `termlings --spawn`.")
+    expect(
+      renderHostYoloSpawnApproval(config, result.riskyTargets, result.dangerousFlags, "termlings --spawn"),
+    ).toContain("Resolved routes from `.termlings/spawn.json`:")
+    expect(
+      renderHostYoloSpawnApproval(config, result.riskyTargets, result.dangerousFlags, "termlings --spawn"),
+    ).toContain("claude --dangerously-skip-permissions --effort medium")
+    expect(
+      renderHostYoloSpawnApproval(config, result.riskyTargets, result.dangerousFlags, "termlings --spawn"),
+    ).toContain("Run in Docker for better safety: `termlings --spawn --docker`")
+    expect(
+      renderHostYoloSpawnApproval(config, result.riskyTargets, result.dangerousFlags, "termlings --spawn"),
+    ).toContain("Change defaults: edit `.termlings/spawn.json`")
+    expect(
+      renderHostYoloSpawnApproval(config, result.riskyTargets, result.dangerousFlags, "termlings --spawn"),
+    ).not.toContain("termlings claude")
   })
 
   it("adds a default Claude effort level for unattended spawn routes", () => {
