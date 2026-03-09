@@ -34,7 +34,7 @@ describe("renderSystemContext", () => {
       apps: BUILTIN_WORKSPACE_APPS,
     })
 
-    expect(context.includes("termlings crm --help")).toBe(true)
+    expect(context.includes("termlings crm schema")).toBe(true)
     expect(context.includes("## CRM")).toBe(true)
   })
 })

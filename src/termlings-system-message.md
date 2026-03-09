@@ -59,7 +59,7 @@ Use this for:
 
 ## Quick Reference
 
-Run `termlings <command> --help` for detailed documentation:
+Use `--help` for core commands and `schema` for JSON-first app commands:
 
 ```bash
 termlings --help                       # Full CLI reference
@@ -71,10 +71,42 @@ termlings request --help               # Request inputs/decisions/env vars
 termlings workflow --help              # Workflow checklists
 termlings task --help                  # Task management
 termlings calendar --help              # Calendar events
-termlings crm --help                   # External relationship records + follow-ups
+termlings crm schema                   # CRM app contract
+termlings social schema                # Social app contract
+termlings cms schema                   # CMS app contract
+termlings memory schema                # Memory app contract
+termlings image schema                 # Image app contract
+termlings video schema                 # Video app contract
+termlings analytics schema             # Analytics app contract
+termlings finance schema               # Finance app contract
 termlings skills --help                # Skills discovery/install/update (skills.sh wrapper)
 termlings brand --help                 # Brand CLI
 termlings browser --help               # Browser (browsing, testing, automation)
+```
+
+## JSON App API
+
+Newer app commands are JSON-first.
+
+Use `schema` first:
+
+```bash
+termlings social schema
+termlings analytics schema sync
+```
+
+Use `--params` for reads and filters:
+
+```bash
+termlings analytics report --params '{"last":"30d"}' --json
+termlings social list --params '{"status":"scheduled","limit":10}' --json
+```
+
+Use `--stdin-json` for writes:
+
+```bash
+printf '%s\n' '{"platform":"x","text":"Ship update"}' | termlings social create --stdin-json --json
+printf '%s\n' '{"collection":"blog","title":"Launch recap"}' | termlings cms create --stdin-json --json
 ```
 
 ## Core Commands
@@ -122,13 +154,12 @@ termlings calendar show <id>                       # Event details
 
 **CRM:**
 ```bash
-termlings crm list                                  # External records
-termlings crm create org "Acme"                     # Create org/person/deal/etc.
-termlings crm show org/acme                         # Record details
-termlings crm set org/acme attrs.domain acme.com   # Set custom fields
-termlings crm note org/acme "Warm intro from Nora" # Append relationship note
-termlings crm followup org/acme 2026-03-10 "Send pricing"  # Set next action
-termlings crm timeline org/acme                     # Activity history
+termlings crm list --params '{"type":"org","limit":25}' --json
+termlings crm show --params '{"ref":"org/acme"}' --json
+printf '%s\n' '{"type":"org","name":"Acme"}' | termlings crm create --stdin-json --json
+printf '%s\n' '{"ref":"org/acme","text":"Warm intro from Nora"}' | termlings crm note --stdin-json --json
+printf '%s\n' '{"ref":"org/acme","at":"2026-03-10T09:00:00+01:00","text":"Send pricing"}' | termlings crm followup --stdin-json --json
+termlings crm timeline --params '{"ref":"org/acme","limit":25}' --json
 ```
 
 **Brand profile:**
@@ -255,9 +286,9 @@ Use CRM when the work involves people or organizations outside the agent team.
 Typical pattern:
 
 ```bash
-termlings crm create org "Acme"
-termlings crm note org/acme "Intro call went well. Interested in pilot."
-termlings crm followup org/acme 2026-03-10 "Send pricing draft"
+printf '%s\n' '{"type":"org","name":"Acme"}' | termlings crm create --stdin-json --json
+printf '%s\n' '{"ref":"org/acme","text":"Intro call went well. Interested in pilot."}' | termlings crm note --stdin-json --json
+printf '%s\n' '{"ref":"org/acme","at":"2026-03-10T09:00:00+01:00","text":"Send pricing draft"}' | termlings crm followup --stdin-json --json
 termlings task create "Prepare Acme pricing draft"
 ```
 

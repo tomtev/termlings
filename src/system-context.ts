@@ -18,8 +18,10 @@ function section(title: string, body: string): string {
   return `## ${title}\n\n${body.trim()}`
 }
 
-function withApp(enabled: boolean, body: string): string {
-  return enabled ? body.trim() : ""
+function renderAppSection(enabled: boolean, title: string, lines: string[], note?: string): string {
+  if (!enabled) return ""
+  const body = [codeBlock(lines), note ? `\n${note.trim()}` : ""].filter(Boolean).join("\n")
+  return section(title, body)
 }
 
 export function renderManageAgentsContext(): string {
@@ -57,90 +59,23 @@ export function renderSystemContext(input: RenderSystemContextInput): string {
     apps["brief"] ? "termlings brief                        # Session startup snapshot" : "",
     apps["org-chart"] ? "termlings org-chart --help             # Team discovery" : "",
     apps["messaging"] ? "termlings message --help               # Messaging guide" : "",
-    apps["messaging"] ? "termlings conversation --help          # Read recent conversation history" : "",
-    apps["requests"] ? "termlings request --help               # Request inputs/decisions/env vars" : "",
-    apps["workflows"] ? "termlings workflow --help              # Workflow checklists" : "",
+    apps["requests"] ? "termlings request --help               # Requests guide" : "",
     apps["task"] ? "termlings task --help                  # Task management" : "",
+    apps["workflows"] ? "termlings workflow --help              # Workflow checklists" : "",
     apps["calendar"] ? "termlings calendar --help              # Calendar events" : "",
-    apps["crm"] ? "termlings crm --help                   # External relationship records + follow-ups" : "",
+    apps["social"] ? "termlings social schema                # Social app contract" : "",
+    apps["ads"] ? "termlings ads schema                   # Ads app contract" : "",
+    apps["memory"] ? "termlings memory schema                # Memory app contract" : "",
+    apps["cms"] ? "termlings cms schema                   # CMS app contract" : "",
+    apps["crm"] ? "termlings crm schema                   # CRM app contract" : "",
+    apps["media"] ? "termlings image schema                 # Image app contract" : "",
+    apps["media"] ? "termlings video schema                 # Video app contract" : "",
+    apps["analytics"] ? "termlings analytics schema             # Analytics app contract" : "",
+    apps["finance"] ? "termlings finance schema               # Finance app contract" : "",
     apps["skills"] ? "termlings skills --help                # Skills discovery/install/update" : "",
     apps["brand"] ? "termlings brand --help                 # Brand CLI" : "",
     apps["browser"] ? "termlings browser --help               # Browser automation" : "",
   ].filter(Boolean)
-
-  const discoveryCommands = [
-    apps["brief"] ? "termlings brief                                    # First command at session start" : "",
-    apps["org-chart"] ? "termlings org-chart                                # See team hierarchy + status" : "",
-    apps["messaging"] ? "termlings message agent:growth \"hello\"             # Message teammate by slug" : "",
-    apps["messaging"] ? "termlings conversation human:default --limit 120   # Human/operator DM thread" : "",
-    apps["messaging"] ? "termlings conversation recent --limit 120          # Cross-thread recent context" : "",
-    apps["messaging"] ? "termlings message human:default \"help needed\"      # Message operator" : "",
-    apps["requests"] ? "termlings request env VAR_NAME \"reason\" \"url\" --scope project" : "",
-    apps["requests"] ? "termlings request confirm \"Deploy to production?\"" : "",
-    apps["requests"] ? "termlings request choice \"Framework?\" \"Svelte\" \"Next\"" : "",
-    apps["requests"] ? "termlings request list                             # Check pending requests" : "",
-  ].filter(Boolean)
-
-  const taskCommands = [
-    "termlings task list                                # See all tasks",
-    "termlings task claim <id>                          # Claim a task",
-    "termlings task status <id> in-progress             # Mark as started",
-    "termlings task note <id> \"progress update\"         # Add notes",
-    "termlings task status <id> completed \"notes\"       # Mark as done",
-    "termlings task depends <id> <dep-id>               # Add dependency",
-    "termlings task depends <id> --remove <dep-id>      # Remove dependency",
-  ]
-
-  const workflowCommands = [
-    "termlings workflow list                            # Org workflows + your workflows",
-    "termlings workflow list --active                   # Only runs still in progress",
-    "termlings workflow create '{\"title\":\"Ship feature\",\"steps\":[\"Write tests\",\"Ship\"]}'",
-    "termlings workflow start org/release-deploy        # Start a running copy",
-    "termlings workflow step done <ref> <step-id>       # Mark a step done",
-  ]
-
-  const calendarCommands = [
-    "termlings calendar list                            # Your assigned events",
-    "termlings calendar show <id>                       # Event details",
-  ]
-
-  const crmCommands = [
-    "termlings crm list                                  # External records",
-    "termlings crm create org \"Acme\"                     # Create org/person/deal/etc.",
-    "termlings crm show org/acme                         # Record details",
-    "termlings crm set org/acme attrs.domain acme.com   # Set custom fields",
-    "termlings crm note org/acme \"Warm intro from Nora\" # Append relationship note",
-    "termlings crm followup org/acme 2026-03-10 \"Send pricing\"",
-    "termlings crm timeline org/acme                     # Activity history",
-  ]
-
-  const brandCommands = [
-    "termlings brand show                               # Show current brand profile",
-    "termlings brand get voice                          # Get brand voice/tone string",
-    "termlings brand get colors.primary                 # Get primary color token",
-    "termlings brand get logos.main                     # Get main logo path",
-    "termlings brand extract --write                    # Try auto-extract from project files",
-    "termlings brand validate --strict                  # Validate profile shape + paths",
-  ]
-
-  const skillCommands = [
-    "termlings skills list                               # List skills accessible to this workspace",
-    "termlings skills install <source> [options...]      # Install from skills.sh source",
-    "termlings skills check                              # Show installed skills",
-    "termlings skills update                             # Update installed skills",
-  ]
-
-  const browserCommands = [
-    "termlings browser start                            # headed by default",
-    "termlings browser start --headless                # scraping/CI mode",
-    "termlings browser status                           # current CDP endpoint + profile",
-    "termlings browser tabs list                        # discover tab indexes",
-    "termlings browser navigate \"https://example.com\" --tab <index>",
-    "termlings browser screenshot --tab <index> --out /tmp/page.png",
-    "termlings browser extract --tab <index>",
-    "termlings browser type \"hello\" --tab <index>",
-    "termlings browser click \"button.submit\" --tab <index>",
-  ]
 
   const sections = [
     "<TERMLINGS-SYSTEM-MESSAGE>",
@@ -166,7 +101,7 @@ ${codeBlock([
   "termlings message human:default \"Your message\"   # To operator/owner",
 ])}
 
-If you need a response from the operator instead of a status update, use:
+If you need a response, credential, decision, or approval, use:
 
 ${codeBlock([
   "termlings request env VAR_NAME \"why you need it\" \"where to get it\" --scope project",
@@ -179,47 +114,246 @@ ${codeBlock([
     section("Operating Model", `
 - Tasks are the primary unit of work.
 ${apps["crm"] ? "- CRM is the system of record for external relationships." : ""}
+${apps["cms"] ? "- CMS is the system of record for structured content." : ""}
+${apps["memory"] ? "- Memory is the system of record for durable notes and recall." : ""}
 - Collaborate through DMs, tasks, workflows, and calendar.
 - Keep humans and managers updated through the reporting chain.
     `),
     "",
     section("Quick Reference", codeBlock(quickReference)),
     "",
-    withApp(
-      apps["messaging"] || apps["requests"] || apps["org-chart"] || apps["brief"],
-      section("Discovery And Coordination", codeBlock(discoveryCommands)),
+    section("JSON App API", `
+Newer app commands are JSON-first.
+
+Use schema first:
+
+${codeBlock([
+  "termlings social schema                         # Inspect app actions",
+  "termlings analytics schema sync                 # Inspect one action",
+])}
+
+Use \`--params\` for reads/filters:
+
+${codeBlock([
+  "termlings analytics report --params '{\"last\":\"30d\"}' --json",
+  "termlings social list --params '{\"status\":\"scheduled\",\"limit\":10}' --json",
+])}
+
+Use \`--stdin-json\` for writes:
+
+${codeBlock([
+  "printf '%s\\n' '{\"platform\":\"x\",\"text\":\"Ship update\"}' | termlings social create --stdin-json --json",
+  "printf '%s\\n' '{\"collection\":\"blog\",\"title\":\"Launch Recap\"}' | termlings cms create --stdin-json --json",
+])}
+    `),
+    "",
+    renderAppSection(
+      apps["brief"],
+      "Brief",
+      ["termlings brief                                    # Run first at session start"],
+      "Use `brief` to recover context quickly before you guess.",
     ),
     "",
-    withApp(apps["task"], section("Task Management", `${codeBlock(taskCommands)}
-
-Tasks are the shared source of truth. Claim tasks before starting, add notes every 15-30 minutes on long work, and mark them complete when finished.`)),
+    renderAppSection(
+      apps["org-chart"],
+      "Org Chart",
+      ["termlings org-chart                                # See team hierarchy + who's online"],
+      "Use `org-chart` to identify managers, peers, and specialists before reporting or escalating.",
+    ),
     "",
-    withApp(apps["workflows"], section("Workflow Checklists", codeBlock(workflowCommands))),
+    renderAppSection(
+      apps["messaging"],
+      "Messaging",
+      [
+        "termlings message agent:growth \"hello\"             # Message teammate by slug",
+        "termlings message human:default \"status update\"    # Message operator/owner",
+        "termlings conversation human:default --limit 120   # Human/operator DM thread",
+        "termlings conversation recent --limit 120          # Cross-thread recent context",
+      ],
+      "Use messages for status, handoffs, coordination, and blockers that do not require an explicit response object.",
+    ),
     "",
-    withApp(apps["calendar"], section("Calendar", codeBlock(calendarCommands))),
+    renderAppSection(
+      apps["requests"],
+      "Requests",
+      [
+        "termlings request env VAR_NAME \"reason\" \"url\" --scope project",
+        "termlings request confirm \"Deploy to production?\"",
+        "termlings request choice \"Framework?\" \"Svelte\" \"Next\"",
+        "termlings request list                             # Check pending requests",
+      ],
+      "Use requests when you need credentials, approvals, or decisions from a human.",
+    ),
     "",
-    withApp(apps["crm"], section("CRM", `${codeBlock(crmCommands)}
-
-Use CRM for prospects, customers, partners, contacts, deals, relationship notes, and next follow-ups.
-Use tasks for execution work that comes out of those relationships.`)),
+    renderAppSection(
+      apps["task"],
+      "Tasks",
+      [
+        "termlings task list                                # See all tasks",
+        "termlings task claim <id>                          # Claim a task",
+        "termlings task status <id> in-progress             # Mark as started",
+        "termlings task note <id> \"progress update\"         # Add notes",
+        "termlings task status <id> completed \"notes\"       # Mark as done",
+      ],
+      "Tasks are the shared source of truth. Claim work before starting and leave notes every 15-30 minutes on longer efforts.",
+    ),
     "",
-    withApp(apps["brand"], section("Brand Profile", codeBlock(brandCommands))),
+    renderAppSection(
+      apps["workflows"],
+      "Workflows",
+      [
+        "termlings workflow list                            # Org and agent workflows",
+        "termlings workflow list --active                   # Running copies only",
+        "termlings workflow start org/release-deploy        # Start a running copy",
+        "termlings workflow step done <ref> <step-id>       # Mark a step complete",
+      ],
+      "Use workflows for repeatable checklists and operational playbooks, not for ad-hoc task tracking.",
+    ),
     "",
-    withApp(apps["skills"], section("Skills", `${codeBlock(skillCommands)}
-
-Workflow:
-1. Run \`termlings skills list\`
-2. Run \`termlings skills check\`
-3. Run \`termlings skills find <query>\`
-4. Install selected skills
-5. Re-check workspace-visible skills`)),
+    renderAppSection(
+      apps["calendar"],
+      "Calendar",
+      [
+        "termlings calendar list                            # Your assigned events",
+        "termlings calendar show <id>                       # Event details",
+      ],
+      "Use calendar for meetings, scheduled work visibility, and time-based coordination.",
+    ),
     "",
-    withApp(apps["browser"], section("Browser", `${codeBlock(browserCommands)}
-
-Policy:
-- Headed mode is the default for human-in-the-loop work.
-- Use \`--headless\` for scraping and CI-style tasks.
-- Prefer \`termlings browser tabs list\` and explicit \`--tab <index>\` to avoid collisions.`)),
+    renderAppSection(
+      apps["social"],
+      "Social",
+      [
+        "termlings social schema                            # Inspect the social contract",
+        "termlings social list --params '{\"status\":\"scheduled\",\"limit\":10}' --json",
+        "printf '%s\\n' '{\"platform\":\"x\",\"text\":\"Ship update\"}' | termlings social create --stdin-json --json",
+        "printf '%s\\n' '{\"id\":\"post_x_abc123\",\"at\":\"2026-03-10T09:00:00+01:00\"}' | termlings social schedule --stdin-json --json",
+      ],
+      "Use social for organic posts and publishing queues. Inspect the schema before unfamiliar actions. The scheduler executes due posts.",
+    ),
+    "",
+    renderAppSection(
+      apps["ads"],
+      "Ads",
+      [
+        "termlings ads schema                               # Inspect the ads contract",
+        "termlings ads sync --params '{\"last\":\"30d\"}' --json",
+        "termlings ads campaigns --params '{\"status\":\"active\",\"limit\":20}' --json",
+        "termlings ads report --params '{\"last\":\"30d\"}' --json",
+      ],
+      "Use ads for paid-campaign reporting and account snapshots, not for organic post scheduling.",
+    ),
+    "",
+    renderAppSection(
+      apps["memory"],
+      "Memory",
+      [
+        "termlings memory schema                            # Inspect the memory contract",
+        "termlings memory search --params '{\"query\":\"csv export\",\"limit\":10}' --json",
+        "printf '%s\\n' '{\"collection\":\"project\",\"text\":\"Important note\"}' | termlings memory add --stdin-json --json",
+        "termlings memory qmd status --json                # Optional qmd backend status",
+      ],
+      "Use memory for durable notes and recall. Treat it as a lightweight knowledge layer, not as a task tracker.",
+    ),
+    "",
+    renderAppSection(
+      apps["cms"],
+      "CMS",
+      [
+        "termlings cms schema                               # Inspect the CMS contract",
+        "termlings cms list --params '{\"collection\":\"blog\",\"status\":\"draft\"}' --json",
+        "printf '%s\\n' '{\"collection\":\"blog\",\"title\":\"Launch Post\"}' | termlings cms create --stdin-json --json",
+        "printf '%s\\n' '{\"id\":\"entry_abc123\",\"at\":\"2026-03-10T09:00:00+01:00\"}' | termlings cms schedule --stdin-json --json",
+      ],
+      "Use CMS for structured content that should end up as local markdown/JSON outputs.",
+    ),
+    "",
+    renderAppSection(
+      apps["crm"],
+      "CRM",
+      [
+        "termlings crm schema                               # Inspect the CRM contract",
+        "termlings crm list --params '{\"type\":\"org\",\"stage\":\"lead\"}' --json",
+        "printf '%s\\n' '{\"type\":\"org\",\"name\":\"Acme\",\"stage\":\"lead\"}' | termlings crm create --stdin-json --json",
+        "printf '%s\\n' '{\"ref\":\"org/acme\",\"text\":\"Warm intro from Nora\"}' | termlings crm note --stdin-json --json",
+        "printf '%s\\n' '{\"ref\":\"org/acme\",\"at\":\"2026-03-10T09:00:00+01:00\",\"text\":\"Send pricing\"}' | termlings crm followup --stdin-json --json",
+      ],
+      "Use CRM for prospects, customers, partners, contacts, deals, relationship notes, and next follow-ups. Use tasks for execution work that comes out of those relationships.",
+    ),
+    "",
+    renderAppSection(
+      apps["media"],
+      "Media",
+      [
+        "termlings image schema                             # Inspect image generation contract",
+        "printf '%s\\n' '{\"prompt\":\"Prompt text\"}' | termlings image generate --stdin-json --json",
+        "termlings video schema                             # Inspect video generation contract",
+        "termlings video poll --params '{\"id\":\"vid_abc123\"}' --json",
+      ],
+      "Use media for asset generation. Keep prompts concrete and route final assets into CMS, social, or ads as needed.",
+    ),
+    "",
+    renderAppSection(
+      apps["analytics"],
+      "Analytics",
+      [
+        "termlings analytics schema                         # Inspect the analytics contract",
+        "termlings analytics sync --params '{\"last\":\"30d\"}' --json",
+        "termlings analytics channels --params '{\"last\":\"30d\",\"limit\":10}' --json",
+        "termlings analytics report --params '{\"last\":\"30d\"}' --json",
+      ],
+      "Use analytics for site traffic and conversion reporting, not ad-platform spend data.",
+    ),
+    "",
+    renderAppSection(
+      apps["finance"],
+      "Finance",
+      [
+        "termlings finance schema                           # Inspect the finance contract",
+        "termlings finance sync --params '{\"last\":\"30d\"}' --json",
+        "termlings finance metrics --params '{\"last\":\"30d\"}' --json",
+        "termlings finance report --params '{\"last\":\"30d\"}' --json",
+      ],
+      "Use finance for revenue, subscriptions, invoices, and refunds. Keep it separate from CRM relationship work.",
+    ),
+    "",
+    renderAppSection(
+      apps["brand"],
+      "Brand",
+      [
+        "termlings brand show                               # Show current brand profile",
+        "termlings brand get voice                          # Brand voice/tone string",
+        "termlings brand get colors.primary                 # Primary color token",
+        "termlings brand validate --strict                  # Validate profile shape + paths",
+      ],
+      "Use brand whenever copy, creative, or presentation quality matters.",
+    ),
+    "",
+    renderAppSection(
+      apps["skills"],
+      "Skills",
+      [
+        "termlings skills list                               # Workspace-visible skills",
+        "termlings skills check                              # Installed skills",
+        "termlings skills install <source>                   # Install a skill",
+        "termlings skills update                             # Update installed skills",
+      ],
+      "Workflow: list skills, check current installs, then install only what the task actually needs.",
+    ),
+    "",
+    renderAppSection(
+      apps["browser"],
+      "Browser",
+      [
+        "termlings browser start                            # Headed by default",
+        "termlings browser start --headless                 # Scraping/CI mode",
+        "termlings browser tabs list                        # Discover tab indexes",
+        "termlings browser navigate \"https://example.com\" --tab <index>",
+        "termlings browser screenshot --tab <index> --out /tmp/page.png",
+        "termlings browser extract --tab <index>",
+      ],
+      "Policy: headed mode is the default for human-in-the-loop work. Prefer explicit tab IDs to avoid collisions.",
+    ),
     "",
     section("Context Recovery", `
 If you are unsure what someone is referring to, do not guess.
@@ -247,7 +381,7 @@ If you are unsure what someone is referring to, do not guess.
 - Add task notes frequently
 - Message after meaningful progress or blockers
 - Ask for help early
-- Keep CRM records updated after external interactions when CRM is enabled
+- Keep CRM, CMS, social, or memory records updated when those apps are part of the work
 
 ❌ DON'T:
 - Work without a task

@@ -12,7 +12,7 @@ There are three layers:
 
 1. Built-in core apps in JSON-backed code manifests.
 2. Workspace overrides in `.termlings/workspace.json.apps`.
-3. Agent-specific overrides in `.termlings/workspace.json.apps.agents.<slug>`.
+3. Agent-specific app allowlists in `.termlings/agents/<slug>/SOUL.md`.
 
 The launcher resolves the final app set for the current agent before building the injected system context.
 
@@ -32,7 +32,15 @@ Current core app keys:
 - `browser`
 - `skills`
 - `brand`
+- `social`
+- `ads`
+- `memory`
+- `cms`
 - `crm`
+- `media`
+- `analytics`
+- `finance`
+- `eval`
 
 These are built-in apps, not arbitrary markdown sections.
 
@@ -40,7 +48,7 @@ These are built-in apps, not arbitrary markdown sections.
 
 ## Workspace Config
 
-App availability lives in `.termlings/workspace.json`:
+Global app availability still lives in `.termlings/workspace.json`:
 
 ```json
 {
@@ -54,15 +62,8 @@ App availability lives in `.termlings/workspace.json`:
   "apps": {
     "defaults": {
       "crm": false,
-      "browser": true
-    },
-    "agents": {
-      "growth": {
-        "crm": true
-      },
-      "developer": {
-        "browser": false
-      }
+      "browser": true,
+      "ads": false
     }
   }
 }
@@ -72,13 +73,46 @@ Resolution order:
 
 1. Built-in defaults
 2. `apps.defaults`
-3. `apps.agents.<slug>`
+3. Agent SOUL frontmatter `apps:` allowlist, if present
 
 Example behavior:
 
 - no `apps` object: all core apps enabled
 - `apps.defaults.crm = false`: CRM disabled for everyone
-- `apps.agents.growth.crm = true`: CRM re-enabled for `growth`
+- `apps.defaults.ads = false`: Ads disabled for everyone
+
+## Agent SOUL App Allowlist
+
+Per-agent app access now comes from `SOUL.md`.
+
+If an agent has no `apps:` frontmatter field, it keeps access to all globally-enabled apps.
+
+If `apps:` is present, that list becomes the agent allowlist.
+
+Canonical example:
+
+```yaml
+---
+name: Growth
+dna: 80bf40
+apps:
+  - messaging
+  - brief
+  - task
+  - social
+  - ads
+  - analytics
+  - finance
+---
+```
+
+Important rules:
+
+- `messaging` is still forced on even if omitted
+- invalid app keys are ignored
+- SOUL `apps:` narrows access; it does not override a workspace default that disabled an app globally
+- no `apps:` key means full access to all globally-enabled apps
+- `eval` is operator-only and is always hidden from normal agent sessions
 
 ## Injection Path
 
@@ -86,7 +120,7 @@ App-aware context injection works like this:
 
 1. `termlings spawn` resolves the target agent and runtime.
 2. The launcher reads identity from `.termlings/agents/<slug>/SOUL.md`.
-3. The launcher resolves workspace apps for that agent.
+3. The launcher resolves workspace defaults, then applies the agent SOUL `apps:` allowlist if present.
 4. The launcher renders the system context from structured code sections.
 5. Disabled apps are omitted from the rendered prompt.
 6. The final prompt is injected into the runtime:
@@ -114,6 +148,7 @@ When an app is disabled for an agent:
 - TUI tabs contributed by that app are omitted
 - slash commands contributed by that app are omitted
 - app-specific activity feed entries can be omitted
+- `termlings brief` omits app-backed sections the current agent does not have access to
 
 Current enforced example:
 

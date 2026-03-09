@@ -161,6 +161,54 @@
     ]
   },
   {
+    "id": "social",
+    "title": "Social",
+    "helpOrder": 93,
+    "commands": [
+      {
+        "name": "social",
+        "usage": "termlings social <cmd>",
+        "summary": "Social drafts, queue, scheduling, and publishing"
+      }
+    ]
+  },
+  {
+    "id": "ads",
+    "title": "Ads",
+    "helpOrder": 95,
+    "commands": [
+      {
+        "name": "ads",
+        "usage": "termlings ads <cmd>",
+        "summary": "Ad campaigns, creatives, and performance reports"
+      }
+    ]
+  },
+  {
+    "id": "memory",
+    "title": "Memory",
+    "helpOrder": 96,
+    "commands": [
+      {
+        "name": "memory",
+        "usage": "termlings memory <cmd>",
+        "summary": "Project and agent memory with optional qmd support"
+      }
+    ]
+  },
+  {
+    "id": "cms",
+    "title": "CMS",
+    "helpOrder": 97,
+    "commands": [
+      {
+        "name": "cms",
+        "usage": "termlings cms <cmd>",
+        "summary": "Content collections, entries, and scheduled publishing"
+      }
+    ]
+  },
+  {
     "id": "crm",
     "title": "CRM",
     "helpOrder": 100,
@@ -169,6 +217,60 @@
         "name": "crm",
         "usage": "termlings crm <cmd>",
         "summary": "File-based CRM records and timelines"
+      }
+    ]
+  },
+  {
+    "id": "media",
+    "title": "Media",
+    "helpOrder": 103,
+    "commands": [
+      {
+        "name": "image",
+        "usage": "termlings image <cmd>",
+        "summary": "Generate and manage images"
+      },
+      {
+        "name": "video",
+        "usage": "termlings video <cmd>",
+        "summary": "Generate and manage videos"
+      }
+    ]
+  },
+  {
+    "id": "analytics",
+    "title": "Analytics",
+    "helpOrder": 105,
+    "commands": [
+      {
+        "name": "analytics",
+        "usage": "termlings analytics <cmd>",
+        "summary": "Website analytics sync and reports"
+      }
+    ]
+  },
+  {
+    "id": "finance",
+    "title": "Finance",
+    "helpOrder": 107,
+    "commands": [
+      {
+        "name": "finance",
+        "usage": "termlings finance <cmd>",
+        "summary": "Revenue, subscriptions, and finance reports"
+      }
+    ]
+  },
+  {
+    "id": "eval",
+    "title": "Eval",
+    "agentVisible": false,
+    "helpOrder": 108,
+    "commands": [
+      {
+        "name": "eval",
+        "usage": "termlings eval <cmd>",
+        "summary": "Benchmark verified outcomes per token"
       }
     ]
   },

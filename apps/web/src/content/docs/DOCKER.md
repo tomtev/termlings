@@ -102,7 +102,7 @@ That avoids downloading a second bundled browser into the image.
 
 ## Runtime Scope
 
-Managed Termlings agent spawning remains Claude-only. Codex is included in the container for manual/operator use and future workflows, not as a spawned Termlings runtime.
+Managed Termlings agent spawning supports both Claude Code and Codex.
 
 ## Reopen The Workspace
 

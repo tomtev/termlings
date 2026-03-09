@@ -43,5 +43,6 @@ describe("renderTopLevelHelp", () => {
     expect(help.includes("termlings message <target> <text>")).toBe(true)
     expect(help.includes("termlings crm <cmd>")).toBe(true)
     expect(help.includes("termlings browser <cmd>")).toBe(true)
+    expect(help.includes("termlings eval <cmd>")).toBe(true)
   })
 })

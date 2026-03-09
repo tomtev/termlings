@@ -69,4 +69,4 @@ Disable `org-chart` for all agents in `.termlings/workspace.json`:
 }
 ```
 
-You can override that for a specific agent under `apps.agents.<slug>`. See [APPS.md](APPS.md).
+Per-agent access is narrowed in `.termlings/agents/<slug>/SOUL.md` with the `apps:` allowlist. See [APPS.md](APPS.md).

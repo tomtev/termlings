@@ -4,6 +4,9 @@ The scheduler automatically executes:
 - due calendar notifications
 - one-time and recurring direct messages
 - due/overdue task reminders (for tasks with `dueDate`)
+- recurring app sync jobs for analytics, finance, and ads
+- due scheduled social posts
+- due scheduled CMS publishes
 
 ## Running the Scheduler
 
@@ -26,8 +29,9 @@ Runs continuously in the background, checking every 60 seconds for due work.
 1. **Checks calendar events** - Reads `.termlings/store/calendar/calendar.json`
 2. **Checks scheduled messages** - Reads `.termlings/store/message-schedules/schedules.json`
 3. **Checks task due dates** - Reads `.termlings/store/tasks/tasks.json` and tracks reminder state in `.termlings/store/tasks/scheduler-state.json`
-4. **Executes due items** - Sends event notifications, scheduled DMs, and task reminders
-5. **Marks completed work** - Calendar and one-time message schedules mark notifications
+4. **Checks app schedules** - Reads `.termlings/store/app-schedules/schedules.json`
+5. **Executes due items** - Sends event notifications, scheduled DMs, task reminders, app sync jobs, social publishes, and CMS publishes
+6. **Marks completed work** - Calendar and one-time schedules disable themselves after execution
 
 ## Calendar Agent Notification
 
@@ -118,6 +122,43 @@ termlings scheduler --daemon
    - One due-now reminder when due time is reached
    - Overdue reminders every 24h while task remains incomplete
    - Target is task assignee (`agent:<slug>`) when assigned, otherwise task creator
+
+6. **App sync schedules are checked**
+   - `analytics`, `finance`, and `ads` can create recurring sync jobs through the shared scheduler
+   - Schedules are stored in `.termlings/store/app-schedules/schedules.json`
+   - Scheduler executes the due sync and appends shared activity entries for success/failure
+
+7. **Scheduled social posts are checked**
+   - `social` creates one-time queued posts under `.termlings/store/social/posts/*.json`
+   - When due, the scheduler publishes them through the configured platform webhook
+   - If the post has a linked calendar event, the scheduler disables it after the publish attempt
+
+8. **Scheduled CMS entries are checked**
+   - `cms` creates scheduled entries under `.termlings/store/cms/entries/<collection>/*.json`
+   - When due, the scheduler publishes markdown and JSON outputs under `.termlings/store/cms/publish/<collection>/`
+   - Publish success/failure is recorded in CMS history and the shared app activity feed
+
+## Scheduled App Syncs
+
+Use the app-specific `schedule` subcommands to register recurring sync jobs:
+
+```bash
+printf '%s\n' '{"action":"sync","recurrence":"daily","time":"07:00","last":"30d"}' \
+  | termlings analytics schedule create --stdin-json --json
+
+printf '%s\n' '{"action":"sync","recurrence":"daily","time":"08:00","last":"30d"}' \
+  | termlings finance schedule create --stdin-json --json
+
+printf '%s\n' '{"action":"sync","recurrence":"weekly","time":"09:00","weekday":"mon","last":"7d"}' \
+  | termlings ads schedule create --stdin-json --json
+```
+
+List or remove schedules:
+
+```bash
+termlings analytics schedule list --json
+termlings finance schedule remove --params '{"id":"finance_schedule_abc123"}' --json
+```
 
 ## Configuration
 

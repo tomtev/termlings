@@ -59,7 +59,15 @@ export const WORKSPACE_APP_KEYS = [
   "browser",
   "skills",
   "brand",
+  "social",
+  "ads",
+  "memory",
+  "cms",
   "crm",
+  "media",
+  "analytics",
+  "finance",
+  "eval",
 ] as const
 
 export const REQUIRED_WORKSPACE_APP_KEYS = ["messaging"] as const satisfies readonly Array<(typeof WORKSPACE_APP_KEYS)[number]>
@@ -470,8 +478,34 @@ export function ensureWorkspaceDirs(root = process.cwd()): void {
   mkdirSync(join(workflowsDir(root), "org"), { recursive: true })
   mkdirSync(join(workflowsDir(root), "agents"), { recursive: true })
   mkdirSync(storeDir(root), { recursive: true })
+  mkdirSync(join(storeDir(root), "ads", "campaigns"), { recursive: true })
+  mkdirSync(join(storeDir(root), "ads", "creatives"), { recursive: true })
+  mkdirSync(join(storeDir(root), "ads", "metrics"), { recursive: true })
+  mkdirSync(join(storeDir(root), "ads", "reports"), { recursive: true })
+  mkdirSync(join(storeDir(root), "memory", "records"), { recursive: true })
+  mkdirSync(join(storeDir(root), "memory", "qmd"), { recursive: true })
+  mkdirSync(join(storeDir(root), "cms", "entries"), { recursive: true })
+  mkdirSync(join(storeDir(root), "cms", "publish"), { recursive: true })
   mkdirSync(join(storeDir(root), "crm", "records"), { recursive: true })
   mkdirSync(join(storeDir(root), "crm", "activity"), { recursive: true })
+  mkdirSync(join(storeDir(root), "social", "posts"), { recursive: true })
+  mkdirSync(join(storeDir(root), "media", "jobs"), { recursive: true })
+  mkdirSync(join(storeDir(root), "media", "outputs"), { recursive: true })
+  mkdirSync(join(storeDir(root), "analytics", "traffic"), { recursive: true })
+  mkdirSync(join(storeDir(root), "analytics", "channels"), { recursive: true })
+  mkdirSync(join(storeDir(root), "analytics", "pages"), { recursive: true })
+  mkdirSync(join(storeDir(root), "analytics", "conversions"), { recursive: true })
+  mkdirSync(join(storeDir(root), "analytics", "reports"), { recursive: true })
+  mkdirSync(join(storeDir(root), "finance", "customers"), { recursive: true })
+  mkdirSync(join(storeDir(root), "finance", "subscriptions"), { recursive: true })
+  mkdirSync(join(storeDir(root), "finance", "invoices"), { recursive: true })
+  mkdirSync(join(storeDir(root), "finance", "refunds"), { recursive: true })
+  mkdirSync(join(storeDir(root), "finance", "metrics"), { recursive: true })
+  mkdirSync(join(storeDir(root), "finance", "reports"), { recursive: true })
+  mkdirSync(join(storeDir(root), "evals", "tasks"), { recursive: true })
+  mkdirSync(join(storeDir(root), "evals", "runs"), { recursive: true })
+  mkdirSync(join(storeDir(root), "evals", "reports"), { recursive: true })
+  mkdirSync(join(storeDir(root), "app-schedules"), { recursive: true })
   mkdirSync(join(storeDir(root), "activity", "thread"), { recursive: true })
   mkdirSync(join(storeDir(root), "workflows"), { recursive: true })
   mkdirSync(sessionsDir(root), { recursive: true })

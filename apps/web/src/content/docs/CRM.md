@@ -58,48 +58,42 @@ Records use a strict envelope plus flexible `attrs`:
 }
 ```
 
-## Commands
+## Canonical API
+
+Inspect the contract first:
 
 ```bash
-termlings crm create <type> <name>
-termlings crm list
-termlings crm show <ref>
-termlings crm set <ref> <path> <value>
-termlings crm unset <ref> <path>
-termlings crm note <ref> <text...>
-termlings crm link <from> <rel> <to>
-termlings crm followup <ref> <when|clear> [text...]
-termlings crm timeline <ref>
-termlings crm archive <ref>
-termlings crm restore <ref>
+termlings crm schema
+termlings crm schema create
 ```
 
-Useful flags:
+Read actions use `--params` and `--json`:
 
 ```bash
---type <type>
---owner <target>
---status <status>
---stage <stage>
---tags a,b,c
---query <text>
---attrs '{"domain":"acme.com"}'
---due
---archived
---all
---limit <n>
---json
+termlings crm list --params '{"type":"org","stage":"lead","dueOnly":true,"limit":25}' --json
+termlings crm show --params '{"ref":"org/acme"}' --json
+termlings crm timeline --params '{"ref":"org/acme","limit":25}' --json
+termlings crm archive --params '{"ref":"org/acme"}' --json
+termlings crm restore --params '{"ref":"org/acme"}' --json
 ```
 
-## Examples
+Write actions use `--stdin-json`:
 
 ```bash
-termlings crm create org "Acme" --owner agent:growth --stage lead --tags warm,b2b
-termlings crm set org/acme attrs.domain acme.com
-termlings crm note org/acme "Warm intro from Nora"
-termlings crm link person/jane-doe works_at org/acme
-termlings crm followup org/acme 2026-03-10 "Send pricing"
-termlings crm list --type org --stage lead --due
+printf '%s\n' '{"type":"org","name":"Acme","owner":"agent:growth","stage":"lead","tags":["warm","b2b"]}' \
+  | termlings crm create --stdin-json --json
+
+printf '%s\n' '{"ref":"org/acme","path":"attrs.domain","value":"acme.com"}' \
+  | termlings crm set --stdin-json --json
+
+printf '%s\n' '{"ref":"org/acme","text":"Warm intro from Nora"}' \
+  | termlings crm note --stdin-json --json
+
+printf '%s\n' '{"fromRef":"person/jane-doe","rel":"works_at","toRef":"org/acme"}' \
+  | termlings crm link --stdin-json --json
+
+printf '%s\n' '{"ref":"org/acme","at":"2026-03-10T09:00:00+01:00","text":"Send pricing","owner":"agent:growth"}' \
+  | termlings crm followup --stdin-json --json
 ```
 
 ## Mutable Paths
@@ -152,4 +146,4 @@ Disable `crm` for all agents in `.termlings/workspace.json`:
 }
 ```
 
-You can override that for a specific agent under `apps.agents.<slug>`. See [APPS.md](APPS.md).
+Per-agent access is narrowed in `.termlings/agents/<slug>/SOUL.md` with the `apps:` allowlist. See [APPS.md](APPS.md).

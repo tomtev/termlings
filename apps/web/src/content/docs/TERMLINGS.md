@@ -83,6 +83,26 @@ Optional frontmatter permission:
 - `manage_agents: true` allows this agent to manage agent lifecycle (`termlings create`, `termlings spawn --agent`, `termlings spawn --respawn`).
 - When enabled, Termlings injects additional runtime context for safe agent-management workflows.
 
+Optional frontmatter app allowlist:
+- `apps:` narrows which Termlings apps this agent can use.
+- If omitted, the agent gets access to all globally-enabled apps.
+- Example:
+
+```yaml
+---
+name: Alice
+dna: 0a3f201
+apps:
+  - messaging
+  - brief
+  - task
+  - browser
+  - social
+---
+```
+
+`messaging` is always enabled even if omitted.
+
 ### avatar.svg
 
 Auto-generated visual identity based on DNA. Can be viewed with:

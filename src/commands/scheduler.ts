@@ -15,7 +15,7 @@ USAGE:
 
 DAEMON MODE:
   • Checks every 60 seconds
-  • Runs due calendar events, scheduled messages, and task reminders
+  • Runs due calendar events, scheduled messages, task reminders, app sync jobs, scheduled social posts, and scheduled CMS publishes
   • Keeps running until Ctrl+C
   • Good for production workflows
 
@@ -26,7 +26,7 @@ EXAMPLES:
 
   # Background daemon (for production)
   $ termlings scheduler --daemon
-  📅 Starting scheduler daemon (calendar + message + task checks, press Ctrl+C to stop)
+  📅 Starting scheduler daemon (calendar + message + task + app + social + cms checks, press Ctrl+C to stop)
   ✓ 09:00 Standup started
   ✓ Scheduled DM -> agent:ceo
   ✓ Task reminder: task_... due now
@@ -35,6 +35,9 @@ USE WHEN:
   • Need to auto-start meetings/tasks on schedule
   • Need one-time, hourly, daily, or weekly DMs
   • Need due/overdue task reminders
+  • Want analytics, finance, or ads syncs to run on a schedule
+  • Want queued social posts to auto-publish when due
+  • Want scheduled CMS entries to publish when due
   • Running a 24/7 agent team
   • Want hands-off calendar execution
 `);
@@ -47,6 +50,12 @@ USE WHEN:
     await import("../engine/message-scheduler.js");
   const { executeScheduledTaskChecks, formatTaskScheduleExecutionResults } =
     await import("../engine/task-scheduler.js");
+  const { executeScheduledAppJobs, formatAppScheduleExecutionResults } =
+    await import("../engine/app-scheduler.js");
+  const { executeScheduledSocialPosts } =
+    await import("../engine/social.js");
+  const { executeScheduledCmsPublishes } =
+    await import("../engine/cms.js");
 
   if (flags.has("daemon")) {
     const { appendWorkspaceMessage } = await import("../workspace/state.js");
@@ -58,9 +67,9 @@ USE WHEN:
     });
 
     // Run as background daemon (keeps running)
-    console.log("📅 Starting scheduler daemon (calendar + message + task checks, press Ctrl+C to stop)");
+    console.log("📅 Starting scheduler daemon (calendar + message + task + app + social + cms checks, press Ctrl+C to stop)");
 
-    const runTick = () => {
+    const runTick = async () => {
       const calendarResults = executeScheduledCalendarEvents();
       if (calendarResults.length > 0) {
         for (const result of calendarResults) {
@@ -85,10 +94,38 @@ USE WHEN:
           console.log(`✓ Task ${result.stage}: ${result.taskId} (${result.title}) -> ${targets}`);
         }
       }
+
+      const appResults = await executeScheduledAppJobs();
+      if (appResults.length > 0) {
+        for (const result of appResults) {
+          const status = result.success ? "✓" : "✗";
+          const provider = result.provider || result.app;
+          const detail = result.error ? ` (${result.error})` : "";
+          console.log(`${status} ${result.app} ${result.action}${result.window ? ` ${result.window}` : ""} -> ${provider}${detail}`);
+        }
+      }
+
+      const socialResults = await executeScheduledSocialPosts();
+      if (socialResults.length > 0) {
+        for (const result of socialResults) {
+          const status = result.success ? "✓" : "✗";
+          const detail = result.error ? ` (${result.error})` : "";
+          console.log(`${status} social publish -> ${result.platform} ${result.postId}${detail}`);
+        }
+      }
+
+      const cmsResults = executeScheduledCmsPublishes();
+      if (cmsResults.length > 0) {
+        for (const result of cmsResults) {
+          const status = result.success ? "✓" : "✗";
+          const detail = result.error ? ` (${result.error})` : "";
+          console.log(`${status} cms publish -> ${result.collection}/${result.slug}${detail}`);
+        }
+      }
     };
 
-    runTick();
-    const interval = setInterval(runTick, 60 * 1000);
+    void runTick();
+    const interval = setInterval(() => { void runTick(); }, 60 * 1000);
 
     let stopping = false;
     const stopDaemon = () => {
@@ -114,6 +151,9 @@ USE WHEN:
     const calendarResults = executeScheduledCalendarEvents();
     const messageResults = executeScheduledMessages();
     const taskResults = executeScheduledTaskChecks();
+    const appResults = await executeScheduledAppJobs();
+    const socialResults = await executeScheduledSocialPosts();
+    const cmsResults = executeScheduledCmsPublishes();
 
     if (calendarResults.length > 0) {
       console.log(formatExecutionResults(calendarResults));
@@ -135,7 +175,36 @@ USE WHEN:
       console.log(formatTaskScheduleExecutionResults(taskResults));
     }
 
-    if (calendarResults.length === 0 && messageResults.length === 0 && taskResults.length === 0) {
+    if (appResults.length > 0) {
+      if (calendarResults.length > 0 || messageResults.length > 0 || taskResults.length > 0) {
+        console.log("");
+      }
+      console.log(formatAppScheduleExecutionResults(appResults));
+    }
+
+    if (socialResults.length > 0) {
+      if (calendarResults.length > 0 || messageResults.length > 0 || taskResults.length > 0 || appResults.length > 0) {
+        console.log("");
+      }
+      for (const result of socialResults) {
+        const status = result.success ? "✓" : "✗";
+        const detail = result.error ? ` (${result.error})` : "";
+        console.log(`${status} social publish -> ${result.platform} ${result.postId}${detail}`);
+      }
+    }
+
+    if (cmsResults.length > 0) {
+      if (calendarResults.length > 0 || messageResults.length > 0 || taskResults.length > 0 || appResults.length > 0 || socialResults.length > 0) {
+        console.log("");
+      }
+      for (const result of cmsResults) {
+        const status = result.success ? "✓" : "✗";
+        const detail = result.error ? ` (${result.error})` : "";
+        console.log(`${status} cms publish -> ${result.collection}/${result.slug}${detail}`);
+      }
+    }
+
+    if (calendarResults.length === 0 && messageResults.length === 0 && taskResults.length === 0 && appResults.length === 0 && socialResults.length === 0 && cmsResults.length === 0) {
       console.log("No scheduled work to execute");
     }
     process.exit(0);

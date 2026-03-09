@@ -37,6 +37,7 @@ export interface CoreAppDefinition {
   id: WorkspaceAppKey
   title: string
   required: boolean
+  agentVisible: boolean
   helpOrder: number
   commands: AppCommandDefinition[]
   slashCommands: AppSlashCommandDefinition[]
@@ -202,6 +203,7 @@ function loadCoreApps(): CoreAppDefinition[] {
       id,
       title: parseString(app.title, `${id}.title`),
       required: parseBoolean(app.required) || REQUIRED_APP_KEYS.has(id),
+      agentVisible: typeof app.agentVisible === "boolean" ? app.agentVisible : true,
       helpOrder: parseNumber(app.helpOrder, Number.MAX_SAFE_INTEGER),
       commands,
       slashCommands,
@@ -233,10 +235,32 @@ export function getCoreAppTitle(appId: WorkspaceAppKey): string {
   return getCoreAppDefinition(appId).title
 }
 
+export function appVisibleToAgents(appId: WorkspaceAppKey): boolean {
+  return getCoreAppDefinition(appId).agentVisible
+}
+
 export function listEnabledAppCommands(apps: AppAvailabilityMap): AppCommandDefinition[] {
   const commands: AppCommandDefinition[] = []
   for (const app of CORE_APP_DEFINITIONS) {
     if (!apps[app.id]) continue
+    commands.push(...app.commands)
+  }
+  return commands
+}
+
+export function listEnabledAgentVisibleAppCommands(apps: AppAvailabilityMap): AppCommandDefinition[] {
+  const commands: AppCommandDefinition[] = []
+  for (const app of CORE_APP_DEFINITIONS) {
+    if (!apps[app.id] || !app.agentVisible) continue
+    commands.push(...app.commands)
+  }
+  return commands
+}
+
+export function listEnabledOperatorOnlyAppCommands(apps: AppAvailabilityMap): AppCommandDefinition[] {
+  const commands: AppCommandDefinition[] = []
+  for (const app of CORE_APP_DEFINITIONS) {
+    if (!apps[app.id] || app.agentVisible) continue
     commands.push(...app.commands)
   }
   return commands

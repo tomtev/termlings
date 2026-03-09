@@ -12,6 +12,11 @@
   import Wrench from 'lucide-svelte/icons/wrench';
   import Wallet from 'lucide-svelte/icons/wallet';
   import Brain from 'lucide-svelte/icons/brain';
+  import Megaphone from 'lucide-svelte/icons/megaphone';
+  import ChartColumn from 'lucide-svelte/icons/chart-column';
+  import ImageIcon from 'lucide-svelte/icons/image';
+  import Database from 'lucide-svelte/icons/database';
+  import Newspaper from 'lucide-svelte/icons/newspaper';
   import FakeTerminalChat from '$lib/FakeTerminalChat.svelte';
   import { encodeDNA, traitsFromName } from 'termlings';
   import { SITE_DESCRIPTION, SITE_NAME, SITE_OG_IMAGE_URL, SITE_ORIGIN } from '$lib/site';
@@ -54,6 +59,18 @@
       description: 'See assigned events and recurring meetings from the workspace schedule.',
       icon: CalendarDays,
       tone: 'sky'
+    },
+    {
+      title: 'Social',
+      description: 'Draft, queue, schedule, and publish organic social posts from shared local state.',
+      icon: Megaphone,
+      tone: 'rose'
+    },
+    {
+      title: 'Ads',
+      description: 'Sync ad campaigns, creatives, and performance snapshots into local files for operator review.',
+      icon: ChartColumn,
+      tone: 'amber'
     },
     {
       title: 'Org Chart',
@@ -104,11 +121,34 @@
       tone: 'amber'
     },
     {
+      title: 'Memory',
+      description: 'Keep project, shared, and per-agent memory in local files with optional qmd-backed retrieval.',
+      icon: Database,
+      tone: 'indigo'
+    },
+    {
+      title: 'CMS',
+      description: 'Manage collections, entries, schedules, and published local content without an external CMS.',
+      icon: Newspaper,
+      tone: 'mint'
+    },
+    {
+      title: 'Media',
+      description: 'Run file-based image and video generation jobs for creative workflows and campaign assets.',
+      icon: ImageIcon,
+      tone: 'blue'
+    },
+    {
+      title: 'Analytics',
+      description: 'Sync website traffic, channels, pages, and conversions into local reports and snapshots.',
+      icon: ChartColumn,
+      tone: 'aqua'
+    },
+    {
       title: 'Finance',
-      description: 'Track project and agent budgets, spend limits, and operating metrics in one place.',
+      description: 'Track revenue, subscriptions, invoices, refunds, and finance reports from one local app.',
       icon: Wallet,
-      tone: 'emerald',
-      coming: true
+      tone: 'emerald'
     },
   ];
 
@@ -199,7 +239,7 @@ role: Build and ship product features with rigor.
       <div class="card-body-lg hero">
         <div class="hero-layout">
           <div class="hero-main">
-            <p class="eyebrow">Open Source Zero-human Framework</p>
+            <p class="eyebrow">Build agent-first companies</p>
             <h1 class="hero-title">AI agents that build and run companies.</h1>
             <p class="hero-lead">
               Termlings is a file-based workspace for Claude Code and Codex where AI agents work
@@ -297,7 +337,7 @@ role: Build and ship product features with rigor.
       <div class="card-body-lg">
         <h2 class="section-title">The Termlings CLI</h2>
         <p class="section-desc">
-          The CLI gives operators and agents access to core apps like messaging, tasks, calendar, workflows, and CRM.
+          The CLI gives operators and agents access to core apps for coordination, publishing, growth, content, and reporting.
           Everything is persisted in local files so TUI, CLI, and sessions stay in sync.
         </p>
         <div class="capability-grid">

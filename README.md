@@ -13,11 +13,18 @@ Every agent gets access to these core apps (via termlings CLI):
 - **Tasks** — claim, update status, add notes, set dependencies
 - **Workflows** — reusable checklist workflows with per-agent running copies
 - **Calendar** — view events, scheduling, and recurring meetings
+- **Social** — file-based social drafts, queue, scheduling, and publishing
+- **Ads** — file-based ad sync, campaigns, creatives, and performance reports
+- **Memory** — file-based project and agent memory with optional qmd support
+- **CMS** — file-based collections, entries, and scheduled publishing
 - **CRM** — file-based CRM records, timelines, and follow-up tracking
+- **Media** — file-based image and video generation jobs
 - **Org chart** — see who's online, titles, and reporting lines
 - **Brief** — full workspace snapshot on session start
 - **Brand** — shared brand profile (colors, voice, logos, domains)
 - **Browser** — shared browser for web interaction and automation (powered by [agent-browser.dev](https://agent-browser.dev) + Chrome CDP)
+- **Analytics** — file-based website analytics sync and local reports
+- **Finance** — file-based revenue, subscriptions, and finance reports
 - **Skills** — installable skill packs for extended capabilities (powered by skills.sh)
 
 Apps can be disabled globally per workspace or per agent.
@@ -135,7 +142,15 @@ You should not run these commands since they mostly work inside a agent session.
 | `termlings workflow <cmd>` | Workflow checklist commands | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) |
 | `termlings task <cmd>` | Task workflow commands | [docs/TASK.md](docs/TASK.md) |
 | `termlings calendar <cmd>` | Calendar/event workflow | [docs/CALENDAR.md](docs/CALENDAR.md) |
+| `termlings social <cmd>` | Social drafts, queue, scheduling, and publishing | [docs/SOCIAL.md](docs/SOCIAL.md) |
+| `termlings ads <cmd>` | Ad sync, campaigns, creatives, and reports | [docs/ADS.md](docs/ADS.md) |
+| `termlings memory <cmd>` | File-based project and agent memory | [docs/MEMORY.md](docs/MEMORY.md) |
+| `termlings cms <cmd>` | File-based collections, entries, and scheduled publishing | [docs/CMS.md](docs/CMS.md) |
 | `termlings crm <cmd>` | File-based CRM records + timelines | [docs/CRM.md](docs/CRM.md) |
+| `termlings image <cmd>` | Generate and manage images | [docs/MEDIA.md](docs/MEDIA.md) |
+| `termlings video <cmd>` | Generate and manage videos | [docs/MEDIA.md](docs/MEDIA.md) |
+| `termlings analytics <cmd>` | File-based website analytics sync | [docs/ANALYTICS.md](docs/ANALYTICS.md) |
+| `termlings finance <cmd>` | File-based revenue and subscription sync | [docs/FINANCE.md](docs/FINANCE.md) |
 | `termlings request <type>` | Ask operator for decisions/credentials | [docs/REQUESTS.md](docs/REQUESTS.md) |
 | `termlings browser <cmd>` | Browser automation commands | [docs/browser.md](docs/browser.md) |
 
@@ -171,6 +186,44 @@ You should not run these commands since they mostly work inside a agent session.
     crm/
       records/<type>/*.json
       activity/<type>/*.jsonl
+    social/
+      posts/*.json
+      history.jsonl
+    ads/
+      campaigns/*.json
+      creatives/*.json
+      metrics/*.jsonl
+      reports/*.json
+    memory/
+      records/<collection>/*.json
+      qmd/<collection>/*.md
+      history.jsonl
+    cms/
+      entries/<collection>/*.json
+      publish/<collection>/*
+      history.jsonl
+    media/
+      jobs/*.json
+      outputs/*
+    analytics/
+      traffic/daily.jsonl
+      channels/daily.jsonl
+      pages/daily.jsonl
+      conversions/daily.jsonl
+      reports/*.json
+    finance/
+      customers/*.json
+      subscriptions/*.json
+      invoices/*.json
+      refunds/*.json
+      metrics/*.jsonl
+      reports/*.json
+    app-schedules/
+      schedules.json
+    evals/
+      tasks/*.json
+      runs/*.json
+      reports/*.json
     tasks/tasks.json
     calendar/calendar.json
     workflows/
@@ -204,6 +257,15 @@ What each file/folder is for:
 - `.termlings/store/presence/` - session typing/activity state.
 - `.termlings/store/crm/records/<type>/*.json` - one file per CRM record.
 - `.termlings/store/crm/activity/<type>/*.jsonl` - append-only activity timelines per CRM record.
+- `.termlings/store/social/` - local social drafts, queue, and publish history.
+- `.termlings/store/ads/` - ad accounts, campaigns, creatives, metrics, and reports.
+- `.termlings/store/memory/` - project and agent memory records plus optional qmd exports.
+- `.termlings/store/cms/` - file-based collections, entries, publish outputs, and history.
+- `.termlings/store/media/` - image and video jobs plus generated outputs.
+- `.termlings/store/analytics/` - normalized analytics snapshots and reports.
+- `.termlings/store/finance/` - normalized customers, subscriptions, invoices, refunds, metrics, and reports.
+- `.termlings/store/app-schedules/schedules.json` - recurring app sync schedules for ads, analytics, and finance.
+- `.termlings/store/evals/` - operator eval tasks, runs, and comparison reports.
 - `.termlings/store/tasks/tasks.json` - task list and task state.
 - `.termlings/store/calendar/calendar.json` - events and recurrence.
 - `.termlings/store/workflows/<slug>/*.json` - running workflow copies with step completion state.
@@ -228,7 +290,6 @@ This is intentionally separated so operator docs stay short.
 
 ## Documentation Index
 
-- [docs/TERMLINGS.md](docs/TERMLINGS.md) - termling identity and concepts
 - [docs/TERMLINGS.md](docs/TERMLINGS.md) - termling identity, SOUL conventions, and creation flows
 - [docs/SPAWN.md](docs/SPAWN.md) - launch agent runtime sessions
 - [docs/APPS.md](docs/APPS.md) - core apps, injection, and app availability
@@ -241,7 +302,15 @@ This is intentionally separated so operator docs stay short.
 - [docs/plans/README.md](docs/plans/README.md) - planning model and future direction
 - [docs/TASK.md](docs/TASK.md) - task system
 - [docs/CALENDAR.md](docs/CALENDAR.md) - calendar system
+- [docs/SOCIAL.md](docs/SOCIAL.md) - social drafts, queue, scheduling, and publishing
+- [docs/ADS.md](docs/ADS.md) - ad sync, campaigns, creatives, and reports
+- [docs/MEMORY.md](docs/MEMORY.md) - project and agent memory with optional qmd support
+- [docs/CMS.md](docs/CMS.md) - file-based collections, entries, and scheduled publishing
 - [docs/CRM.md](docs/CRM.md) - file-based CRM records and timelines
+- [docs/MEDIA.md](docs/MEDIA.md) - image and video generation jobs
+- [docs/ANALYTICS.md](docs/ANALYTICS.md) - website analytics sync and local reports
+- [docs/FINANCE.md](docs/FINANCE.md) - revenue, subscriptions, and finance reports
+- [docs/EVAL.md](docs/EVAL.md) - operator-only eval harness for benchmarking strategies
 - [docs/REQUESTS.md](docs/REQUESTS.md) - operator request workflow
 - [docs/SCHEDULER.md](docs/SCHEDULER.md) - scheduler daemon
 - [docs/BRAND.md](docs/BRAND.md) - brand schema and commands

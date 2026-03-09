@@ -69,6 +69,7 @@ INCLUDES:
 
   const now = Date.now();
   const cwd = process.cwd();
+  const { resolveWorkspaceAppsForAgent } = await import("../engine/apps.js")
 
   const [
     { discoverLocalAgents },
@@ -108,6 +109,7 @@ INCLUDES:
   const activeSession = sessions.find((session) => session.sessionId === activeSessionId) || null;
   const activeAgentSlug = process.env.TERMLINGS_AGENT_SLUG || "";
   const activeAgentName = process.env.TERMLINGS_AGENT_NAME || "";
+  const resolvedApps = resolveWorkspaceAppsForAgent(activeAgentSlug || undefined, cwd)
 
   const sessionsByDna = new Map<string, typeof sessions>();
   for (const session of sessions) {
@@ -254,7 +256,8 @@ INCLUDES:
       sessionName: activeSession?.name || null,
       activeSessionOnline: Boolean(activeSession),
     },
-    org: {
+    apps: resolvedApps,
+    ...(resolvedApps["org-chart"] ? { org: {
       humans: humanNodes,
       agents: agentNodes,
       totalHumans: humanNodes.length,
@@ -262,8 +265,8 @@ INCLUDES:
       onlineAgents: onlineAgents.length,
       offlineAgents: offlineAgents.length,
       activeSessions: sessions.length,
-    },
-    tasks: {
+    } } : {}),
+    ...(resolvedApps["task"] ? { tasks: {
       total: tasks.length,
       byStatus: tasksByStatus,
       myTasks: myTasks.length,
@@ -278,8 +281,8 @@ INCLUDES:
         updatedAt: task.updatedAt,
         unresolvedDependencies: unresolvedDependencyCount(task),
       })),
-    },
-    workflows: {
+    } } : {}),
+    ...(resolvedApps["workflows"] ? { workflows: {
       totalDefinitions: workflowDefinitions.length,
       orgDefinitions: orgWorkflows.length,
       activeRuns: activeWorkflowRuns.length,
@@ -297,8 +300,8 @@ INCLUDES:
           status: run.status,
         };
       }),
-    },
-    calendar: {
+    } } : {}),
+    ...(resolvedApps["calendar"] ? { calendar: {
       totalEvents: events.length,
       enabledEvents: enabledEvents.length,
       ongoingNow: ongoingEvents.length,
@@ -316,8 +319,8 @@ INCLUDES:
         recurrence: event.recurrence,
         nextAt: getEventNextTs(event),
       })),
-    },
-    brand: {
+    } } : {}),
+    ...(resolvedApps["brand"] ? { brand: {
       available: Boolean(brand),
       name: brand?.name || null,
       voice: brand?.voice || null,
@@ -327,8 +330,8 @@ INCLUDES:
       domain: brand?.identity.domain.primary || null,
       website: brand?.identity.domain.website || null,
       updatedAt: brand?.updatedAt || null,
-    },
-    requests: {
+    } } : {}),
+    ...(resolvedApps["requests"] ? { requests: {
       pending: pendingRequests.length,
       latestPending: pendingRequests.slice(0, 5).map((req) => ({
         id: req.id,
@@ -337,8 +340,8 @@ INCLUDES:
         fromName: req.fromName,
         createdAt: req.ts,
       })),
-    },
-    messaging: {
+    } } : {}),
+    ...(resolvedApps["messaging"] ? { messaging: {
       channels: channels.length,
       channelMessages: totalChannelMessages,
       dmThreads: dmThreads.length,
@@ -346,7 +349,7 @@ INCLUDES:
       latestActivityAt: latestMessageTs || null,
       hottestChannels: channels.slice(0, 3),
       hottestThreads: dmThreads.slice(0, 3),
-    },
+    } } : {}),
   };
 
   if (flags.has("json")) {
@@ -371,171 +374,185 @@ INCLUDES:
   }
   console.log("");
 
-  console.log("Org");
-  console.log(
-    `- Humans: ${brief.org.totalHumans} · Agents: ${brief.org.totalAgents} · Online agents: ${brief.org.onlineAgents} · Active sessions: ${brief.org.activeSessions}`
-  );
-
-  if (humanNodes.length > 0) {
-    for (const human of humanNodes) {
-      console.log(`- ${human.id} · ${human.name} · ${human.title} · team:${human.team} · reports_to:${human.reportsTo}`);
-    }
-  }
-
-  if (agentNodes.length > 0) {
-    for (const agent of agentNodes) {
-      const status = agent.online
-        ? `online${agent.isCurrentSession ? " (you)" : ""}`
-        : "offline";
-      const sessionLabel = agent.sessionIds.length > 0
-        ? ` · sessions:${agent.sessionIds.join(",")}`
-        : "";
-      const seen = agent.lastSeenAt > 0
-        ? ` · seen ${formatRelativeAge(agent.lastSeenAt, now)}`
-        : "";
-      console.log(
-        `- ${agent.id} · ${agent.name} · ${agent.title} · ${status}${seen}${sessionLabel} · team:${agent.team} · reports_to:${agent.reportsTo}`
-      );
-    }
-  }
-  if (humanNodes.length === 0 && agentNodes.length === 0) {
-    console.log("- No humans or agents found in .termlings");
-  }
-  console.log("");
-
-  console.log("Tasks");
-  console.log(
-    `- Total: ${brief.tasks.total} · Open: ${brief.tasks.byStatus.open} · Claimed: ${brief.tasks.byStatus.claimed} · In-progress: ${brief.tasks.byStatus["in-progress"]} · Blocked: ${brief.tasks.byStatus.blocked} · Completed: ${brief.tasks.byStatus.completed}`
-  );
-  if (activeAgentSlug) {
-    console.log(`- Your tasks (${activeAgentSlug}): ${brief.tasks.myTasks} total, ${brief.tasks.myActiveTasks} active`);
-  }
-
-  if (blockedTasks.length > 0) {
-    console.log("- Blocked / waiting:");
-    for (const task of blockedTasks.slice(0, 5)) {
-      const waitingOn = unresolvedDependencyCount(task);
-      const waitingText = waitingOn > 0 ? ` · waiting on ${waitingOn} dep${waitingOn > 1 ? "s" : ""}` : "";
-      console.log(`  [${task.id}] ${truncate(task.title, 70)} · ${task.status}${waitingText}`);
-    }
-  }
-
-  if (recentTasks.length > 0) {
-    console.log("- Recently updated:");
-    for (const task of recentTasks) {
-      const owner = task.assignedTo ? ` · ${task.assignedTo}` : "";
-      console.log(
-        `  [${task.id}] ${truncate(task.title, 70)} · ${task.status}${owner} · ${formatRelativeAge(task.updatedAt, now)}`
-      );
-    }
-  }
-  if (tasks.length === 0) {
-    console.log("- No tasks found");
-  }
-  console.log("");
-
-  console.log("Workflows");
-  console.log(`- Definitions: ${brief.workflows.totalDefinitions} · Org definitions: ${brief.workflows.orgDefinitions} · Active runs: ${brief.workflows.activeRuns} · Completed runs: ${brief.workflows.completedRuns}`);
-  if (activeAgentSlug) {
-    console.log(`- Your workflow runs (${activeAgentSlug}): ${brief.workflows.myActiveRuns} active, ${brief.workflows.myCompletedRuns} completed`);
-  }
-
-  if (brief.workflows.recentMine.length > 0) {
-    console.log("- Your running workflows:");
-    for (const workflow of brief.workflows.recentMine) {
-      console.log(
-        `  [${workflow.ref}] ${truncate(workflow.title, 70)} · ${workflow.done}/${workflow.total} done · ${workflow.status} · ${formatRelativeAge(workflow.updatedAt, now)}`
-      );
-    }
-  } else if (activeAgentSlug) {
-    console.log("- No running workflows for your agent");
-  }
-  console.log("");
-
-  console.log("Calendar");
-  console.log(
-    `- Total events: ${brief.calendar.totalEvents} · Enabled: ${brief.calendar.enabledEvents} · Ongoing now: ${brief.calendar.ongoingNow} · Upcoming 24h: ${brief.calendar.upcoming24h}`
-  );
-  if (activeAgentSlug) {
-    console.log(`- Your upcoming events: ${brief.calendar.myUpcomingEvents.length}`);
-  }
-
-  if (upcomingEvents.length > 0) {
-    console.log("- Next events:");
-    for (const event of upcomingEvents.slice(0, 5)) {
-      const nextAt = getEventNextTs(event);
-      const agentCount = event.assignedAgents.length;
-      console.log(
-        `  [${event.id}] ${truncate(event.title, 70)} · ${new Date(nextAt).toLocaleString()} (${formatTimeUntil(nextAt, now)}) · ${event.recurrence} · ${agentCount} agent${agentCount === 1 ? "" : "s"}`
-      );
-    }
-  }
-  if (events.length === 0) {
-    console.log("- No calendar events found");
-  }
-  console.log("");
-
-  console.log("Brand");
-  if (!brief.brand.available) {
-    console.log("- No brand profile found (run: termlings brand init)");
-  } else {
-    const domainLabel = brief.brand.domain || "-";
-    const websiteLabel = brief.brand.website || "-";
-    const primaryLabel = brief.brand.primaryColor || "-";
-    const secondaryLabel = brief.brand.secondaryColor || "-";
-    const logoLabel = brief.brand.logo || "-";
+  if (resolvedApps["org-chart"]) {
+    console.log("Org");
     console.log(
-      `- ${brief.brand.name || "-"} · domain:${domainLabel} · website:${websiteLabel} · primary:${primaryLabel} · secondary:${secondaryLabel} · logo:${logoLabel}`
+      `- Humans: ${brief.org.totalHumans} · Agents: ${brief.org.totalAgents} · Online agents: ${brief.org.onlineAgents} · Active sessions: ${brief.org.activeSessions}`
     );
-    if (brief.brand.voice) {
-      console.log(`- Voice: ${truncate(brief.brand.voice, 120)}`);
-    }
-    if (brief.brand.updatedAt) {
-      const updatedTs = Date.parse(brief.brand.updatedAt);
-      if (Number.isFinite(updatedTs)) {
-        console.log(`- Updated: ${formatRelativeAge(updatedTs, now)}`);
-      } else {
-        console.log(`- Updated: ${brief.brand.updatedAt}`);
+
+    if (humanNodes.length > 0) {
+      for (const human of humanNodes) {
+        console.log(`- ${human.id} · ${human.name} · ${human.title} · team:${human.team} · reports_to:${human.reportsTo}`);
       }
     }
-  }
-  console.log("");
 
-  console.log("Requests");
-  console.log(`- Pending operator requests: ${brief.requests.pending}`);
-  if (pendingRequests.length > 0) {
-    for (const req of pendingRequests.slice(0, 5)) {
-      const from = req.fromSlug ? `agent:${req.fromSlug}` : req.fromName;
-      console.log(`  [${req.id}] ${req.type} from ${from} · ${formatRelativeAge(req.ts, now)}`);
+    if (agentNodes.length > 0) {
+      for (const agent of agentNodes) {
+        const status = agent.online
+          ? `online${agent.isCurrentSession ? " (you)" : ""}`
+          : "offline";
+        const sessionLabel = agent.sessionIds.length > 0
+          ? ` · sessions:${agent.sessionIds.join(",")}`
+          : "";
+        const seen = agent.lastSeenAt > 0
+          ? ` · seen ${formatRelativeAge(agent.lastSeenAt, now)}`
+          : "";
+        console.log(
+          `- ${agent.id} · ${agent.name} · ${agent.title} · ${status}${seen}${sessionLabel} · team:${agent.team} · reports_to:${agent.reportsTo}`
+        );
+      }
     }
+    if (humanNodes.length === 0 && agentNodes.length === 0) {
+      console.log("- No humans or agents found in .termlings");
+    }
+    console.log("");
   }
-  console.log("");
 
-  console.log("Messaging");
-  console.log(
-    `- Channels: ${brief.messaging.channels} (${brief.messaging.channelMessages} msgs) · DM threads: ${brief.messaging.dmThreads} (${brief.messaging.dmMessages} msgs)`
-  );
-  if (latestMessageTs > 0) {
-    console.log(`- Last activity: ${new Date(latestMessageTs).toLocaleString()} (${formatRelativeAge(latestMessageTs, now)})`);
-  }
-  if (channels.length > 0) {
-    console.log("- Top channels:");
-    for (const channel of channels.slice(0, 3)) {
-      console.log(`  #${channel.name} · ${channel.count} msgs · ${formatRelativeAge(channel.lastTs, now)}`);
+  if (resolvedApps["task"]) {
+    console.log("Tasks");
+    console.log(
+      `- Total: ${brief.tasks.total} · Open: ${brief.tasks.byStatus.open} · Claimed: ${brief.tasks.byStatus.claimed} · In-progress: ${brief.tasks.byStatus["in-progress"]} · Blocked: ${brief.tasks.byStatus.blocked} · Completed: ${brief.tasks.byStatus.completed}`
+    );
+    if (activeAgentSlug) {
+      console.log(`- Your tasks (${activeAgentSlug}): ${brief.tasks.myTasks} total, ${brief.tasks.myActiveTasks} active`);
     }
-  }
-  if (dmThreads.length > 0) {
-    console.log("- Top DM threads:");
-    for (const thread of dmThreads.slice(0, 3)) {
-      console.log(`  ${thread.target} · ${thread.count} msgs · ${formatRelativeAge(thread.lastTs, now)}`);
+
+    if (blockedTasks.length > 0) {
+      console.log("- Blocked / waiting:");
+      for (const task of blockedTasks.slice(0, 5)) {
+        const waitingOn = unresolvedDependencyCount(task);
+        const waitingText = waitingOn > 0 ? ` · waiting on ${waitingOn} dep${waitingOn > 1 ? "s" : ""}` : "";
+        console.log(`  [${task.id}] ${truncate(task.title, 70)} · ${task.status}${waitingText}`);
+      }
     }
+
+    if (recentTasks.length > 0) {
+      console.log("- Recently updated:");
+      for (const task of recentTasks) {
+        const owner = task.assignedTo ? ` · ${task.assignedTo}` : "";
+        console.log(
+          `  [${task.id}] ${truncate(task.title, 70)} · ${task.status}${owner} · ${formatRelativeAge(task.updatedAt, now)}`
+        );
+      }
+    }
+    if (tasks.length === 0) {
+      console.log("- No tasks found");
+    }
+    console.log("");
   }
-  console.log("");
+
+  if (resolvedApps["workflows"]) {
+    console.log("Workflows");
+    console.log(`- Definitions: ${brief.workflows.totalDefinitions} · Org definitions: ${brief.workflows.orgDefinitions} · Active runs: ${brief.workflows.activeRuns} · Completed runs: ${brief.workflows.completedRuns}`);
+    if (activeAgentSlug) {
+      console.log(`- Your workflow runs (${activeAgentSlug}): ${brief.workflows.myActiveRuns} active, ${brief.workflows.myCompletedRuns} completed`);
+    }
+
+    if (brief.workflows.recentMine.length > 0) {
+      console.log("- Your running workflows:");
+      for (const workflow of brief.workflows.recentMine) {
+        console.log(
+          `  [${workflow.ref}] ${truncate(workflow.title, 70)} · ${workflow.done}/${workflow.total} done · ${workflow.status} · ${formatRelativeAge(workflow.updatedAt, now)}`
+        );
+      }
+    } else if (activeAgentSlug) {
+      console.log("- No running workflows for your agent");
+    }
+    console.log("");
+  }
+
+  if (resolvedApps["calendar"]) {
+    console.log("Calendar");
+    console.log(
+      `- Total events: ${brief.calendar.totalEvents} · Enabled: ${brief.calendar.enabledEvents} · Ongoing now: ${brief.calendar.ongoingNow} · Upcoming 24h: ${brief.calendar.upcoming24h}`
+    );
+    if (activeAgentSlug) {
+      console.log(`- Your upcoming events: ${brief.calendar.myUpcomingEvents.length}`);
+    }
+
+    if (upcomingEvents.length > 0) {
+      console.log("- Next events:");
+      for (const event of upcomingEvents.slice(0, 5)) {
+        const nextAt = getEventNextTs(event);
+        const agentCount = event.assignedAgents.length;
+        console.log(
+          `  [${event.id}] ${truncate(event.title, 70)} · ${new Date(nextAt).toLocaleString()} (${formatTimeUntil(nextAt, now)}) · ${event.recurrence} · ${agentCount} agent${agentCount === 1 ? "" : "s"}`
+        );
+      }
+    }
+    if (events.length === 0) {
+      console.log("- No calendar events found");
+    }
+    console.log("");
+  }
+
+  if (resolvedApps["brand"]) {
+    console.log("Brand");
+    if (!brief.brand.available) {
+      console.log("- No brand profile found (run: termlings brand init)");
+    } else {
+      const domainLabel = brief.brand.domain || "-";
+      const websiteLabel = brief.brand.website || "-";
+      const primaryLabel = brief.brand.primaryColor || "-";
+      const secondaryLabel = brief.brand.secondaryColor || "-";
+      const logoLabel = brief.brand.logo || "-";
+      console.log(
+        `- ${brief.brand.name || "-"} · domain:${domainLabel} · website:${websiteLabel} · primary:${primaryLabel} · secondary:${secondaryLabel} · logo:${logoLabel}`
+      );
+      if (brief.brand.voice) {
+        console.log(`- Voice: ${truncate(brief.brand.voice, 120)}`);
+      }
+      if (brief.brand.updatedAt) {
+        const updatedTs = Date.parse(brief.brand.updatedAt);
+        if (Number.isFinite(updatedTs)) {
+          console.log(`- Updated: ${formatRelativeAge(updatedTs, now)}`);
+        } else {
+          console.log(`- Updated: ${brief.brand.updatedAt}`);
+        }
+      }
+    }
+    console.log("");
+  }
+
+  if (resolvedApps["requests"]) {
+    console.log("Requests");
+    console.log(`- Pending operator requests: ${brief.requests.pending}`);
+    if (pendingRequests.length > 0) {
+      for (const req of pendingRequests.slice(0, 5)) {
+        const from = req.fromSlug ? `agent:${req.fromSlug}` : req.fromName;
+        console.log(`  [${req.id}] ${req.type} from ${from} · ${formatRelativeAge(req.ts, now)}`);
+      }
+    }
+    console.log("");
+  }
+
+  if (resolvedApps["messaging"]) {
+    console.log("Messaging");
+    console.log(
+      `- Channels: ${brief.messaging.channels} (${brief.messaging.channelMessages} msgs) · DM threads: ${brief.messaging.dmThreads} (${brief.messaging.dmMessages} msgs)`
+    );
+    if (latestMessageTs > 0) {
+      console.log(`- Last activity: ${new Date(latestMessageTs).toLocaleString()} (${formatRelativeAge(latestMessageTs, now)})`);
+    }
+    if (channels.length > 0) {
+      console.log("- Top channels:");
+      for (const channel of channels.slice(0, 3)) {
+        console.log(`  #${channel.name} · ${channel.count} msgs · ${formatRelativeAge(channel.lastTs, now)}`);
+      }
+    }
+    if (dmThreads.length > 0) {
+      console.log("- Top DM threads:");
+      for (const thread of dmThreads.slice(0, 3)) {
+        console.log(`  ${thread.target} · ${thread.count} msgs · ${formatRelativeAge(thread.lastTs, now)}`);
+      }
+    }
+    console.log("");
+  }
 
   console.log("Startup Routine");
   console.log("- Run this command first in new sessions: termlings brief");
-  console.log("- Then pick work: termlings task list");
-  console.log("- Check your active workflow runs: termlings workflow list --active");
-  console.log("- Check timing: termlings calendar list");
-  console.log("- Coordinate: termlings message <target> <text>");
+  if (resolvedApps["task"]) console.log("- Then pick work: termlings task list");
+  if (resolvedApps["workflows"]) console.log("- Check your active workflow runs: termlings workflow list --active");
+  if (resolvedApps["calendar"]) console.log("- Check timing: termlings calendar list");
+  if (resolvedApps["messaging"]) console.log("- Coordinate: termlings message <target> <text>");
 }

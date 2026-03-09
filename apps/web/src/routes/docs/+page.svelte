@@ -6,6 +6,7 @@
   import Workflow from 'lucide-svelte/icons/workflow';
   import FileText from 'lucide-svelte/icons/file-text';
   import CircleHelp from 'lucide-svelte/icons/circle-help';
+  import Megaphone from 'lucide-svelte/icons/megaphone';
   import Palette from 'lucide-svelte/icons/palette';
   import Globe from 'lucide-svelte/icons/globe';
   import Wrench from 'lucide-svelte/icons/wrench';
@@ -16,6 +17,8 @@
   import Server from 'lucide-svelte/icons/server';
   import Shield from 'lucide-svelte/icons/shield';
   import Settings2 from 'lucide-svelte/icons/settings-2';
+  import ChartColumn from 'lucide-svelte/icons/chart-column';
+  import ImageIcon from 'lucide-svelte/icons/image';
   import PanelLeft from 'lucide-svelte/icons/panel-left';
   import PanelLeftClose from 'lucide-svelte/icons/panel-left-close';
   import { SITE_DESCRIPTION, SITE_NAME, SITE_OG_IMAGE_URL, toCanonicalUrl } from '$lib/site';
@@ -54,7 +57,15 @@
     brief: 'cli_agents',
     skills: 'cli_agents',
     brand: 'cli_agents',
+    social: 'cli_agents',
+    ads: 'cli_agents',
+    memory: 'cli_agents',
+    cms: 'cli_agents',
     crm: 'cli_agents',
+    media: 'cli_agents',
+    analytics: 'cli_agents',
+    finance: 'cli_agents',
+    eval: 'wip',
     workflows: 'cli_agents',
     messaging: 'cli_agents',
     task: 'cli_agents',
@@ -102,7 +113,15 @@
     browser: 70,
     skills: 80,
     brand: 90,
+    social: 91,
+    ads: 92,
+    memory: 93,
+    cms: 94,
+    media: 95,
     crm: 95,
+    analytics: 97,
+    finance: 98,
+    eval: 199,
     settings: 100,
     docker: 190,
     machines: 195,
@@ -145,7 +164,15 @@
     'org-chart': { icon: Workflow, tone: 'violet' },
     requests: { icon: CircleHelp, tone: 'amber' },
     brand: { icon: Palette, tone: 'rose' },
+    social: { icon: Megaphone, tone: 'amber' },
+    ads: { icon: Megaphone, tone: 'rose' },
+    memory: { icon: Brain, tone: 'mint' },
+    cms: { icon: FileText, tone: 'slate' },
+    media: { icon: ImageIcon, tone: 'amber' },
     crm: { icon: Brain, tone: 'amber' },
+    analytics: { icon: ChartColumn, tone: 'blue' },
+    finance: { icon: ChartColumn, tone: 'emerald' },
+    eval: { icon: ChartColumn, tone: 'slate' },
     workflows: { icon: Workflow, tone: 'violet' },
     skills: { icon: Wrench, tone: 'indigo' },
     scheduler: { icon: CalendarDays, tone: 'mint' },

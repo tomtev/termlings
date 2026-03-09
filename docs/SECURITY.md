@@ -12,7 +12,7 @@ Short version:
 
 Termlings is a coordination layer. The real security boundary comes from:
 
-1. the runtime sandbox of Claude Code or Codex
+1. the runtime sandbox or permission model of Claude Code or Codex
 2. the outer OS / container / VM boundary around the runtime
 3. your credential handling and browser profile isolation
 

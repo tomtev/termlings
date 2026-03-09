@@ -93,7 +93,7 @@ TERMLINGS_AGENT_ROLE="Owns roadmap and priorities"
 TERMLINGS_CONTEXT_PROFILE=default
 ```
 
-`TERMLINGS_AGENT_SLUG` is also used by app resolution paths, including top-level `termlings --help`, so agent sessions only see commands enabled for that agent in `.termlings/workspace.json`.
+`TERMLINGS_AGENT_SLUG` is also used by app resolution paths, including top-level `termlings --help`, so agent sessions only see commands enabled by workspace defaults and their own SOUL `apps:` allowlist.
 
 ## Context Assembly
 

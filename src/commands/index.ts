@@ -21,8 +21,17 @@ import { handleBrand } from "./brand.js";
 import { handleConversation } from "./conversation.js";
 import { handleSkills } from "./skills.js";
 import { handleAgents } from "./agents.js";
+import { handleAds } from "./ads.js";
 import { handleCrm } from "./crm.js";
+import { handleAnalytics } from "./analytics.js";
+import { handleCms } from "./cms.js";
+import { handleFinance } from "./finance.js";
+import { handleEval } from "./eval.js";
+import { handleImage } from "./image.js";
 import { handleMachine } from "./machine.js";
+import { handleMemory } from "./memory.js";
+import { handleVideo } from "./video.js";
+import { handleSocial } from "./social.js";
 
 export async function routeCommand(
   positional: string[],
@@ -77,8 +86,44 @@ export async function routeCommand(
       await handleBrand(flags, positional, opts);
       return true;
 
+    case "ads":
+      await handleAds(flags, positional, opts);
+      return true;
+
     case "crm":
       await handleCrm(flags, positional, opts);
+      return true;
+
+    case "image":
+      await handleImage(flags, positional, opts);
+      return true;
+
+    case "video":
+      await handleVideo(flags, positional, opts);
+      return true;
+
+    case "analytics":
+      await handleAnalytics(flags, positional, opts);
+      return true;
+
+    case "cms":
+      await handleCms(flags, positional, opts);
+      return true;
+
+    case "finance":
+      await handleFinance(flags, positional, opts);
+      return true;
+
+    case "eval":
+      await handleEval(flags, positional, opts);
+      return true;
+
+    case "social":
+      await handleSocial(flags, positional, opts);
+      return true;
+
+    case "memory":
+      await handleMemory(flags, positional, opts);
       return true;
 
     case "skills":

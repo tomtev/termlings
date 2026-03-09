@@ -1,16 +1,22 @@
-import { listEnabledAppCommands } from "./apps/registry.js"
+import {
+  listEnabledAgentVisibleAppCommands,
+  listEnabledOperatorOnlyAppCommands,
+} from "./apps/registry.js"
 import type { ResolvedWorkspaceApps } from "./engine/apps.js"
 
 export function renderTopLevelHelp(apps: ResolvedWorkspaceApps): string {
-  const appCommands = listEnabledAppCommands(apps)
+  const appCommands = listEnabledAgentVisibleAppCommands(apps)
+  const operatorCommands = listEnabledOperatorOnlyAppCommands(apps)
   const width = Math.max(
     "termlings agents <cmd>".length,
     ...appCommands.map((command) => command.usage.length),
+    ...operatorCommands.map((command) => command.usage.length),
   ) + 2
   const agentAppLines = [
     ...appCommands.map((command) => `  ${command.usage.padEnd(width)}${command.summary}`),
     `  ${"termlings agents <cmd>".padEnd(width)}Browse/install predefined teams and termlings`,
   ]
+  const operatorLines = operatorCommands.map((command) => `  ${command.usage.padEnd(width)}${command.summary}`)
 
   return `Usage: termlings [options]
        termlings avatar [dna|name] [options]
@@ -25,6 +31,8 @@ Workspace:
 
 Agent Apps:
 ${agentAppLines.join("\n")}
+
+${operatorLines.length > 0 ? `\nOperator:\n${operatorLines.join("\n")}\n` : ""}
 
 Server:
   termlings --server [--host <host>] [--port <port>]

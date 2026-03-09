@@ -100,8 +100,11 @@ const VALUE_FLAGS = new Set([
   "token", "cors-origin", "cors_origin", "allowed-projects", "allowed_projects",
   "max-body-kb", "max_body_kb", "rate-limit", "rate_limit", "sse-max", "sse_max",
   "agent", "account", "folder", "scope", "type", "status", "stage", "tags", "query", "attrs",
-  "user", "dir", "remoteDir", "identity", "description", "mode",
+  "strategy", "task",
+  "params",
+  "provider", "last", "link", "media", "platform", "collection", "file", "body-file", "body_file", "user", "dir", "remoteDir", "identity", "description", "mode",
   "docker-shell", "docker_shell", "container-dir", "container_dir", "containerDir",
+  "timezone", "weekday", "date",
 ]);
 
 // Check if first arg is an agent name
