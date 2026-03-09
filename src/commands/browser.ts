@@ -3,6 +3,199 @@
  * Browser automation commands
  */
 
+import { maybeHandleCommandSchema, type CommandSchemaContract } from "./command-schema.js";
+
+const BROWSER_SCHEMA: CommandSchemaContract = {
+  command: "browser",
+  title: "Browser",
+  summary: "Shared browser lifecycle, automation, collaboration, and reusable query patterns",
+  notes: [
+    "Headed mode is the default for human-in-the-loop work; use --headless for CI or scraping.",
+    "Most navigation and interaction commands accept --tab <index> to target a specific browser tab.",
+  ],
+  actions: {
+    init: {
+      summary: "Initialize the shared browser profile and directories",
+      usage: "termlings browser init",
+    },
+    start: {
+      summary: "Start the shared browser runtime",
+      usage: "termlings browser start [--headed|--headless]",
+      options: {
+        headed: "Force headed mode when a display server is available",
+        headless: "Force headless mode",
+      },
+      examples: [
+        "termlings browser start --headed",
+        "termlings browser start --headless",
+      ],
+    },
+    stop: {
+      summary: "Stop the shared browser runtime",
+      usage: "termlings browser stop",
+    },
+    status: {
+      summary: "Show browser runtime status",
+      usage: "termlings browser status [--json]",
+      options: {
+        json: "Output the browser workspace snapshot JSON",
+      },
+    },
+    overview: {
+      summary: "Show browser runtime and tab overview",
+      usage: "termlings browser overview [--json]",
+      options: {
+        json: "Output the full browser workspace overview JSON",
+      },
+    },
+    snapshot: {
+      summary: "Capture a structured page snapshot",
+      usage: "termlings browser snapshot [--tab <index>] [--compact] [--interactive] [--depth <n>] [--json]",
+      options: {
+        tab: "Target a specific browser tab id or stable tab reference",
+        compact: "Request a smaller snapshot optimized for token usage",
+        interactive: "Include additional interactive element detail",
+        depth: "Limit DOM traversal depth",
+        "max-tokens": "Limit returned snapshot tokens",
+        out: "Write snapshot JSON to a file path instead of stdout",
+        json: "Snapshot output is already JSON; keep for consistency with other commands",
+      },
+      examples: [
+        "termlings browser snapshot --compact --interactive --depth 2",
+        "termlings browser snapshot --tab 1 --out /tmp/page.json",
+      ],
+    },
+    "tabs.list": {
+      summary: "List open tabs",
+      usage: "termlings browser tabs list",
+      options: {
+        json: "Output the current tab list as JSON",
+      },
+    },
+    invite: {
+      summary: "Invite another agent into a shared tab",
+      usage: "termlings browser invite agent:<slug> [note...] [--tab <index>]",
+      options: {
+        tab: "Target a specific tab instead of the current session tab",
+        message: "Provide the invite note via flag instead of positional text",
+      },
+      examples: [
+        "termlings browser invite agent:designer \"Please handle the login\"",
+      ],
+    },
+    invites: {
+      summary: "List browser invites relevant to the current agent",
+      usage: "termlings browser invites",
+    },
+    accept: {
+      summary: "Accept a browser invite",
+      usage: "termlings browser accept <invite-id>",
+    },
+    leave: {
+      summary: "Leave an invited shared tab",
+      usage: "termlings browser leave [invite-id]",
+    },
+    navigate: {
+      summary: "Navigate a tab to a URL",
+      usage: "termlings browser navigate <url> [--tab <index>]",
+      options: {
+        tab: "Target a specific browser tab id or stable tab reference",
+      },
+    },
+    screenshot: {
+      summary: "Capture a screenshot of a tab",
+      usage: "termlings browser screenshot [--tab <index>] [--out <path>]",
+      options: {
+        tab: "Target a specific browser tab id or stable tab reference",
+        out: "Write the PNG bytes to a file path instead of stdout",
+      },
+      examples: [
+        "termlings browser screenshot --tab 1 --out /tmp/page.png",
+      ],
+    },
+    type: {
+      summary: "Type into the focused element",
+      usage: "termlings browser type <text> [--tab <index>]",
+    },
+    click: {
+      summary: "Click an element by CSS selector",
+      usage: "termlings browser click <selector> [--tab <index>]",
+    },
+    focus: {
+      summary: "Focus an element by CSS selector",
+      usage: "termlings browser focus <selector> [--tab <index>]",
+    },
+    cursor: {
+      summary: "Force an in-page avatar cursor preview",
+      usage: "termlings browser cursor [--tab <index>]",
+    },
+    extract: {
+      summary: "Extract visible page text",
+      usage: "termlings browser extract [--tab <index>]",
+    },
+    "cookies.list": {
+      summary: "List cookies for the current browser context",
+      usage: "termlings browser cookies list [--tab <index>]",
+      options: {
+        tab: "Target a specific browser tab id or stable tab reference",
+      },
+    },
+    "check-login": {
+      summary: "Exit non-zero when the current page appears to require login",
+      usage: "termlings browser check-login [--tab <index>]",
+    },
+    "request-help": {
+      summary: "Notify the operator that manual browser help is needed",
+      usage: "termlings browser request-help <message> [--tab <index>]",
+      options: {
+        tab: "Target a specific browser tab id or stable tab reference",
+      },
+      examples: [
+        "termlings browser request-help \"I need someone to complete the login flow\" --tab 1",
+      ],
+    },
+    "patterns.list": {
+      summary: "List saved browser query patterns",
+      usage: "termlings browser patterns list",
+    },
+    "patterns.view": {
+      summary: "Show one saved query pattern",
+      usage: "termlings browser patterns view <id>",
+      examples: [
+        "termlings browser patterns view github-issues",
+      ],
+    },
+    "patterns.save": {
+      summary: "Create or update a saved query pattern",
+      usage: "termlings browser patterns save <id> --navigate=<url-template> [--name <label>] [--description <text>] [--sites <a,b>] [--wait-ms <ms>] [--filters '<json-array>'] [--snapshot-options '<json-object>'] [--usage <text>]",
+      options: {
+        navigate: "Required URL template. Supports parameter substitution when executing.",
+        name: "Human-readable pattern name",
+        description: "Longer pattern description",
+        sites: "Comma-separated hostnames covered by the pattern",
+        "wait-ms": "Delay after navigation before snapshotting",
+        filters: "JSON array of { name, jq } filters applied to the snapshot",
+        "snapshot-options": "JSON object forwarded into the snapshot call",
+        usage: "Optional human usage note stored with the pattern",
+      },
+      examples: [
+        "termlings browser patterns save example --navigate=\"https://example.com\" --sites=\"example.com\" --wait-ms=1200",
+      ],
+    },
+    "patterns.execute": {
+      summary: "Execute a saved query pattern",
+      usage: "termlings browser patterns execute <id> [key=value ...] [--tab <index>] [--out <path>]",
+      options: {
+        tab: "Target a specific browser tab id or stable tab reference",
+        out: "Write the result payload JSON to a file path instead of stdout",
+      },
+      examples: [
+        "termlings browser patterns execute github-issues owner=openai repo=openai-node --out /tmp/issues.json",
+      ],
+    },
+  },
+}
+
 function parseBooleanOption(raw: string | undefined, optionName: string): boolean | undefined {
   if (raw === undefined) return undefined;
   const normalized = raw.trim().toLowerCase();
@@ -35,6 +228,10 @@ function isTabActive(tab: { active?: boolean; current?: boolean; selected?: bool
 }
 
 export async function handleBrowser(flags: Set<string>, positional: string[], opts: Record<string, string>) {
+  if (maybeHandleCommandSchema(BROWSER_SCHEMA, positional)) {
+    return;
+  }
+
   const {
     initializeBrowserDirs,
     getOrCreateProfileReference,

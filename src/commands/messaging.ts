@@ -4,6 +4,43 @@
 
 import { sendMessage } from "../engine/messaging-util.js";
 import { handleOrgChart } from "./org-chart.js";
+import { maybeHandleCommandSchema, type CommandSchemaContract } from "./command-schema.js";
+
+const MESSAGE_SCHEMA: CommandSchemaContract = {
+  command: "message",
+  title: "Messaging",
+  summary: "Direct messaging for agents, humans, channels, and recent conversation lookup",
+  relatedCommands: ["conversation"],
+  notes: [
+    "Use agent:<slug> for durable agent DMs and human:default for operator communication.",
+    "Use `termlings conversation ...` to inspect message history.",
+  ],
+  actions: {
+    send: {
+      summary: "Send a direct message or channel post",
+      usage: "termlings message <target> <text>",
+      options: {
+        target: "channel:<name> | agent:<slug> | human:default | tl-<session-id>",
+        text: "Message body",
+      },
+      examples: [
+        "termlings message agent:developer \"Ready for review\"",
+        "termlings message human:default \"Blocked on credentials\"",
+      ],
+    },
+    history: {
+      summary: "Read message history for a target or recent timeline",
+      usage: "termlings conversation <target> [--limit <n>] [--json]",
+      notes: [
+        "Targets: human:default, agent:<slug>, channel:<name>, tl-<session-id>, recent, all, or bare agent slug.",
+      ],
+      examples: [
+        "termlings conversation human:default --limit 120",
+        "termlings conversation recent --json",
+      ],
+    },
+  },
+}
 
 export async function handleListAgents(flags: Set<string>, positional: string[]) {
   if (flags.has("help")) {
@@ -26,6 +63,10 @@ OPTIONS:
 }
 
 export async function handleMessage(flags: Set<string>, positional: string[]) {
+  if (maybeHandleCommandSchema(MESSAGE_SCHEMA, positional)) {
+    return;
+  }
+
   if (flags.has("help")) {
     console.log(`
 💬 Message - Send messages to channels, agents & operators

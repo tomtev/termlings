@@ -1,4 +1,28 @@
 import { basename } from "path";
+import { maybeHandleCommandSchema, type CommandSchemaContract } from "./command-schema.js";
+
+const BRIEF_SCHEMA: CommandSchemaContract = {
+  command: "brief",
+  title: "Brief",
+  summary: "Full workspace snapshot for context recovery",
+  notes: [
+    "Run this first at session start or before replying when context is unclear.",
+    "Use --json when another tool or agent should consume the snapshot programmatically.",
+  ],
+  actions: {
+    run: {
+      summary: "Render the current workspace snapshot",
+      usage: "termlings brief [--json]",
+      options: {
+        json: "Output structured snapshot JSON instead of formatted text",
+      },
+      examples: [
+        "termlings brief",
+        "termlings brief --json",
+      ],
+    },
+  },
+}
 
 function cleanFrontmatterValue(input?: string): string {
   if (!input) return "";
@@ -46,6 +70,10 @@ function truncate(input: string, max = 90): string {
 }
 
 export async function handleBrief(flags: Set<string>, _positional: string[]): Promise<void> {
+  if (maybeHandleCommandSchema(BRIEF_SCHEMA, _positional)) {
+    return;
+  }
+
   if (flags.has("help")) {
     console.log(`
 📎 Brief - Full workspace snapshot

@@ -1,14 +1,23 @@
 import type { ResolvedWorkspaceApps } from "./engine/apps.js"
 
 interface RenderSystemContextInput {
+  apps: ResolvedWorkspaceApps
+}
+
+interface RenderSoulContextInput {
   name: string
+  slug?: string
   sessionId: string
+  dna?: string
   title?: string
   titleShort?: string
   role?: string
+  team?: string
+  reportsTo?: string
   description?: string
-  apps: ResolvedWorkspaceApps
 }
+
+const DEFAULT_SOUL_INTRO = "You are part of an autonomous AI worker team. Work together with other team members to achieve shared goals. Communicate regularly, ask for help when needed, and celebrate wins together."
 
 function codeBlock(lines: string[]): string {
   return `\`\`\`bash\n${lines.join("\n")}\n\`\`\``
@@ -22,6 +31,15 @@ function renderAppSection(enabled: boolean, title: string, lines: string[], note
   if (!enabled) return ""
   const body = [codeBlock(lines), note ? `\n${note.trim()}` : ""].filter(Boolean).join("\n")
   return section(title, body)
+}
+
+function normalizeSoulDescription(input?: string): string {
+  if (!input) return ""
+
+  let description = input.trim()
+  description = description.replace(DEFAULT_SOUL_INTRO, "").trim()
+  description = description.replace(/\n?---\s*$/, "").trim()
+  return description
 }
 
 export function renderManageAgentsContext(): string {
@@ -47,22 +65,49 @@ Operational rules:
 `.trim()
 }
 
+export function renderSoulContext(input: RenderSoulContextInput): string {
+  const description = normalizeSoulDescription(input.description)
+  const identityLines = [
+    `- **Name:** ${input.name}`,
+    `- **Session ID:** ${input.sessionId}`,
+    input.slug ? `- **Slug:** ${input.slug}` : "",
+    input.dna ? `- **DNA:** ${input.dna}` : "",
+    input.title ? `- **Title:** ${input.title}` : "",
+    input.titleShort ? `- **Title (short):** ${input.titleShort}` : "",
+    input.role ? `- **Role:** ${input.role}` : "",
+    input.team ? `- **Team:** ${input.team}` : "",
+    input.reportsTo ? `- **Reports To:** ${input.reportsTo}` : "",
+  ].filter(Boolean)
+
+  const sections = [
+    "<TERMLINGS-SOUL>",
+    "",
+    "# Agent Soul",
+    "",
+    DEFAULT_SOUL_INTRO,
+    "",
+    section("Identity", identityLines.join("\n")),
+    description ? "" : "",
+    description ? section("Source", description) : "",
+    "",
+    "</TERMLINGS-SOUL>",
+  ].filter((part) => part.trim().length > 0)
+
+  return sections.join("\n")
+}
+
 export function renderSystemContext(input: RenderSystemContextInput): string {
-  const title = input.title || ""
-  const titleShort = input.titleShort || ""
-  const role = input.role || ""
-  const description = input.description || "You are an autonomous agent exploring and interacting with the world."
   const apps = input.apps
 
   const quickReference = [
     "termlings --help                       # Full CLI reference",
-    apps["brief"] ? "termlings brief                        # Session startup snapshot" : "",
-    apps["org-chart"] ? "termlings org-chart --help             # Team discovery" : "",
-    apps["messaging"] ? "termlings message --help               # Messaging guide" : "",
-    apps["requests"] ? "termlings request --help               # Requests guide" : "",
-    apps["task"] ? "termlings task --help                  # Task management" : "",
-    apps["workflows"] ? "termlings workflow --help              # Workflow checklists" : "",
-    apps["calendar"] ? "termlings calendar --help              # Calendar events" : "",
+    apps["brief"] ? "termlings brief schema                 # Brief contract" : "",
+    apps["org-chart"] ? "termlings org-chart schema             # Org chart contract" : "",
+    apps["messaging"] ? "termlings message schema               # Messaging contract" : "",
+    apps["requests"] ? "termlings request schema               # Requests contract" : "",
+    apps["task"] ? "termlings task schema                  # Task contract" : "",
+    apps["workflows"] ? "termlings workflow schema              # Workflow contract" : "",
+    apps["calendar"] ? "termlings calendar schema              # Calendar contract" : "",
     apps["social"] ? "termlings social schema                # Social app contract" : "",
     apps["ads"] ? "termlings ads schema                   # Ads app contract" : "",
     apps["memory"] ? "termlings memory schema                # Memory app contract" : "",
@@ -72,34 +117,42 @@ export function renderSystemContext(input: RenderSystemContextInput): string {
     apps["media"] ? "termlings video schema                 # Video app contract" : "",
     apps["analytics"] ? "termlings analytics schema             # Analytics app contract" : "",
     apps["finance"] ? "termlings finance schema               # Finance app contract" : "",
-    apps["skills"] ? "termlings skills --help                # Skills discovery/install/update" : "",
-    apps["brand"] ? "termlings brand --help                 # Brand CLI" : "",
-    apps["browser"] ? "termlings browser --help               # Browser automation" : "",
+    apps["skills"] ? "termlings skills schema                # Skills contract" : "",
+    apps["brand"] ? "termlings brand schema                 # Brand contract" : "",
+    apps["browser"] ? "termlings browser schema               # Browser contract" : "",
   ].filter(Boolean)
 
   const sections = [
     "<TERMLINGS-SYSTEM-MESSAGE>",
     "",
-    "# You are an autonomous Termlings agent",
+    "# Workspace Operating Context",
     "",
-    "## Your Identity",
-    "",
-    `- **Name:** ${input.name}`,
-    `- **Session ID:** ${input.sessionId}`,
-    `- **Title:** ${title}`,
-    `- **Title (short):** ${titleShort}`,
-    `- **Role:** ${role}`,
-    `- **Description:** ${description}`,
-    "",
-    section("Critical Communication", `
+    section("CRITICAL: ALWAYS USE `termlings message` CLI TO COMMUNICATE", `
 **OTHER AGENTS AND THE OPERATOR CANNOT SEE YOUR TERMINAL OUTPUT, THINKING, OR LOGGING.**
 
-You must communicate explicitly with the CLI:
+The ONLY way teammates and the operator can see what you're doing is if you explicitly send messages using the CLI:
 
 ${codeBlock([
   "termlings message agent:<slug> \"Your message\"    # To teammates",
   "termlings message human:default \"Your message\"   # To operator/owner",
 ])}
+
+**Example: When you receive a message from the operator:**
+\`\`\`
+[Message from human:default: "What's your status on task-123?"]
+
+YOU MUST RESPOND BY RUNNING THIS CLI COMMAND:
+termlings message human:default "Task-123 is 50% complete, found performance issue in query."
+\`\`\`
+
+**Every important action MUST have a corresponding \`termlings message\`:**
+- Starting work: \`termlings message <reports_to> "Starting task-123"\`
+- Found a blocker: \`termlings request env API_KEY "Blocked: need API key for task-456"\`
+- Completed something: \`termlings message agent:pm "Done with validation, ready for review"\`
+- Progress checkpoint: \`termlings message <reports_to> "50% complete on task-123"\`
+- Asking for help: \`termlings message <reports_to> "Need help debugging the payment API"\`
+
+Replace \`<reports_to>\` with your manager target from \`termlings org-chart\`.
 
 If you need a response, credential, decision, or approval, use:
 
@@ -109,6 +162,10 @@ ${codeBlock([
   "termlings request choice \"pick one\" \"option-a\" \"option-b\"",
   "termlings request list",
 ])}
+
+Do not use runtime-native question tools or inline terminal questions for operator input.
+Always use \`termlings request ...\` when you need a human decision, answer, credential, or approval.
+Examples of tools to avoid for this purpose: \`AskUserQuestion\`, \`request_user_input\`, or any equivalent runtime-specific prompt mechanism.
     `),
     "",
     section("Operating Model", `
@@ -124,6 +181,8 @@ ${apps["memory"] ? "- Memory is the system of record for durable notes and recal
     "",
     section("JSON App API", `
 Newer app commands are JSON-first.
+
+Every app/command surface exposes \`schema\`. Use it before unfamiliar workflows.
 
 Use schema first:
 
@@ -373,29 +432,55 @@ If you are unsure what someone is referring to, do not guess.
     section("Requests vs Messages", `
 - Use \`termlings request\` when you need a response, credential, decision, or approval.
 - Use \`termlings message\` when you are informing someone about status, progress, handoff, or blockers.
+- Never use runtime-native AskUserQuestion/request-user-input style tools for operator communication inside Termlings. Use \`termlings request\` instead.
     `),
     "",
-    section("Best Practices", `
-✅ DO:
-- Track work as tasks
-- Add task notes frequently
-- Message after meaningful progress or blockers
-- Ask for help early
-- Keep CRM, CMS, social, or memory records updated when those apps are part of the work
+    section("Receiving & Responding to Messages", `
+**Messages from the operator appear in your terminal like this:**
+\`\`\`
+[Message from Tommy - Founder. id: human:default]: What's your status on task-123?
+\`\`\`
 
-❌ DON'T:
-- Work without a task
-- Leave tasks in progress without notes for long periods
-- Work in silence
-- Assume the operator knows what you're doing unless you reported it
-    `),
-    "",
-    section("Message Response Format", `
-Always respond with:
+**You MUST respond immediately using the CLI:**
+${codeBlock([
+  "termlings message human:default \"Task-123 is 60% done. Found database issue. ETA 2 hours.\"",
+])}
+
+**Messages from teammates appear like this:**
+\`\`\`
+[Message from Alice - Developer. id: agent:developer]: task-456 is ready for review
+\`\`\`
+
+**Respond using the slug shown in the message:**
+${codeBlock([
+  "termlings message agent:developer \"Got it, reviewing now. Will send feedback in 30min\"",
+])}
+
+**Always respond with:**
 1. Acknowledgment
 2. Current status or direct answer
 3. Next step and ETA when relevant
 4. Blockers and what you need if blocked
+    `),
+    "",
+    section("Best Practices", `
+✅ DO:
+- **ALWAYS use \`termlings message\` for EVERY response and update**
+- Track work as tasks
+- Add task notes frequently (every 15-30 min on long tasks)
+- Message your manager (\`reports_to\`) with frequent updates
+- Message teammates using \`agent:slug\` format
+- Ask for help early when blocked
+- Be extremely verbose about what you're doing and finding
+- Keep CRM, CMS, social, or memory records updated when those apps are part of the work
+
+❌ DON'T:
+- Respond with plain text output — the operator cannot see it
+- Work without a task
+- Leave tasks in progress without notes for long periods
+- Silently fail — communicate blockers immediately via your reporting chain
+- Assume the operator knows what you're doing if you haven't reported it
+- Work in silence — message after every major action
     `),
     "",
     "Run `termlings org-chart` to see team hierarchy and roles.",

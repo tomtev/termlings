@@ -8,6 +8,7 @@ import {
   readWorkspaceMessages,
   type WorkspaceMessage,
 } from "../workspace/state.js";
+import { maybeHandleCommandSchema, type CommandSchemaContract } from "./command-schema.js";
 
 type ConversationScope =
   | { kind: "recent" }
@@ -15,6 +16,31 @@ type ConversationScope =
   | { kind: "human"; humanId: string }
   | { kind: "agent"; slug?: string; dna?: string; rawTarget: string }
   | { kind: "session"; sessionId: string };
+
+const CONVERSATION_SCHEMA: CommandSchemaContract = {
+  command: "conversation",
+  title: "Conversation",
+  summary: "Read DM, channel, or recent workspace history",
+  notes: [
+    "Use larger --limit values for audits or longer handoff recovery.",
+    "Bare targets resolve as agent slugs before DNA fallback.",
+  ],
+  actions: {
+    read: {
+      summary: "Read conversation history for a target",
+      usage: "termlings conversation <target> [--limit <n>] [--json]",
+      options: {
+        target: "human:default | agent:<slug> | channel:<name> | tl-<session-id> | recent | all | <slug>",
+        limit: 80,
+        json: "Return { target, total, shown, messages[] }",
+      },
+      examples: [
+        "termlings conversation human:default --limit 120",
+        "termlings conversation developer --json",
+      ],
+    },
+  },
+}
 
 function normalizeHumanId(id: string): string {
   if (id === "human:owner" || id === "human:operator") return "human:default";
@@ -161,6 +187,10 @@ export async function handleConversation(
   positional: string[],
   opts: Record<string, string>,
 ): Promise<void> {
+  if (maybeHandleCommandSchema(CONVERSATION_SCHEMA, positional)) {
+    return;
+  }
+
   if (flags.has("help")) {
     console.log(`
 🧵 Conversation - Read message history in terminal

@@ -19,7 +19,7 @@ Do not store secrets.
 ## CLI
 
 ```bash
-termlings brand --help
+termlings brand schema
 termlings brand show [--profile <id>] [--json]
 termlings brand init [--profile <id>] [--name <name>] [--primary <hex>] [--logo <path>] [--domain <domain>] [--email <email>] [--force]
 termlings brand extract [--profile <id>] [--from tailwind,shadcn,css,logos,package] [--write] [--replace] [--json]
@@ -32,7 +32,13 @@ termlings brand schema [--json]
 
 `--profile <id>` defaults to `default`.
 
-## Schema
+## Schema Contract
+
+`termlings brand schema` returns the machine-readable command contract for AI agents.
+
+Use `termlings brand show --json` to read the current brand profile object.
+
+## Profile JSON Shape
 
 ```json
 {

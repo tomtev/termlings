@@ -5,7 +5,7 @@ Schedule and manage team events with the `calendar` command.
 ## Quick Start
 
 ```bash
-termlings calendar --help           # Full documentation
+termlings calendar schema           # Command contract
 termlings calendar list             # View your events
 termlings calendar show <event-id>  # Event details
 ```

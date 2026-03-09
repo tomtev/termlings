@@ -79,7 +79,7 @@ export async function routeCommand(
       return true;
 
     case "calendar":
-      await handleCalendar(flags, positional);
+      await handleCalendar(flags, positional, opts);
       return true;
 
     case "brand":

@@ -23,8 +23,8 @@ const MEMORY_CONTRACT: AppApiContract = {
     "collection-create": {
       summary: "Create a memory collection",
       stdinJson: {
-        id: "project",
-        title: "Project memory",
+        id: "research-notes",
+        title: "Research Notes",
       },
     },
     add: {

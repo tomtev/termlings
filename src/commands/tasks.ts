@@ -2,6 +2,76 @@
  * Task management commands
  */
 
+import { maybeHandleCommandSchema, type CommandSchemaContract } from "./command-schema.js";
+
+const TASK_SCHEMA: CommandSchemaContract = {
+  command: "task",
+  title: "Tasks",
+  summary: "Shared task tracking with ownership, notes, status changes, and dependencies",
+  notes: [
+    "Claim tasks before starting work and keep notes updated on longer tasks.",
+    "Dependencies block claims until the dependent tasks are completed.",
+  ],
+  actions: {
+    create: {
+      summary: "Create a new task",
+      usage: "termlings task create <title> [description] [low|medium|high]",
+      examples: [
+        "termlings task create \"Fix flaky tests\" \"Stabilize browser suite\" high",
+      ],
+    },
+    list: {
+      summary: "List tasks relevant to the current agent",
+      usage: "termlings task list",
+      examples: [
+        "termlings task list",
+      ],
+    },
+    show: {
+      summary: "Show one task in detail",
+      usage: "termlings task show <task-id>",
+      examples: [
+        "termlings task show task-123",
+      ],
+    },
+    claim: {
+      summary: "Claim an open task",
+      usage: "termlings task claim <task-id>",
+      examples: [
+        "termlings task claim task-123",
+      ],
+    },
+    status: {
+      summary: "Update a task status with an optional note",
+      usage: "termlings task status <task-id> <open|claimed|in-progress|completed|blocked> [note]",
+      notes: [
+        "When the updater differs from the original creator target, this command also notifies the creator via direct message.",
+      ],
+      examples: [
+        "termlings task status task-123 in-progress \"Started investigation\"",
+      ],
+    },
+    note: {
+      summary: "Add a progress note to a task",
+      usage: "termlings task note <task-id> <note...>",
+      examples: [
+        "termlings task note task-123 \"Found issue in auth handler\"",
+      ],
+    },
+    depends: {
+      summary: "Add or remove a dependency edge between tasks",
+      usage: "termlings task depends <id> <dep-id> | termlings task depends <id> --remove <dep-id>",
+      options: {
+        remove: "Remove an existing dependency edge instead of adding one",
+      },
+      examples: [
+        "termlings task depends task-456 task-123",
+        "termlings task depends task-456 --remove task-123",
+      ],
+    },
+  },
+}
+
 function creatorFromEnvironment(agentName: string): { createdBy: string; createdByName: string } {
   const slug = process.env.TERMLINGS_AGENT_SLUG?.trim();
   if (slug) {
@@ -41,6 +111,10 @@ function normalizeTaskCreatorTarget(createdBy: string | undefined): string {
 }
 
 export async function handleTask(flags: Set<string>, positional: string[]) {
+  if (maybeHandleCommandSchema(TASK_SCHEMA, positional)) {
+    return;
+  }
+
   const { createTask, getTask, getAllTasks, claimTask, updateTaskStatus, addTaskNote, addTaskDependency, removeTaskDependency, getUnresolvedDeps, formatTask, formatAgentTaskList } =
     await import("../engine/tasks.js");
   const sessionId = process.env.TERMLINGS_SESSION_ID;

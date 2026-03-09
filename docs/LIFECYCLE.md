@@ -31,7 +31,7 @@ Context injection is implemented in `src/agents/launcher.ts` and adapter files u
 
 `loadContext()` reads:
 
-- `src/termlings-system-message.md` (base)
+- `src/system-context.ts` → `renderSystemContext()` (dynamic, app-aware)
 - `.termlings/VISION.md` (appended when present, wrapped in `<TERMLINGS-VISION>` tags)
 
 ### 2) Apply runtime substitutions
@@ -99,7 +99,7 @@ TERMLINGS_CONTEXT_PROFILE=default
 
 Base context comes from:
 
-- `src/termlings-system-message.md`
+- `src/system-context.ts` → `renderSystemContext()`
 
 Project vision is appended when present:
 

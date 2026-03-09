@@ -66,6 +66,13 @@ const CRM_CONTRACT: AppApiContract = {
         path: "attrs.domain",
         value: "acme.com",
       },
+      notes: [
+        "Mutable paths are limited to: name, owner, status, stage, tags, attrs, attrs.*, next, next.at, next.text, and next.owner.",
+        "Immutable fields such as ref, type, slug, links, createdAt, and archivedAt are rejected.",
+      ],
+      examples: [
+        "printf '%s\\n' '{\"ref\":\"org/acme\",\"path\":\"stage\",\"value\":\"opportunity\"}' | termlings crm set --stdin-json --json",
+      ],
     },
     unset: {
       summary: "Clear a mutable CRM field",
@@ -73,6 +80,13 @@ const CRM_CONTRACT: AppApiContract = {
         ref: "org/acme",
         path: "attrs.domain",
       },
+      notes: [
+        "Mutable paths are limited to: owner, status, stage, tags, attrs, attrs.*, next, next.at, next.text, and next.owner.",
+        "The required name field cannot be unset.",
+      ],
+      examples: [
+        "printf '%s\\n' '{\"ref\":\"org/acme\",\"path\":\"next.owner\"}' | termlings crm unset --stdin-json --json",
+      ],
     },
     note: {
       summary: "Append a CRM activity note",
@@ -97,6 +111,14 @@ const CRM_CONTRACT: AppApiContract = {
         text: "Send pricing",
         owner: "agent:growth",
       },
+      notes: [
+        "To set a follow-up, provide a valid `at` value as ISO 8601 text or a unix timestamp.",
+        "To clear a follow-up, send `at: null` or one of the strings `clear`, `none`, or `unset`.",
+      ],
+      examples: [
+        "printf '%s\\n' '{\"ref\":\"org/acme\",\"at\":\"2026-03-10T09:00:00+01:00\",\"text\":\"Send pricing\",\"owner\":\"agent:growth\"}' | termlings crm followup --stdin-json --json",
+        "printf '%s\\n' '{\"ref\":\"org/acme\",\"at\":null}' | termlings crm followup --stdin-json --json",
+      ],
     },
     timeline: {
       summary: "Read CRM timeline entries",

@@ -3,12 +3,112 @@
  */
 
 import type { WorkflowCreateStep } from "../engine/workflows.js"
+import { maybeHandleCommandSchema, type CommandSchemaContract } from "./command-schema.js"
 
 interface WorkflowJsonPayload {
   title: string
   scope?: string
   owner?: string
   steps: WorkflowCreateStep[]
+}
+
+const WORKFLOW_SCHEMA: CommandSchemaContract = {
+  command: "workflow",
+  title: "Workflows",
+  summary: "Reusable workflow definitions with per-agent running state",
+  notes: [
+    "Workflow refs use org/<id> or agent:<slug>/<id>.",
+    "Use --agent outside an agent session when a command needs a target owner.",
+  ],
+  actions: {
+    list: {
+      summary: "List workflow definitions or active runs",
+      usage: "termlings workflow list [--active] [--org] [--agent <slug>] [--scope org|agent]",
+      options: {
+        active: "Show only active workflow runs instead of workflow definitions",
+        org: "Limit definition listing to org-scoped workflows",
+        agent: "Target a specific agent for list/show/start/reset/stop/step flows",
+        scope: "Use org or agent definition scope while listing",
+      },
+      examples: [
+        "termlings workflow list",
+        "termlings workflow list --active",
+        "termlings workflow list --agent developer",
+      ],
+    },
+    show: {
+      summary: "Show a workflow definition and current run state",
+      usage: "termlings workflow show <ref> [--agent <slug>]",
+      options: {
+        agent: "Target a specific agent run when the workflow is agent-scoped",
+      },
+      examples: [
+        "termlings workflow show org/release-deploy",
+        "termlings workflow show agent:developer/qa-checklist --agent developer",
+      ],
+    },
+    create: {
+      summary: "Create a workflow definition from JSON",
+      usage: "termlings workflow create '{\"title\":\"...\",\"scope\":\"org|agent\",\"steps\":[...]}' [--scope org|agent] [--agent <slug>]",
+      options: {
+        scope: "Override the workflow scope inferred from the JSON payload",
+        agent: "Owner slug for agent-scoped workflow definitions",
+      },
+      notes: [
+        "The JSON payload must include title and a non-empty steps array.",
+        "Agent-scoped workflows require an owner via --agent, payload.owner, or the current agent session.",
+      ],
+      examples: [
+        "termlings workflow create '{\"title\":\"Release deploy\",\"scope\":\"org\",\"steps\":[\"Run tests\",\"Deploy\"]}'",
+        "termlings workflow create '{\"title\":\"Triage inbox\",\"steps\":[\"Check inbox\",\"Reply\"]}' --scope agent --agent support",
+      ],
+    },
+    start: {
+      summary: "Start a workflow run for an agent",
+      usage: "termlings workflow start <ref> [--agent <slug>]",
+      options: {
+        agent: "Target agent when running outside an agent session",
+      },
+      examples: [
+        "termlings workflow start org/release-deploy",
+        "termlings workflow start agent:developer/qa-checklist --agent developer",
+      ],
+    },
+    reset: {
+      summary: "Reset a running workflow copy",
+      usage: "termlings workflow reset <ref> [--agent <slug>]",
+      options: {
+        agent: "Target agent when running outside an agent session",
+      },
+    },
+    stop: {
+      summary: "Stop and clear a running workflow copy",
+      usage: "termlings workflow stop <ref> [--agent <slug>]",
+      options: {
+        agent: "Target agent when running outside an agent session",
+      },
+    },
+    "step.done": {
+      summary: "Mark a workflow step complete",
+      usage: "termlings workflow step done <ref> <step-id> [--agent <slug>]",
+      options: {
+        agent: "Target agent when running outside an agent session",
+      },
+      examples: [
+        "termlings workflow step done org/release-deploy step_1",
+      ],
+    },
+    "step.undo": {
+      summary: "Mark a workflow step incomplete",
+      usage: "termlings workflow step undo <ref> <step-id> [--agent <slug>]",
+      options: {
+        agent: "Target agent when running outside an agent session",
+      },
+      examples: [
+        "termlings workflow step undo org/release-deploy step_1",
+      ],
+    },
+  },
 }
 
 function actorFromEnvironment(): { by: string; byName: string } {
@@ -80,6 +180,10 @@ function parseWorkflowJson(raw: string): WorkflowJsonPayload {
 }
 
 export async function handleWorkflow(flags: Set<string>, positional: string[], opts: Record<string, string>) {
+  if (maybeHandleCommandSchema(WORKFLOW_SCHEMA, positional)) {
+    return
+  }
+
   const {
     createWorkflow,
     formatWorkflow,

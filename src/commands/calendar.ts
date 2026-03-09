@@ -2,7 +2,87 @@
  * Calendar management commands - complete implementation
  */
 
-export async function handleCalendar(flags: Set<string>, positional: string[]) {
+import { maybeHandleCommandSchema, type CommandSchemaContract } from "./command-schema.js";
+
+const CALENDAR_SCHEMA: CommandSchemaContract = {
+  command: "calendar",
+  title: "Calendar",
+  summary: "Event scheduling, assignment, recurrence, and visibility",
+  notes: [
+    "Use ISO 8601 timestamps for create flows.",
+    "Disable recurring events instead of deleting them when you want to preserve history.",
+  ],
+  actions: {
+    list: {
+      summary: "List events for the current agent or an explicit target",
+      usage: "termlings calendar list [--agent <slug>]",
+      options: {
+        agent: "Show events assigned to a specific agent slug",
+      },
+      examples: [
+        "termlings calendar list",
+        "termlings calendar list --agent developer",
+      ],
+    },
+    show: {
+      summary: "Show one event",
+      usage: "termlings calendar show <event-id>",
+      examples: [
+        "termlings calendar show evt-001",
+      ],
+    },
+    create: {
+      summary: "Create a new event assigned to one or more agents",
+      usage: "termlings calendar create <agent-slug> [<agent-slug> ...] <title> <start-iso> <end-iso> [none|hourly|daily|weekly|monthly]",
+      notes: [
+        "Use ISO 8601 timestamps such as 2026-03-02T09:00:00Z.",
+      ],
+      examples: [
+        "termlings calendar create developer \"Daily Standup\" \"2026-03-02T09:00:00Z\" \"2026-03-02T09:30:00Z\" daily",
+      ],
+    },
+    edit: {
+      summary: "Edit an existing event",
+      usage: "termlings calendar edit <event-id> [--title TITLE] [--description DESC] [--recurrence REC] [--agents AGENT...]",
+      options: {
+        title: "Replace the event title",
+        description: "Replace the event description",
+        recurrence: "Set none|hourly|daily|weekly|monthly",
+        agents: "Replace the assigned agent slug list",
+      },
+      examples: [
+        "termlings calendar edit evt-001 --title \"Team Standup\" --agents developer designer",
+      ],
+    },
+    delete: {
+      summary: "Delete an event",
+      usage: "termlings calendar delete <event-id>",
+      examples: [
+        "termlings calendar delete evt-001",
+      ],
+    },
+    enable: {
+      summary: "Enable an event",
+      usage: "termlings calendar enable <event-id>",
+      examples: [
+        "termlings calendar enable evt-001",
+      ],
+    },
+    disable: {
+      summary: "Disable an event",
+      usage: "termlings calendar disable <event-id>",
+      examples: [
+        "termlings calendar disable evt-001",
+      ],
+    },
+  },
+}
+
+export async function handleCalendar(flags: Set<string>, positional: string[], opts: Record<string, string> = {}) {
+  if (maybeHandleCommandSchema(CALENDAR_SCHEMA, positional)) {
+    return;
+  }
+
   const { createCalendarEvent, getAllCalendarEvents, getCalendarEvent, updateCalendarEvent, deleteCalendarEvent, toggleCalendarEvent, formatCalendarEvent, formatCalendarEventList, formatRecurrence, getAgentCalendarEvents } =
     await import("../engine/calendar.js");
 
@@ -19,7 +99,7 @@ COMMANDS:
   termlings calendar list [--agent <id>]      List events (agent-specific or all)
   termlings calendar show <event-id>          Show event details
   termlings calendar create ...               Create new event
-  termlings calendar edit <event-id> ...      Modify event
+  termlings calendar edit <event-id> ...      Modify title/description/recurrence/agents
   termlings calendar delete <event-id>        Remove event
   termlings calendar enable <event-id>        Reactivate event
   termlings calendar disable <event-id>       Disable event
@@ -39,7 +119,7 @@ EXAMPLES:
   ID          Title              Start                    End                      Agents
   evt-001     Daily Standup      2026-03-02 09:00        2026-03-02 09:30         alice
 
-  $ termlings calendar edit evt-001 --title "Team Standup"
+  $ termlings calendar edit evt-001 --title "Team Standup" --agents alice,bob
 
   $ termlings calendar enable evt-001
 
@@ -60,20 +140,11 @@ BEST PRACTICES:
       process.exit(1);
     }
 
-    let agents: string[] = [];
-    let titleIdx = 2;
-
-    // Accept agent slugs (e.g., "alice", "developer") — stop when we hit the title (quoted string or non-slug)
-    while (titleIdx < positional.length) {
-      const arg = positional[titleIdx];
-      // If arg looks like a date or starts with quotes, it's the title
-      if (!arg || arg.match(/^\d{4}-/) || arg.startsWith('"') || arg.startsWith("'")) break;
-      // If next args look like they complete create syntax (title + dates), current must be last agent
-      const remaining = positional.length - titleIdx;
-      if (remaining <= 3) break; // Need at least title + start + end after agents
-      agents.push(arg);
-      titleIdx++;
-    }
+    const recurrenceValues = new Set(["none", "hourly", "daily", "weekly", "monthly"]);
+    const trailingToken = positional[positional.length - 1] || "";
+    const hasExplicitRecurrence = recurrenceValues.has(trailingToken);
+    const titleIdx = positional.length - (hasExplicitRecurrence ? 4 : 3);
+    const agents = positional.slice(2, titleIdx);
 
     if (agents.length === 0) {
       console.error("Error: At least one agent slug required (e.g., alice, developer)");
@@ -83,7 +154,7 @@ BEST PRACTICES:
     const title = positional[titleIdx];
     const startIso = positional[titleIdx + 1];
     const endIso = positional[titleIdx + 2];
-    const recurrence = (positional[titleIdx + 3] || "none") as any;
+    const recurrence = (hasExplicitRecurrence ? trailingToken : "none") as any;
 
     if (!title || !startIso || !endIso) {
       console.error("Error: Missing title, start time, or end time");
@@ -112,19 +183,12 @@ BEST PRACTICES:
     }
   }
 
-  if (subcommand === "list") {
-    const agentSlug = process.env.TERMLINGS_AGENT_SLUG || "";
-    const agentIdArg = positional[2];
+    if (subcommand === "list") {
+      const agentSlug = process.env.TERMLINGS_AGENT_SLUG || "";
+      const agentId = (opts.agent || "").trim() || (agentSlug && positional.length <= 2 ? agentSlug : null);
 
-    let agentId: string | null = null;
-    if (agentIdArg === "--agent" && positional[3]) {
-      agentId = positional[3];
-    } else if (agentSlug && !agentIdArg) {
-      agentId = agentSlug;
-    }
-
-    const events = agentId
-      ? getAgentCalendarEvents(agentId)
+      const events = agentId
+        ? getAgentCalendarEvents(agentId)
       : getAllCalendarEvents();
 
     console.log(formatCalendarEventList(events));
@@ -148,34 +212,28 @@ BEST PRACTICES:
     return;
   }
 
-  if (subcommand === "edit") {
-    const eventId = positional[2];
-    if (!eventId) {
-      console.error("Usage: termlings calendar edit <event-id> [--title TITLE] [--description DESC] [--recurrence REC] [--agents AGENT...]");
-      process.exit(1);
-    }
-
-    const updates: any = {};
-    for (let i = 3; i < positional.length; i++) {
-      if (positional[i] === "--title" && i + 1 < positional.length) {
-        updates.title = positional[++i];
-      } else if (positional[i] === "--description" && i + 1 < positional.length) {
-        updates.description = positional[++i];
-      } else if (positional[i] === "--recurrence" && i + 1 < positional.length) {
-        updates.recurrence = positional[++i];
-      } else if (positional[i] === "--agents") {
-        const agents: string[] = [];
-        i++;
-        while (i < positional.length && !positional[i]?.startsWith("--")) {
-          agents.push(positional[i]);
-          i++;
-        }
-        i--;
-        updates.assignedAgents = agents;
+    if (subcommand === "edit") {
+      const eventId = positional[2];
+      if (!eventId) {
+        console.error("Usage: termlings calendar edit <event-id> [--title TITLE] [--description DESC] [--recurrence REC] [--agents AGENT[,AGENT...]]");
+        process.exit(1);
       }
-    }
 
-    const event = updateCalendarEvent(eventId, updates);
+      const updates: any = {};
+      if (opts.title) updates.title = opts.title;
+      if (opts.description) updates.description = opts.description;
+      if (opts.recurrence) updates.recurrence = opts.recurrence;
+      if (flags.has("agents")) {
+        const inlineAgents = (opts.agents || "")
+          .split(",")
+          .map((value) => value.trim())
+          .filter(Boolean);
+        const trailingAgents = positional.slice(3).map((value) => value.trim()).filter(Boolean);
+        const assignedAgents = Array.from(new Set([...inlineAgents, ...trailingAgents]));
+        updates.assignedAgents = assignedAgents;
+      }
+
+      const event = updateCalendarEvent(eventId, updates);
     if (!event) {
       console.error(`Calendar event not found: ${eventId}`);
       process.exit(1);

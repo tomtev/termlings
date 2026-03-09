@@ -492,7 +492,7 @@ termlings calendar enable evt-001
 ## Docs
 
 - [docs/SKILLS.md](docs/SKILLS.md)
-- [src/termlings-system-message.md](src/termlings-system-message.md)
+- [src/system-context.ts](src/system-context.ts)
 - [docs/team-coordination.md](docs/team-coordination.md)
 - [docs/browser.md](docs/browser.md)
 - [docs/calendar-system.md](docs/calendar-system.md)

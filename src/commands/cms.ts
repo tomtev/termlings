@@ -22,9 +22,9 @@ const CMS_CONTRACT: AppApiContract = {
     "collection-create": {
       summary: "Create a content collection",
       stdinJson: {
-        id: "blog",
-        title: "Blog",
-        description: "Marketing posts and updates",
+        id: "resources",
+        title: "Resources",
+        description: "Guides and reference content",
       },
     },
     create: {

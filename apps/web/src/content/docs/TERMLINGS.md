@@ -410,4 +410,4 @@ termlings create alice       # Random DNA assigned
 - [BROWSER.md](BROWSER.md) - Termlings automating the web
 - `AGENTS.md` (repo root) - contributor/agent operating instructions
 - [ORGANIZATIONS.md](ORGANIZATIONS.md) - Reporting chains and org chart structure
-- [../src/termlings-system-message.md](../src/termlings-system-message.md) - In-session termling guide
+- [../src/system-context.ts](../src/system-context.ts) - Dynamic in-session context generator

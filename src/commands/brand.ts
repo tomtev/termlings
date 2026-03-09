@@ -14,6 +14,110 @@ import {
   type BrandData,
   type DeepPartial,
 } from "../engine/brand.js";
+import { maybeHandleCommandSchema, type CommandSchemaContract } from "./command-schema.js";
+
+const BRAND_SCHEMA: CommandSchemaContract = {
+  command: "brand",
+  title: "Brand",
+  summary: "Project brand profile creation, inspection, extraction, and validation",
+  notes: [
+    "Use `termlings brand show --json` to read the current canonical brand profile object.",
+    "Brand profiles live under `.termlings/brand/` and default to the `default` profile.",
+  ],
+  actions: {
+    show: {
+      summary: "Read the current brand profile",
+      usage: "termlings brand show [--profile <id>] [--json]",
+      aliases: [
+        "termlings brand [--profile <id>] [--json]",
+      ],
+      options: {
+        profile: "Brand profile id (default: default)",
+        json: "Output the full brand profile JSON",
+      },
+      examples: [
+        "termlings brand show --json",
+        "termlings brand --profile marketing",
+      ],
+    },
+    init: {
+      summary: "Create a brand profile from the default template",
+      usage: "termlings brand init [--profile <id>] [--name <name>] [--primary <hex>] [--logo <path>] [--domain <domain>] [--email <email>] [--force] [--json]",
+      options: {
+        profile: "Brand profile id (default: default)",
+        name: "Brand/product name",
+        primary: "Primary brand color token",
+        logo: "Path to the main logo asset",
+        domain: "Primary product domain",
+        email: "Default from-address",
+        force: "Replace an existing brand profile",
+        json: "Output the created brand profile JSON",
+      },
+      examples: [
+        "termlings brand init --name \"Acme\" --primary \"#111111\"",
+      ],
+    },
+    extract: {
+      summary: "Extract brand signals from project files and optionally persist them",
+      usage: "termlings brand extract [--profile <id>] [--from tailwind,shadcn,css,logos,package] [--write] [--replace] [--json]",
+      options: {
+        profile: "Brand profile id (default: default)",
+        from: "Comma-separated extraction sources",
+        write: "Persist the extracted values into the selected profile",
+        replace: "Replace existing fields instead of merging",
+        json: "Output extraction preview or merged profile JSON",
+      },
+      examples: [
+        "termlings brand extract --write --json",
+      ],
+    },
+    get: {
+      summary: "Read one brand field via dot-path",
+      usage: "termlings brand get <path> [--profile <id>] [--json]",
+      options: {
+        profile: "Brand profile id (default: default)",
+        json: "Force JSON output for scalar values",
+      },
+      examples: [
+        "termlings brand get colors.primary",
+      ],
+    },
+    set: {
+      summary: "Write one brand field via dot-path",
+      usage: "termlings brand set <path> <value> [--profile <id>] [--json-value]",
+      options: {
+        profile: "Brand profile id (default: default)",
+        "json-value": "Parse <value> as JSON before writing",
+      },
+      examples: [
+        "termlings brand set voice \"Clear, direct, no hype.\"",
+        "termlings brand set colors.palette '[\"#111111\",\"#FFFFFF\"]' --json-value",
+      ],
+    },
+    validate: {
+      summary: "Validate the selected brand profile",
+      usage: "termlings brand validate [--profile <id>] [--strict] [--json]",
+      options: {
+        profile: "Brand profile id (default: default)",
+        strict: "Enable stricter reference validation checks",
+        json: "Output { valid, issues[] } JSON",
+      },
+      examples: [
+        "termlings brand validate --strict --json",
+      ],
+    },
+    profiles: {
+      summary: "List available brand profiles",
+      usage: "termlings brand profiles [--json]",
+      options: {
+        json: "Output { active, profiles[] } JSON",
+      },
+      examples: [
+        "termlings brand profiles --json",
+      ],
+    },
+  },
+};
 
 function printHelp(): void {
   console.log(`
@@ -43,7 +147,7 @@ COMMANDS:
   set       Write one field via dot-path
   validate  Validate shape + references (strict checks optional)
   profiles  List available brand profiles
-  schema    Print canonical schema/template structure
+  schema    Print the canonical brand command contract for AI agents
 
 PROFILE:
   --profile <id>            Select brand profile (default: default)
@@ -56,7 +160,7 @@ FIELD NOTES:
   identity.email.*            Public sender/contact emails (non-secret).
   sources                     Files used by extraction (audit/debug aid).
 
-SCHEMA STRUCTURE (.termlings/brand/brand.json):
+PROFILE TEMPLATE (.termlings/brand/brand.json):
 {
   "schemaVersion": 1,
   "name": "Termlings",
@@ -156,21 +260,15 @@ function parseSetValue(flags: Set<string>, raw: string): unknown {
 }
 
 export async function handleBrand(flags: Set<string>, positional: string[], opts: Record<string, string>): Promise<void> {
+  if (maybeHandleCommandSchema(BRAND_SCHEMA, positional)) {
+    return;
+  }
+
   const subcommand = positional[1] || "show";
   const profile = resolveProfileOrExit(opts);
 
   if (flags.has("help") || subcommand === "help") {
     printHelp();
-    return;
-  }
-
-  if (subcommand === "schema") {
-    const schema = createBrandTemplate();
-    if (flags.has("json")) {
-      console.log(JSON.stringify(schema, null, 2));
-      return;
-    }
-    console.log(JSON.stringify(schema, null, 2));
     return;
   }
 
@@ -323,6 +421,6 @@ export async function handleBrand(flags: Set<string>, positional: string[], opts
   }
 
   console.error(`Unknown brand command: ${subcommand}`);
-  console.error("Run: termlings brand --help");
+  console.error("Run: termlings brand schema");
   process.exit(1);
 }

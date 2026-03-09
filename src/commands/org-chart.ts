@@ -1,6 +1,7 @@
 import { discoverLocalAgents } from "../agents/discover.js";
 import { discoverLocalHumans } from "../humans/discover.js";
 import { listSessions, type WorkspaceSession } from "../workspace/state.js";
+import { maybeHandleCommandSchema, type CommandSchemaContract } from "./command-schema.js";
 
 type OrgNodeType = "human" | "agent";
 
@@ -16,6 +17,32 @@ interface OrgNode {
   online: boolean;
   lastSeenAt: number;
   sessionIds: string[];
+}
+
+const ORG_CHART_SCHEMA: CommandSchemaContract = {
+  command: "org-chart",
+  title: "Org Chart",
+  summary: "Team hierarchy, reporting lines, and active session visibility",
+  notes: [
+    "Use reports_to and team fields in SOUL.md frontmatter to shape the graph.",
+    "The legacy alias `termlings list-agents` resolves to the same command.",
+  ],
+  actions: {
+    show: {
+      summary: "Render the org chart as text or JSON",
+      usage: "termlings org-chart [--json]",
+      aliases: [
+        "termlings list-agents [--json]",
+      ],
+      options: {
+        json: "Output nodes and edges as structured JSON",
+      },
+      examples: [
+        "termlings org-chart",
+        "termlings org-chart --json",
+      ],
+    },
+  },
 }
 
 function cleanFrontmatterValue(input?: string): string {
@@ -61,6 +88,10 @@ function truncate(value: string, maxWidth: number): string {
 }
 
 export async function handleOrgChart(flags: Set<string>, _positional: string[]): Promise<void> {
+  if (maybeHandleCommandSchema(ORG_CHART_SCHEMA, _positional)) {
+    return;
+  }
+
   if (flags.has("help")) {
     console.log(`
 🏢 Org Chart - Team hierarchy and reporting lines

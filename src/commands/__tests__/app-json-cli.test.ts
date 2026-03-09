@@ -58,6 +58,14 @@ describe("JSON-first app CLI", () => {
   })
 
   it("creates and lists app schedules through JSON", () => {
+    const scheduleSchema = runCli(root, ["analytics", "schema", "schedule.create"])
+    expect(scheduleSchema.status).toBe(0)
+    expect(scheduleSchema.stdout).toContain("\"invoke\": [")
+    expect(scheduleSchema.stdout).toContain("\"analytics\"")
+    expect(scheduleSchema.stdout).toContain("\"schedule\"")
+    expect(scheduleSchema.stdout).toContain("\"create\"")
+    expect(scheduleSchema.stdout).toContain("termlings analytics schedule create")
+
     const create = runCli(
       root,
       ["analytics", "schedule", "create", "--stdin-json", "--json"],

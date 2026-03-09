@@ -6,8 +6,64 @@
 
 import { createRequest, listRequests, getRequest } from "../engine/requests.js";
 import type { EnvScope } from "../engine/env.js";
+import { maybeHandleCommandSchema, type CommandSchemaContract } from "./command-schema.js";
+
+const REQUEST_SCHEMA: CommandSchemaContract = {
+  command: "request",
+  title: "Requests",
+  summary: "Operator-facing requests for credentials, approvals, and explicit decisions",
+  notes: [
+    "Requests create durable artifacts in the shared requests store and appear in the Requests UI.",
+    "Use messages for status updates; use requests only when you need an explicit response or credential.",
+  ],
+  actions: {
+    env: {
+      summary: "Request an environment variable or API credential",
+      usage: "termlings request env <VAR_NAME> [reason] [url] [--scope project|termlings]",
+      options: {
+        scope: "project | termlings",
+      },
+      examples: [
+        "termlings request env OPENAI_API_KEY \"Needed for app runtime\" --scope project",
+        "termlings request env AGENT_BROWSER_API_KEY \"Needed for browser automation\" --scope termlings",
+      ],
+    },
+    confirm: {
+      summary: "Ask the operator a yes/no question",
+      usage: "termlings request confirm <question>",
+      examples: [
+        "termlings request confirm \"Should we deploy to production?\"",
+      ],
+    },
+    choice: {
+      summary: "Ask the operator to choose from two or more options",
+      usage: "termlings request choice <question> <option1> <option2> [option3...]",
+      examples: [
+        "termlings request choice \"Which framework?\" \"SvelteKit\" \"Next.js\" \"Remix\"",
+      ],
+    },
+    list: {
+      summary: "List pending requests, or all requests with --all",
+      usage: "termlings request list [--all]",
+      options: {
+        all: "Include resolved and dismissed requests",
+      },
+    },
+    check: {
+      summary: "Check whether a request has been resolved",
+      usage: "termlings request check <request-id>",
+      notes: [
+        "Exit code 2 means pending, exit code 3 means dismissed.",
+      ],
+    },
+  },
+}
 
 export async function handleRequest(flags: Set<string>, positional: string[], opts: Record<string, string> = {}) {
+  if (maybeHandleCommandSchema(REQUEST_SCHEMA, positional)) {
+    return;
+  }
+
   if (flags.has("help") || !positional[1]) {
     console.log(`
 Request - Ask the operator for decisions, env vars, or approvals

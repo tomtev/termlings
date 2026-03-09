@@ -2,6 +2,8 @@ export interface AppApiActionSchema {
   summary: string
   params?: Record<string, unknown>
   stdinJson?: Record<string, unknown> | unknown[] | string | number | boolean | null
+  usage?: string
+  examples?: string[]
   notes?: string[]
 }
 
@@ -23,6 +25,45 @@ function formatActionInput(schema: AppApiActionSchema): string {
   if (schema.params) modes.push("--params")
   if (schema.stdinJson !== undefined) modes.push("--stdin-json")
   return modes.length > 0 ? modes.join(" + ") : "no input"
+}
+
+function actionPath(actionName: string): string[] {
+  return actionName.split(".").filter(Boolean)
+}
+
+function renderAppActionUsage(contract: AppApiContract, actionName: string, schema: AppApiActionSchema): string {
+  if (schema.usage) return schema.usage
+
+  const path = actionPath(actionName)
+  const base = `termlings ${contract.app} ${path.join(" ")}`
+
+  if (schema.stdinJson !== undefined) {
+    return schema.params
+      ? `printf '%s\\n' '<json>' | ${base} --stdin-json [--params '{"..."}'] [--json]`
+      : `printf '%s\\n' '<json>' | ${base} --stdin-json [--json]`
+  }
+
+  if (schema.params) {
+    return `${base} --params '{"..."}' [--json]`
+  }
+
+  return `${base} [--json]`
+}
+
+function renderAppActionSchema(contract: AppApiContract, actionName: string): Record<string, unknown> {
+  const path = actionPath(actionName)
+  const schema = contract.actions[actionName]!
+  return {
+    name: actionName,
+    path,
+    invoke: [contract.app, ...path],
+    summary: schema.summary,
+    usage: renderAppActionUsage(contract, actionName, schema),
+    params: schema.params || null,
+    stdinJson: schema.stdinJson ?? null,
+    notes: schema.notes || [],
+    examples: schema.examples || [],
+  }
 }
 
 export function printJson(value: unknown): void {
@@ -143,12 +184,7 @@ export function renderAppApiSchema(contract: AppApiContract, actionName?: string
       app: contract.app,
       title: contract.title,
       summary: contract.summary,
-      actions: sortedActionNames(contract).map((name) => ({
-        name,
-        summary: contract.actions[name]!.summary,
-        params: contract.actions[name]!.params || null,
-        stdinJson: contract.actions[name]!.stdinJson ?? null,
-      })),
+      actions: sortedActionNames(contract).map((name) => renderAppActionSchema(contract, name)),
       env: contract.env || [],
       notes: contract.notes || [],
     }
@@ -162,10 +198,14 @@ export function renderAppApiSchema(contract: AppApiContract, actionName?: string
   return {
     app: contract.app,
     action: actionName,
+    path: actionPath(actionName),
+    invoke: [contract.app, ...actionPath(actionName)],
     summary: schema.summary,
+    usage: renderAppActionUsage(contract, actionName, schema),
     params: schema.params || null,
     stdinJson: schema.stdinJson ?? null,
     notes: schema.notes || [],
+    examples: schema.examples || [],
   }
 }
 

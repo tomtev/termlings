@@ -6,7 +6,7 @@ import { resolve as resolvePath, join as joinPath } from "path"
 import { readMessages, getIpcDir } from "../engine/ipc.js"
 import { resolveWorkspaceAppsForAgent } from "../engine/apps.js"
 import { sanitizeManagedRuntimeEnv } from "../engine/runtime-processes.js"
-import { renderManageAgentsContext, renderSystemContext } from "../system-context.js"
+import { renderManageAgentsContext, renderSoulContext, renderSystemContext } from "../system-context.js"
 import {
   appendWorkspaceMessage,
   ensureWorkspaceDirs,
@@ -46,6 +46,66 @@ function runtimeLabelForAdapter(adapter: AgentAdapter): string {
   return fallback || adapter.bin || "Unknown"
 }
 
+function buildSystemContextDebugMarkdown(input: {
+  agentName: string
+  agentSlug: string
+  sessionId: string
+  runtimeName: string
+  context: string
+  generatedAt?: number
+}): string {
+  const generatedAt = new Date(input.generatedAt ?? Date.now()).toISOString()
+
+  return [
+    "# System Context Debug",
+    "",
+    `- Agent: ${input.agentName}`,
+    `- Slug: ${input.agentSlug}`,
+    `- Session ID: ${input.sessionId}`,
+    `- Runtime: ${input.runtimeName}`,
+    `- Generated At: ${generatedAt}`,
+    "- Captured: before per-launch runtime marker injection",
+    "",
+    "---",
+    "",
+    input.context.trim(),
+    "",
+  ].join("\n")
+}
+
+export function writeSystemContextDebugFile(input: {
+  agentName: string
+  agentSlug: string
+  sessionId: string
+  runtimeName: string
+  context: string
+  root?: string
+  generatedAt?: number
+}): string | undefined {
+  const agentSlug = (input.agentSlug || "").trim()
+  const context = input.context.trim()
+  if (!agentSlug || !context) return undefined
+
+  const root = input.root || process.cwd()
+  const agentDir = resolvePath(root, ".termlings", "agents", agentSlug)
+  if (!existsSync(agentDir)) return undefined
+
+  const debugPath = joinPath(agentDir, "system-context.debug.md")
+  writeFileSync(
+    debugPath,
+    buildSystemContextDebugMarkdown({
+      agentName: input.agentName,
+      agentSlug,
+      sessionId: input.sessionId,
+      runtimeName: input.runtimeName,
+      context,
+      generatedAt: input.generatedAt,
+    }),
+    "utf8",
+  )
+  return debugPath
+}
+
 function loadVisionAddendum(): string {
   try {
     const visionPath = resolvePath(".termlings", "VISION.md")
@@ -58,20 +118,38 @@ function loadVisionAddendum(): string {
   }
 }
 
-function parseSoul(): { name: string; dna: string } {
+function parseSoul(): {
+  name: string
+  dna: string
+  description?: string
+  title?: string
+  title_short?: string
+  role?: string
+  team?: string
+  reports_to?: string
+  manage_agents?: boolean
+} {
   const slug = (process.env.TERMLINGS_AGENT_SLUG || "").trim()
   if (!slug) return { name: "", dna: "" }
   const soulPath = resolvePath(".termlings", "agents", slug, "SOUL.md")
   if (!existsSync(soulPath)) return { name: "", dna: "" }
   try {
     const content = readFileSync(soulPath, "utf8")
-    const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+    const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)/)
     const yaml = frontmatterMatch?.[1] ?? ""
+    const description = (frontmatterMatch?.[2] ?? "").trim()
     const nameMatch = yaml.match(/^name:\s*(.+)$/m)
     const dnaMatch = yaml.match(/^dna:\s*(.+)$/m)
     return {
       name: nameMatch ? nameMatch[1]!.trim().replace(/^['"]|['"]$/g, "") : "",
       dna: dnaMatch ? dnaMatch[1]!.trim().replace(/^['"]|['"]$/g, "") : "",
+      description,
+      title: yaml.match(/^title:\s*(.+)$/m)?.[1]?.trim().replace(/^['"]|['"]$/g, ""),
+      title_short: yaml.match(/^title_short:\s*(.+)$/m)?.[1]?.trim().replace(/^['"]|['"]$/g, ""),
+      role: yaml.match(/^role:\s*(.+)$/m)?.[1]?.trim().replace(/^['"]|['"]$/g, ""),
+      team: yaml.match(/^team:\s*(.+)$/m)?.[1]?.trim().replace(/^['"]|['"]$/g, ""),
+      reports_to: yaml.match(/^reports_to:\s*(.+)$/m)?.[1]?.trim().replace(/^['"]|['"]$/g, ""),
+      manage_agents: yaml.match(/^manage_agents:\s*(.+)$/m)?.[1]?.trim().replace(/^['"]|['"]$/g, "").toLowerCase() === "true",
     }
   } catch {
     return { name: "", dna: "" }
@@ -315,6 +393,8 @@ export async function launchLocalAgent(
     title: localAgent.soul?.title,
     title_short: localAgent.soul?.title_short,
     role: localAgent.soul?.role,
+    team: localAgent.soul?.team,
+    reports_to: localAgent.soul?.reports_to,
     manage_agents: localAgent.soul?.manage_agents,
   })
 }
@@ -334,6 +414,8 @@ export async function launchAgent(
     title?: string;
     title_short?: string;
     role?: string;
+    team?: string;
+    reports_to?: string;
     manage_agents?: boolean;
   },
 ): Promise<never> {
@@ -354,6 +436,8 @@ export async function launchAgent(
   const agentTitle = soulData?.title
   const agentTitleShort = soulData?.title_short
   const agentRole = soulData?.role
+  const agentTeam = soulData?.team || soul.team
+  const agentReportsTo = soulData?.reports_to || soul.reports_to
   const agentCanManageAgents = Boolean(soulData?.manage_agents)
   const agentDescription =
     termlingOpts.description
@@ -362,15 +446,24 @@ export async function launchAgent(
     || "You are an autonomous agent exploring and interacting with the world."
   const workspaceApps = resolveWorkspaceAppsForAgent(agentSlug || undefined)
 
-  let finalContext = renderSystemContext({
+  const soulContext = renderSoulContext({
     name: agentName,
+    slug: agentSlug || undefined,
     sessionId,
+    dna: agentDna,
     title: agentTitle,
     titleShort: agentTitleShort,
     role: agentRole,
+    team: agentTeam,
+    reportsTo: agentReportsTo,
     description: agentDescription,
+  })
+
+  const systemContext = renderSystemContext({
     apps: workspaceApps,
   })
+
+  let finalContext = [soulContext, systemContext].filter(Boolean).join("\n\n")
 
   if (agentCanManageAgents) {
     const manageAgentsContext = renderManageAgentsContext()
@@ -382,6 +475,18 @@ export async function launchAgent(
   }
 
   finalContext += loadVisionAddendum()
+
+  try {
+    writeSystemContextDebugFile({
+      agentName,
+      agentSlug,
+      sessionId,
+      runtimeName: adapter.bin,
+      context: finalContext,
+    })
+  } catch {
+    // Debug artifact writes should not block agent launch.
+  }
 
   // Per-launch marker used only to link this runtime process to its transcript file.
   // It improves mapping accuracy when multiple agents spawn concurrently.
@@ -764,28 +869,34 @@ export async function launchAgent(
       }
     } catch {}
 
-    return `[Message from ${msg.fromName}${title}. id: ${messageId}]: ${msg.text}`
+    return `[Message from ${msg.fromName}${title}. id: ${messageId}]: ${msg.text}\n(Reply with: termlings message ${messageId} "your response")`
   }
 
   // Wait for initial output to settle before attempting message injection.
   lastTerminalOutputAt = Date.now()
 
+  // Buffer for messages read while terminal is busy.
+  const pendingMessages: Awaited<ReturnType<typeof readMessages>> = []
+
   const pollTimer = setInterval(async () => {
     if (processingInput) return
-    if (isTerminalBusy()) return
+    // Always read messages from disk so they don't sit undelivered.
     try {
       const { readQueuedMessages } = await import("../engine/ipc.js")
       const messages = readMessages(sessionId)
       const slugQueued = agentSlug ? readQueuedMessages(agentSlug) : []
       const dnaQueued = readQueuedMessages(agentDna)
-      const queuedMessages = [...slugQueued, ...dnaQueued]
-      const allMessages = [...messages, ...queuedMessages]
+      pendingMessages.push(...messages, ...slugQueued, ...dnaQueued)
+    } catch {}
 
-      if (allMessages.length === 0) return
+    if (pendingMessages.length === 0) return
+    if (isTerminalBusy()) return
 
+    try {
       clearTerminalTyping()
       processingInput = true
-      for (const msg of allMessages) {
+      while (pendingMessages.length > 0) {
+        const msg = pendingMessages.shift()!
         const line = await formatMessageHeader(msg)
         await injectMessageLine(line)
       }

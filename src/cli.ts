@@ -102,7 +102,7 @@ const VALUE_FLAGS = new Set([
   "agent", "account", "folder", "scope", "type", "status", "stage", "tags", "query", "attrs",
   "strategy", "task",
   "params",
-  "provider", "last", "link", "media", "platform", "collection", "file", "body-file", "body_file", "user", "dir", "remoteDir", "identity", "description", "mode",
+  "provider", "last", "link", "media", "platform", "collection", "file", "body-file", "body_file", "user", "dir", "remoteDir", "identity", "description", "mode", "recurrence", "agents",
   "docker-shell", "docker_shell", "container-dir", "container_dir", "containerDir",
   "timezone", "weekday", "date",
 ]);

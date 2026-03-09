@@ -61,14 +61,17 @@ const ADS_CONTRACT: AppApiContract = {
         provider: "meta",
         last: "30d",
         timezone: "Europe/Oslo",
-        weekday: "mon",
-        date: "2026-03-10",
       },
+      notes: [
+        "Use `weekday` only for weekly schedules.",
+        "Use `date` only for one-time schedules with `recurrence: \"once\"`.",
+        "The only supported scheduled action is `sync`.",
+      ],
     },
     "schedule.remove": {
       summary: "Remove an ads schedule",
       params: {
-        id: "ads_schedule_abc123",
+        id: "appsch_1773055000000_ab12cd",
       },
     },
   },

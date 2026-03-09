@@ -2,6 +2,87 @@ import { spawn } from "child_process"
 import { relative } from "path"
 
 import { listSkills } from "../engine/skills.js"
+import { maybeHandleCommandSchema, type CommandSchemaContract } from "./command-schema.js"
+
+const SKILLS_SCHEMA: CommandSchemaContract = {
+  command: "skills",
+  title: "Skills",
+  summary: "Discover local skills and proxy skills.sh operations",
+  notes: [
+    "Discovery order: .agents/skills, .claude/skills, then ~/.claude/skills.",
+    "Wrapped commands call `npx skills ...` under the hood.",
+  ],
+  actions: {
+    list: {
+      summary: "List workspace-visible skills",
+      usage: "termlings skills list [--json]",
+      options: {
+        json: "Output { skills: [...] } JSON",
+      },
+      examples: [
+        "termlings skills list --json",
+      ],
+    },
+    install: {
+      summary: "Install a skill source through skills.sh",
+      usage: "termlings skills install <source> [skills options...]",
+      notes: [
+        "Additional flags are passed directly to `npx skills add ...`.",
+      ],
+      examples: [
+        "termlings skills install vercel-labs/agent-skills --skill find-skills --yes",
+      ],
+    },
+    check: {
+      summary: "Check installed skills",
+      usage: "termlings skills check [skills options...]",
+      notes: [
+        "Additional flags are passed directly to `npx skills check ...`.",
+      ],
+      examples: [
+        "termlings skills check",
+      ],
+    },
+    update: {
+      summary: "Update installed skills",
+      usage: "termlings skills update [skills options...]",
+      notes: [
+        "Additional flags are passed directly to `npx skills update ...`.",
+      ],
+      examples: [
+        "termlings skills update",
+      ],
+    },
+    find: {
+      summary: "Search installable skills",
+      usage: "termlings skills find [query...]",
+      examples: [
+        "termlings skills find deployment",
+      ],
+    },
+    remove: {
+      summary: "Remove installed skills",
+      usage: "termlings skills remove [skills...]",
+      examples: [
+        "termlings skills remove find-skills",
+      ],
+    },
+    init: {
+      summary: "Initialize a new skill scaffold",
+      usage: "termlings skills init [name]",
+      examples: [
+        "termlings skills init browser-audit",
+      ],
+    },
+    cli: {
+      summary: "Pass raw arguments through to skills.sh",
+      usage: "termlings skills cli <skills-command> [args...]",
+      examples: [
+        "termlings skills cli list -g",
+      ],
+    },
+  },
+}
 
 function printHelp(): void {
   console.log(`
@@ -81,11 +162,15 @@ async function runSkillsCli(args: string[]): Promise<void> {
 
 function usageError(message: string): never {
   console.error(message)
-  console.error("Run `termlings skills --help` for usage.")
+  console.error("Run `termlings skills schema` for the command contract.")
   process.exit(1)
 }
 
 export async function handleSkills(flags: Set<string>, positional: string[]): Promise<void> {
+  if (maybeHandleCommandSchema(SKILLS_SCHEMA, positional)) {
+    return
+  }
+
   const rawArgs = getRawSkillsArgs()
   const rawSubcommand = rawArgs[1]
   const subcommand = rawSubcommand || positional[1] || "list"

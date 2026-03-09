@@ -34,14 +34,18 @@ Apps can be disabled globally per workspace or per agent.
 
 ```bash
 # Instant start
-npx termlings@latest --spawn 
+npx termlings@latest --spawn
 # Instant start with a specific template
 npx termlings@latest --spawn --template personal-assistant
+# Docker (most secure — fully sandboxed)
+npx termlings@latest --spawn --docker
 # Manual
 bun add -g termlings@latest
 # or
 npm install -g termlings@latest
 ```
+
+The `--docker` flag runs each agent in an isolated Docker container with no access to your host filesystem or network. This is the most secure way to run autonomous agents.
 
 Runtime requirement: Bun must be installed because the `termlings` executable runs via Bun.
 
