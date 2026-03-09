@@ -1,3 +1,4 @@
+import { readFileSync } from "fs"
 import { describe, expect, it } from "vitest"
 
 import {
@@ -5,6 +6,8 @@ import {
   getTopLevelInitOptions,
   listUnsupportedTopLevelFlags,
 } from "../top-level-startup.js"
+
+const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }
 
 describe("top-level startup helpers", () => {
   it("allows --template when used with --spawn", () => {
@@ -59,6 +62,38 @@ describe("top-level startup helpers", () => {
         "spawn",
         "--all",
         "--quiet",
+      ],
+    })
+  })
+
+  it("uses npm exec when top-level spawn is launched via npx", () => {
+    expect(
+      buildTopLevelSpawnWorkerInvocation({
+        root: "/workspace/project",
+        argv1: "/private/tmp/.npm/_npx/abc/node_modules/termlings/bin/termlings.js",
+        execPath: "/opt/homebrew/bin/bun",
+        docker: true,
+        env: {
+          npm_execpath: "/Users/test/.nvm/versions/node/v22.0.0/lib/node_modules/npm/bin/npm-cli.js",
+          npm_command: "exec",
+          npm_lifecycle_event: "npx",
+          npm_node_execpath: "/Users/test/.nvm/versions/node/v22.0.0/bin/node",
+        } as NodeJS.ProcessEnv,
+      }),
+    ).toEqual({
+      command: "/Users/test/.nvm/versions/node/v22.0.0/bin/node",
+      args: [
+        "/Users/test/.nvm/versions/node/v22.0.0/lib/node_modules/npm/bin/npm-cli.js",
+        "exec",
+        "--yes",
+        "--package",
+        `termlings@${pkg.version}`,
+        "--",
+        "termlings",
+        "spawn",
+        "--all",
+        "--quiet",
+        "--docker",
       ],
     })
   })

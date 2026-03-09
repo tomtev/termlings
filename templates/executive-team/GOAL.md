@@ -1,4 +1,4 @@
-# Vision
+# Goal
 
 Run an autonomous company operating system that converts strategy into measurable outcomes.
 

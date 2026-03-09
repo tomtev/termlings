@@ -43,6 +43,7 @@ async function startSpawnAllInBackground(
     execPath: process.execPath,
     docker,
     allowHostYolo,
+    env: process.env,
   });
   const sessionEnv = {
     ...(process.env as Record<string, string | undefined>),
@@ -72,6 +73,25 @@ async function startSpawnAllInBackground(
     const pid = child.pid;
     if (!Number.isFinite(pid) || (pid ?? 0) <= 0) {
       return { ok: false, error: "failed to launch spawn worker" };
+    }
+
+    const earlyExit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null } | null>((resolve) => {
+      let settled = false;
+      const finish = (value: { code: number | null; signal: NodeJS.Signals | null } | null) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      };
+      const timer = setTimeout(() => finish(null), 400);
+      child.once("error", () => finish({ code: 1, signal: null }));
+      child.once("exit", (code, signal) => finish({ code, signal }));
+    });
+    if (earlyExit && (earlyExit.code !== 0 || earlyExit.signal)) {
+      const detail = earlyExit.signal
+        ? `spawn worker exited early with signal ${earlyExit.signal}`
+        : `spawn worker exited early with code ${earlyExit.code ?? 1}`;
+      return { ok: false, error: detail };
     }
 
     return { ok: true, pid: pid as number };

@@ -1,4 +1,4 @@
-# Vision
+# Goal
 
 Build a product people actively want to use and pay for.
 

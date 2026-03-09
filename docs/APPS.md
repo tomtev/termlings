@@ -126,7 +126,7 @@ App-aware context injection works like this:
 6. The final prompt is injected into the runtime:
    - Claude: `--append-system-prompt "<context>"`
    - Codex: trailing injected prompt argument
-7. `.termlings/VISION.md` is appended after the generated system context if present.
+7. `.termlings/GOAL.md` is appended after the generated system context if present.
 
 Current implementation points:
 

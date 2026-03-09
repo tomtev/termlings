@@ -162,7 +162,7 @@ You should not run these commands since they mostly work inside a agent session.
 
 ```text
 .termlings/
-  VISION.md
+  GOAL.md
   .env
   workspace.json
   agents/
@@ -248,7 +248,7 @@ You should not run these commands since they mostly work inside a agent session.
 
 What each file/folder is for:
 
-- `.termlings/VISION.md` - simple project vision injected into every agent context.
+- `.termlings/GOAL.md` - simple project goal injected into every agent context.
 - `.termlings/.env` - Termlings-internal environment values resolved from scoped requests.
 - `.termlings/workspace.json` - workspace metadata, TUI settings, and app availability.
 - `.termlings/agents/<slug>/SOUL.md` - saved agent identity, title, role, DNA, and optional `sort_order` for TUI ordering.

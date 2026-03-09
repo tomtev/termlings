@@ -32,7 +32,7 @@ Context injection is implemented in `src/agents/launcher.ts` and adapter files u
 `loadContext()` reads:
 
 - `src/system-context.ts` → `renderSystemContext()` (dynamic, app-aware)
-- `.termlings/VISION.md` (appended when present, wrapped in `<TERMLINGS-VISION>` tags)
+- `.termlings/GOAL.md` (appended when present, wrapped in `<TERMLINGS-GOAL>` tags)
 
 ### 2) Apply runtime substitutions
 
@@ -101,16 +101,16 @@ Base context comes from:
 
 - `src/system-context.ts` → `renderSystemContext()`
 
-Project vision is appended when present:
+Project goal is appended when present:
 
-- `.termlings/VISION.md`
+- `.termlings/GOAL.md`
 
-Injected vision is wrapped as:
+Injected goal is wrapped as:
 
 ```text
-<TERMLINGS-VISION>
-...contents of .termlings/VISION.md...
-</TERMLINGS-VISION>
+<TERMLINGS-GOAL>
+...contents of .termlings/GOAL.md...
+</TERMLINGS-GOAL>
 ```
 
 ## State & Persistence

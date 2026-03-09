@@ -478,7 +478,7 @@ role: Build and ship product features with rigor.
           <aside class="tree-pane">
             <div class="pane-title">Explorer</div>
             <div class="tree-line depth-0"><span class="caret">▾</span><span class="folder">.termlings</span></div>
-            <div class="tree-line depth-1"><span class="file">VISION.md</span></div>
+            <div class="tree-line depth-1"><span class="file">GOAL.md</span></div>
             <div class="tree-line depth-1"><span class="caret">▾</span><span class="folder">agents</span></div>
             <div class="tree-line depth-2"><span class="caret">▾</span><span class="folder">developer</span></div>
             <div class="tree-line depth-3 active"><span class="file">SOUL.md</span></div>

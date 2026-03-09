@@ -238,7 +238,7 @@ CREATES:
   ├── store/                 Persistent data
   ├── brand/                 Brand profile data
   ├── browser/               Browser runtime state (history, process, config)
-  └── VISION.md              Project vision injected into agent context (template-provided)
+  └── GOAL.md                Project goal injected into agent context (template-provided)
 
 TEMPLATES:
   Currently available:

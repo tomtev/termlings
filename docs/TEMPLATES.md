@@ -35,7 +35,7 @@ agents/
 humans/
 store/
 brand/
-VISION.md
+GOAL.md
 README.md
 spawn.json
 ```

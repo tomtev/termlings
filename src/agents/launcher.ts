@@ -106,13 +106,13 @@ export function writeSystemContextDebugFile(input: {
   return debugPath
 }
 
-function loadVisionAddendum(): string {
+function loadGoalAddendum(): string {
   try {
-    const visionPath = resolvePath(".termlings", "VISION.md")
-    if (!existsSync(visionPath)) return ""
-    const vision = readFileSync(visionPath, "utf8").trim()
-    if (!vision) return ""
-    return `\n\n<TERMLINGS-VISION>\n${vision}\n</TERMLINGS-VISION>\n`
+    const goalPath = resolvePath(".termlings", "GOAL.md")
+    if (!existsSync(goalPath)) return ""
+    const goal = readFileSync(goalPath, "utf8").trim()
+    if (!goal) return ""
+    return `\n\n<TERMLINGS-GOAL>\n${goal}\n</TERMLINGS-GOAL>\n`
   } catch {
     return ""
   }
@@ -474,7 +474,7 @@ export async function launchAgent(
     }
   }
 
-  finalContext += loadVisionAddendum()
+  finalContext += loadGoalAddendum()
 
   try {
     writeSystemContextDebugFile({

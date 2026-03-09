@@ -7,7 +7,7 @@ This plan describes a native Termlings design system for AI-authored visual asse
 Create a fast local design workflow with:
 
 - one canonical source format on disk: `design.tsx`
-- semantic classes derived from the current brand profile
+- Tailwind-style utility classes compiled into Satori-supported CSS
 - deterministic rendering through Satori and Resvg
 - dynamic props for reusable asset templates
 - a plugin-first Figma bridge for import/export
@@ -114,9 +114,29 @@ This tree is an internal runtime representation, not a second source file.
 
 ## Semantic Classes
 
-`className` is allowed, but it must be semantic and brand-derived.
+`className` is allowed, and v1 should support the full Tailwind utility surface that can be compiled into Satori-supported CSS.
 
-Supported color classes should come from the current brand profile plus a small local semantic token layer.
+The important constraint is not "small subset of Tailwind." The important constraint is "only what Satori can actually render."
+
+So the compiler should:
+
+- accept any utility that maps cleanly to supported Satori CSS
+- reject unsupported utilities during validation with exact reasons
+- keep semantic brand-derived tokens for colors and theme slots
+
+Supported categories should include, where they compile cleanly:
+
+- display and flexbox layout
+- positioning and inset
+- spacing and sizing
+- borders and radius
+- typography, text alignment, white-space, and line clamp
+- backgrounds, semantic colors, opacity, shadows, filters, and clip paths
+- object fit and object position
+- 2D transforms
+- supported overflow behavior
+
+Supported color classes should still come from the current brand profile plus a local semantic token layer.
 
 Examples:
 
@@ -134,6 +154,7 @@ Non-goal for v1:
 - arbitrary hex classes
 - responsive variants
 - hover/dark/pseudo classes
+- utilities that map to unsupported Satori CSS such as browser-only stacking or 3D transform behavior
 
 ## Brand Integration
 
@@ -301,6 +322,7 @@ The REST API should be used for remote reading and sync, not as the primary writ
 ## Non-Goals For V1
 
 - full Tailwind support
+- utilities outside Satori's supported CSS subset
 - arbitrary JSX and side effects
 - browser DOM rendering
 - direct `.fig` generation/parsing

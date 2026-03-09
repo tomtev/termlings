@@ -1,328 +1,432 @@
-# Termlings Design
+# Design
 
-Status: exploratory idea
+Status: proposed app contract
 
-Current planned direction now lives in `docs/plans/DESIGN-SYSTEM.md`.
+This document rewrites the earlier `design.json` exploration into the same CLI shape as the other Termlings apps.
+
+The current source-of-truth direction should be:
+
+- author design assets as `.design.tsx`
+- inspect them through `termlings design ...`
+- use semantic Tailwind-style classes in `className`
+- render deterministically through a Termlings-owned runtime
 
 ## Goal
 
-Create a native `termlings design` system with:
+Create a native `termlings design` app for AI-authored visual assets:
 
-- a small local `design.json` format that AI can edit quickly
-- semantic brand-aware styling
-- dynamic props for text and media-driven assets
-- deterministic rendering to SVG/PNG
-- optional Figma import/export later through adapters, not as the source of truth
+- local-first source files
+- stable node ids for patching and inspection
+- Tailwind-like authoring across the CSS surface Satori can actually render
+- brand-aware tokens from `termlings brand`
+- fast `brief`, `tree`, `inspect`, `render`, and `validate` commands
 
-## Why
+## Storage
 
-Loopwind is useful as a renderer, but it should not define the Termlings design contract.
-
-The long-term product need is:
-
-- local-first design files
-- fast AI patchability
-- stable semantic IDs
-- simple structure
-- reusable asset templates with dynamic content
-- Figma compatibility when needed
-
-That points to a Termlings-owned JSON AST instead of wrapping another tool's config format.
-
-## Principles
-
-- JSON first
-- auto-layout first
-- semantic tokens first
-- stable node `id` everywhere
-- `tw` allowed as styling sugar
-- constrained Tailwind subset only
-- no raw CSS object as canonical authoring format
-
-## Proposed Layout
+Proposed file layout:
 
 ```text
 .termlings/
-  brand/
-    brand.json
   design/
-    hero-card.design.json
-    pricing-card.design.json
+    hero-card.design.tsx
+    pricing-card.design.tsx
     components/
-      marketing-card.design.json
+      marketing-card.design.tsx
+      stat-row.design.tsx
+  store/
+    design/
+      renders/
+      history.jsonl
 ```
 
-## File Shape
+Rules:
 
-```json
-{
-  "version": 1,
-  "brand": "default",
-  "tokens": {
-    "primary": "$brand.primary",
-    "secondary": "$brand.secondary",
-    "accent": "$brand.accent",
-    "background": "$brand.background",
-    "foreground": "$brand.foreground",
-    "card": "#ffffff",
-    "border": "#e5e7eb",
-    "muted": "#f4f4f5",
-    "muted-foreground": "#71717a"
+- `.termlings/design/` holds checked-in source files
+- `.termlings/store/design/` holds generated outputs, cache, and render history
+- `design.tsx` is the only canonical source format
+- no checked-in `design.json` artifact
+
+## Canonical API
+
+Inspect the contract first:
+
+```bash
+termlings design schema
+termlings design schema render
+```
+
+Read actions should use `--params` and `--json`:
+
+```bash
+termlings design list --json
+termlings design brief --params '{"id":"hero-card"}' --json
+termlings design tree --params '{"id":"hero-card"}' --json
+termlings design inspect --params '{"id":"hero-card","node":"headline"}' --json
+termlings design props --params '{"id":"hero-card"}' --json
+termlings design validate --params '{"id":"hero-card"}' --json
+```
+
+Write and render actions should use `--stdin-json` when the payload is structured:
+
+```bash
+printf '%s\n' '{"id":"hero-card","template":"social-card"}' \
+  | termlings design init --stdin-json --json
+
+printf '%s\n' '{"id":"hero-card","format":"png","out":"/tmp/hero.png","props":{"title":"Launch faster"}}' \
+  | termlings design render --stdin-json --json
+
+printf '%s\n' '{"id":"hero-card","write":true}' \
+  | termlings design fmt --stdin-json --json
+```
+
+The important design rule is the same as the rest of the newer apps:
+
+- `schema` is the AI contract
+- `--params` is for ids, selectors, inspection, and filters
+- `--stdin-json` is for structured writes, renders, and mutations
+- `--json` is the default machine-readable output mode agents should use
+
+## Source File Shape
+
+Use `.design.tsx` with a constrained JSX runtime:
+
+```tsx
+/** @jsxImportSource termlings/design */
+
+export const meta = {
+  id: "hero-card",
+  title: "Hero Card",
+  intent: "Launch social card",
+  size: { width: 1200, height: 630 }
+}
+
+export const props = {
+  title: {
+    type: "string",
+    default: "Build autonomous teams in the terminal"
   },
-  "screens": [
-    {
-      "id": "hero",
-      "type": "box",
-      "width": 1200,
-      "height": 630,
-      "tw": "bg-background text-foreground p-12",
-      "children": [
-        {
-          "id": "panel",
-          "type": "box",
-          "tw": "bg-card border border-border rounded-3xl p-10 flex flex-col gap-6",
-          "children": [
-            {
-              "id": "eyebrow",
-              "type": "text",
-              "text": "TERMLINGS",
-              "tw": "text-sm font-semibold tracking-wide text-primary"
-            },
-            {
-              "id": "headline",
-              "type": "text",
-              "text": "Build autonomous teams in the terminal",
-              "tw": "text-6xl font-bold text-foreground"
-            },
-            {
-              "id": "subhead",
-              "type": "text",
-              "text": "Messaging, tasks, browser workflows, and shared workspace state.",
-              "tw": "text-2xl text-muted-foreground"
-            },
-            {
-              "id": "cta",
-              "type": "box",
-              "tw": "bg-primary rounded-xl px-6 py-4 flex flex-row items-center justify-center",
-              "children": [
-                {
-                  "id": "cta-label",
-                  "type": "text",
-                  "text": "Get Started",
-                  "tw": "text-lg font-semibold text-background"
-                }
-              ]
-            }
-          ]
-        }
-      ]
-    }
-  ]
+  subtitle: {
+    type: "string",
+    default: "Messaging, tasks, browser workflows, and shared state."
+  },
+  ctaLabel: {
+    type: "string",
+    default: "Get Started"
+  },
+  logo: {
+    type: "image",
+    default: "./assets/logo-mark.png"
+  }
+}
+
+export default function Design({ title, subtitle, ctaLabel, logo }) {
+  return (
+    <Screen
+      id="hero"
+      className="flex flex-col bg-background text-foreground p-12"
+    >
+      <Frame
+        id="panel"
+        className="flex flex-col gap-6 rounded-3xl border border-border bg-card p-10 shadow-sm"
+      >
+        <Frame id="top" className="flex flex-row items-center gap-3">
+          <Image
+            id="logo"
+            bind="logo"
+            src={logo}
+            className="h-12 w-12 rounded-xl bg-muted object-contain"
+          />
+          <Text
+            id="eyebrow"
+            className="text-sm font-semibold uppercase tracking-widest text-primary"
+          >
+            Termlings
+          </Text>
+        </Frame>
+
+        <Text
+          id="headline"
+          bind="title"
+          fitText={{ mode: "shrink", min: 28, max: 72, maxLines: 3 }}
+          className="max-w-4xl text-6xl font-bold leading-tight text-foreground"
+        >
+          {title}
+        </Text>
+
+        <Text
+          id="subhead"
+          bind="subtitle"
+          fitText={{ mode: "height", maxLines: 4 }}
+          className="max-w-3xl text-2xl leading-snug text-muted-foreground"
+        >
+          {subtitle}
+        </Text>
+
+        <Frame id="cta" className="mt-2 flex flex-row items-center gap-3">
+          <Frame
+            id="cta-pill"
+            className="flex flex-row items-center justify-center rounded-2xl bg-primary px-6 py-4"
+          >
+            <Text
+              id="cta-label"
+              bind="ctaLabel"
+              fitText={{ mode: "shrink", min: 14, max: 20, maxLines: 1 }}
+              className="text-lg font-semibold text-primary-foreground"
+            >
+              {ctaLabel}
+            </Text>
+          </Frame>
+          <Text id="meta" className="text-sm text-muted-foreground">
+            termlings.com
+          </Text>
+        </Frame>
+      </Frame>
+    </Screen>
+  )
 }
 ```
 
-## Node Types
+## Shared Component Shape
 
-Keep v1 very small:
+Shared components should still be plain `.design.tsx` modules with stable ids and normal props:
 
-- `box`
-- `text`
-- `image`
-- `svg`
-- `instance`
+```tsx
+/** @jsxImportSource termlings/design */
 
-## Layout Rules
+export const meta = {
+  id: "stat-row",
+  title: "Stat Row"
+}
 
-- `box` defaults to vertical flow unless `tw` says otherwise
-- supported layout classes should be a small subset:
-  - `flex`
-  - `flex-row`
-  - `flex-col`
-  - `items-*`
-  - `justify-*`
-  - `gap-*`
-  - `p-*`, `px-*`, `py-*`
-  - `w-full`, `h-full`
-  - `rounded-*`
-  - semantic color classes
-- no responsive variants in v1
-- no hover, dark, or pseudo selectors
-- no arbitrary values in v1
+export const props = {
+  label: { type: "string", default: "Time saved" },
+  value: { type: "string", default: "12h / week" }
+}
 
-## Styling Model
-
-`tw` is authoring sugar, not the core model.
-
-Internally the renderer should normalize `tw` into concrete style props before rendering.
-
-That gives AI a fast surface area:
-
-- edit text
-- change `tw`
-- move nodes by changing tree structure
-- patch nodes by `id`
-
-## Dynamic Props
-
-`design.json` should support typed props so the same asset can be rendered with different content.
-
-Example:
-
-```json
-{
-  "version": 1,
-  "brand": "default",
-  "props": {
-    "title": {
-      "type": "string",
-      "default": "Build autonomous teams in the terminal"
-    },
-    "subtitle": {
-      "type": "string",
-      "default": "Messaging, tasks, browser workflows, and shared workspace state."
-    },
-    "ctaLabel": {
-      "type": "string",
-      "default": "Get Started"
-    }
-  },
-  "screens": [
-    {
-      "id": "hero",
-      "type": "box",
-      "width": 1200,
-      "height": 630,
-      "tw": "bg-background text-foreground p-12",
-      "children": [
-        {
-          "id": "headline",
-          "type": "text",
-          "text": { "prop": "title" },
-          "tw": "text-6xl font-bold text-foreground",
-          "fitText": {
-            "mode": "shrink",
-            "min": 28,
-            "max": 72,
-            "maxLines": 3
-          }
-        },
-        {
-          "id": "subhead",
-          "type": "text",
-          "text": { "prop": "subtitle" },
-          "tw": "text-2xl text-muted-foreground",
-          "fitText": {
-            "mode": "height",
-            "maxLines": 4
-          }
-        },
-        {
-          "id": "cta-label",
-          "type": "text",
-          "text": { "prop": "ctaLabel" },
-          "tw": "text-lg font-semibold text-background",
-          "fitText": {
-            "mode": "shrink",
-            "min": 14,
-            "max": 22,
-            "maxLines": 1
-          }
-        }
-      ]
-    }
-  ]
+export default function StatRow({ label, value }) {
+  return (
+    <Frame
+      id="root"
+      className="flex flex-row items-center justify-between rounded-2xl border border-border bg-muted px-4 py-3"
+    >
+      <Text id="label" bind="label" className="text-sm font-medium text-muted-foreground">
+        {label}
+      </Text>
+      <Text id="value" bind="value" className="text-base font-semibold text-foreground">
+        {value}
+      </Text>
+    </Frame>
+  )
 }
 ```
 
-Recommended prop types for v1:
+Then a parent asset can compose it:
 
-- `string`
-- `image`
-- `color`
-- `boolean`
-- `enum`
+```tsx
+/** @jsxImportSource termlings/design */
 
-## fitText Rules
+import StatRow from "./components/stat-row.design"
 
-Dynamic asset generation needs better text fitting than static design tools usually provide.
+export default function Design() {
+  return (
+    <Screen id="pricing-card" className="flex flex-col gap-4 bg-background p-8">
+      <StatRow label="Setup" value="15 min" />
+      <StatRow label="Agents" value="5 included" />
+    </Screen>
+  )
+}
+```
 
-Recommended `fitText.mode` values:
+## Runtime Primitives
 
-- `none`: use the declared font size as-is
-- `height`: fixed width, grow vertically
-- `truncate`: fixed box with ellipsis and optional `maxLines`
-- `shrink`: reduce font size until the content fits inside the target bounds
+Keep v1 small:
 
-For `shrink`, the renderer should:
+- `Screen`
+- `Frame`
+- `Text`
+- `Image`
+- `Instance`
 
-1. start at `fitText.max` or the font size implied by `tw`
-2. measure the text
-3. step down until it fits or reaches `fitText.min`
-4. if still too large, optionally truncate
+Rules:
 
-This is especially important for reusable social cards, sales assets, and other "design assets++" output where copy length varies.
+- every rendered node must have a stable `id`
+- layout is auto-layout first
+- no arbitrary React hooks or side effects
+- no DOM event handlers
+- no raw browser rendering model
+
+## Tailwind Class Contract
+
+Use Tailwind-style classes, but make the supported surface track Satori's supported CSS subset rather than an arbitrary tiny allowlist.
+
+The v1 rule should be:
+
+- support any utility class that compiles cleanly into a Satori-supported CSS property and value
+- reject any utility that maps to browser-only or unsupported CSS
+- keep semantic brand tokens for colors, but do not artificially shrink layout and typography coverage
+
+That means v1 should include Tailwind utilities across these categories when they map to Satori:
+
+- display and flexbox layout
+- positioning and inset
+- spacing and sizing
+- borders and border radius
+- typography, text alignment, white-space, and line clamp
+- backgrounds and semantic color tokens
+- opacity, box shadow, filters, and clip paths
+- object fit and object position
+- 2D transforms
+- overflow where Satori supports it
+
+Examples that should be fine if they compile to supported Satori CSS:
+
+- `flex`, `inline-flex`, `flex-row`, `flex-col`, `items-center`, `justify-between`
+- `absolute`, `relative`, `top-0`, `inset-0`
+- `p-12`, `px-6`, `gap-4`, `w-full`, `h-12`, `max-w-3xl`
+- `rounded-2xl`, `border`, `border-border`
+- `text-6xl`, `font-bold`, `leading-tight`, `tracking-widest`, `text-center`, `line-clamp-3`
+- `bg-background`, `bg-card`, `text-foreground`, `text-muted-foreground`
+- `shadow-sm`, `opacity-80`, `overflow-hidden`, `object-cover`
+- `rotate-3`, `scale-95`, `translate-x-2`
+
+Do not support in v1:
+
+- responsive prefixes like `md:`
+- state variants like `hover:`, `focus:`, `dark:`
+- utilities that compile to CSS Satori does not support
+- browser-only semantics like `z-*`, `calc(...)`, or 3D transforms
+- arbitrary CSS objects as the source-of-truth authoring format
+- arbitrary class plugins with unknown output
+
+Validation should fail fast with a precise reason when a class cannot be compiled to supported Satori CSS.
+
+The renderer should compile supported `className` values into normalized style props before passing the scene to Satori.
 
 ## Brand Integration
 
-`$brand.*` values should resolve from `.termlings/brand/brand.json`.
+`termlings brand` stays the source of truth for semantic palette inputs.
 
-Recommended semantic token mapping:
+Expected base inputs:
 
-- `$brand.primary` -> `primary`
-- `$brand.secondary` -> `secondary`
-- `$brand.accent` -> `accent`
-- `$brand.background` -> `background`
-- `$brand.foreground` -> `foreground`
+- `primary`
+- `secondary`
+- `accent`
+- `background`
+- `foreground`
 
-Additional design tokens can live inside `tokens`.
+Expected derived tokens:
 
-## CLI Shape
+- `primary-foreground`
+- `secondary-foreground`
+- `accent-foreground`
+- `card`
+- `card-foreground`
+- `muted`
+- `muted-foreground`
+- `border`
 
-```bash
-termlings design init hero-card
-termlings design render .termlings/design/hero-card.design.json --out /tmp/hero.png
-termlings design render .termlings/design/hero-card.design.json --screen hero --out /tmp/hero.svg
-termlings design validate .termlings/design/hero-card.design.json
-termlings design fmt .termlings/design/hero-card.design.json
+That gives design files a stable semantic class vocabulary without hardcoding raw hex values everywhere.
+
+## Props and Bindings
+
+Required v1 prop types:
+
+- `string`
+- `image`
+- `boolean`
+- `enum`
+- `color`
+
+Required binding features:
+
+- `bind="title"` on nodes that should show up in `inspect` and `props`
+- defaults defined in `export const props`
+- render-time overrides via `render --stdin-json`
+
+Example render payload:
+
+```json
+{
+  "id": "hero-card",
+  "format": "png",
+  "out": "/tmp/hero.png",
+  "props": {
+    "title": "Launch faster with autonomous teams",
+    "subtitle": "Coordinate product, growth, support, and operations from one terminal workspace.",
+    "ctaLabel": "View Demo"
+  }
+}
 ```
+
+## fitText
+
+Text fitting should be an explicit node prop, not a class convention.
+
+Recommended shape:
+
+```ts
+type FitText =
+  | { mode: "none" }
+  | { mode: "height"; maxLines?: number }
+  | { mode: "truncate"; maxLines?: number; ellipsis?: boolean }
+  | { mode: "shrink"; min: number; max: number; maxLines?: number; step?: number; fallback?: "truncate" | "clip" }
+```
+
+Required modes:
+
+- `none`
+- `height`
+- `truncate`
+- `shrink`
+
+This matters because social cards, ads, and landing page assets routinely have variable copy length.
+
+## Render and Inspect Model
+
+The CLI should minimize how often an agent has to read the whole file.
+
+`brief` should return:
+
+- asset id
+- title and intent
+- canvas size
+- prop summary
+- token summary
+- validation summary
+
+`tree` should return:
+
+- node ids
+- node types
+- bindings
+- className
+- fitText rules
+
+`inspect` should return:
+
+- one resolved node
+- bound prop name
+- computed semantic tokens
+- fitText behavior
+- any validation warnings for that node
 
 ## Rendering Stack
 
-- structure parser: Termlings
-- `tw` compiler: Termlings
-- scene renderer: Satori
-- rasterization: Resvg
+Recommended implementation:
 
-## Figma Strategy
+1. Bun loads `.design.tsx`
+2. the Termlings JSX runtime builds a normalized design tree
+3. supported `className` values compile into Satori-compatible style props
+4. Satori renders SVG
+5. Resvg renders PNG when needed
 
-Do not treat `.fig` as the canonical format.
+Satori should be the renderer, not the authoring contract.
 
-Preferred direction:
+## Notes
 
-- Termlings JSON is the source of truth
-- Figma plugin/API imports Termlings JSON into Figma
-- Figma plugin/API exports a compatible subset back to Termlings JSON
+- This should be a real Termlings app, not a wrapper around another tool's config format.
+- Tailwind-style `className` is the right authoring surface for AI speed.
+- The class surface should stay constrained so rendering stays deterministic.
+- Figma import/export can come later through a plugin bridge, not as the source of truth.
 
-This keeps AI workflows local and deterministic while still allowing handoff to Figma.
-
-See also: `docs/ideas/termlings-design-figma.md`
-
-## Non-Goals For V1
-
-- full Tailwind support
-- full Figma feature parity
-- arbitrary CSS
-- animations
-- constraints-based layout
-- interactive states
-- video rendering
-
-## Next Step
-
-Implement the smallest viable path:
-
-1. define schema types
-2. support `box` + `text`
-3. support semantic `tw` subset
-4. render to SVG
-5. rasterize to PNG
+See also: `docs/plans/DESIGN-SYSTEM.md` and `docs/ideas/termlings-design-figma.md`.

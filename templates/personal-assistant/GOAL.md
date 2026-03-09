@@ -1,4 +1,4 @@
-# Vision
+# Goal
 
 Use a single high-trust assistant to run day-to-day execution and orchestrate specialist agents only when needed.
 
