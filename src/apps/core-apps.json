@@ -161,6 +161,18 @@
     ]
   },
   {
+    "id": "design",
+    "title": "Design",
+    "helpOrder": 91,
+    "commands": [
+      {
+        "name": "design",
+        "usage": "termlings design <cmd>",
+        "summary": "Local-first design assets and rendering"
+      }
+    ]
+  },
+  {
     "id": "social",
     "title": "Social",
     "helpOrder": 93,

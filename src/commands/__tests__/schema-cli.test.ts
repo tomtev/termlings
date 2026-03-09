@@ -44,6 +44,7 @@ describe("command schema CLI", () => {
       { args: ["skills", "schema"], needle: "\"command\": \"skills\"" },
       { args: ["browser", "schema"], needle: "\"command\": \"browser\"" },
       { args: ["brand", "schema"], needle: "\"command\": \"brand\"" },
+      { args: ["design", "schema"], needle: "\"app\": \"design\"" },
     ]
 
     for (const testCase of cases) {
@@ -65,6 +66,11 @@ describe("command schema CLI", () => {
     expect(browser.status).toBe(0)
     expect(browser.stdout).toContain("\"action\": \"patterns.execute\"")
     expect(browser.stdout).toContain("termlings browser patterns execute <id> [key=value ...] [--tab <index>] [--out <path>]")
+
+    const design = runCli(root, ["design", "schema", "templates.show"])
+    expect(design.status).toBe(0)
+    expect(design.stdout).toContain("\"action\": \"templates.show\"")
+    expect(design.stdout).toContain("termlings design templates show --params '{\\\"...\\\"}' [--json]")
   })
 
   it("prints brand command schema instead of a brand profile template", () => {

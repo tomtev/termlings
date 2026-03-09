@@ -1,6 +1,6 @@
 {
   "name": "termlings",
-  "version": "0.3.17",
+  "version": "0.3.18",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/tomtev/termlings.git"
@@ -18,11 +18,13 @@
   "devDependencies": {
     "@opentui/core": "^0.1.82",
     "@opentui/solid": "^0.1.82",
-    "@resvg/resvg-js": "^2.6.2",
     "solid-js": "^1.9.11"
   },
   "exports": {
     ".": "./src/index.ts",
+    "./design": "./src/design/index.ts",
+    "./design/jsx-runtime": "./src/design/jsx-runtime.ts",
+    "./design/jsx-dev-runtime": "./src/design/jsx-dev-runtime.ts",
     "./engine": "./src/engine/index.ts",
     "./svelte": "./src/svelte/index.ts",
     "./react": "./src/react/index.ts",
@@ -55,6 +57,10 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@resvg/resvg-js": "^2.6.2",
+    "react": "^19.2.4",
+    "satori": "^0.25.0",
     "termfont": "^0.1.2"
   }
 }

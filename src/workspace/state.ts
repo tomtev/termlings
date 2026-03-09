@@ -59,6 +59,7 @@ export const WORKSPACE_APP_KEYS = [
   "browser",
   "skills",
   "brand",
+  "design",
   "social",
   "ads",
   "memory",
@@ -475,6 +476,7 @@ export function ensureWorkspaceDirs(root = process.cwd()): void {
   mkdirSync(base, { recursive: true })
   mkdirSync(join(base, "agents"), { recursive: true })
   mkdirSync(join(base, "humans"), { recursive: true })
+  mkdirSync(join(base, "design"), { recursive: true })
   mkdirSync(join(workflowsDir(root), "org"), { recursive: true })
   mkdirSync(join(workflowsDir(root), "agents"), { recursive: true })
   mkdirSync(storeDir(root), { recursive: true })
@@ -488,6 +490,8 @@ export function ensureWorkspaceDirs(root = process.cwd()): void {
   mkdirSync(join(storeDir(root), "cms", "publish"), { recursive: true })
   mkdirSync(join(storeDir(root), "crm", "records"), { recursive: true })
   mkdirSync(join(storeDir(root), "crm", "activity"), { recursive: true })
+  mkdirSync(join(storeDir(root), "design", "renders"), { recursive: true })
+  mkdirSync(join(storeDir(root), "design", "cache"), { recursive: true })
   mkdirSync(join(storeDir(root), "social", "posts"), { recursive: true })
   mkdirSync(join(storeDir(root), "media", "jobs"), { recursive: true })
   mkdirSync(join(storeDir(root), "media", "outputs"), { recursive: true })

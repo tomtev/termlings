@@ -18,6 +18,7 @@ import { handleRequest } from "./request.js";
 import { handleOrgChart } from "./org-chart.js";
 import { handleBrief } from "./brief.js";
 import { handleBrand } from "./brand.js";
+import { handleDesign } from "./design.js";
 import { handleConversation } from "./conversation.js";
 import { handleSkills } from "./skills.js";
 import { handleAgents } from "./agents.js";
@@ -84,6 +85,10 @@ export async function routeCommand(
 
     case "brand":
       await handleBrand(flags, positional, opts);
+      return true;
+
+    case "design":
+      await handleDesign(flags, positional, opts);
       return true;
 
     case "ads":

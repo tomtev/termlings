@@ -100,7 +100,7 @@ The markdown file includes a small frontmatter block plus the body content, so i
 
 ## Disable This App
 
-Disable CMS globally for the workspace:
+Disable CMS globally in `.termlings/workspace.json`:
 
 ```json
 {

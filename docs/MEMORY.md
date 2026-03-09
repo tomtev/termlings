@@ -75,7 +75,7 @@ This is optional. Local memory search still works without qmd.
 
 ## Disable This App
 
-Disable Memory globally for the workspace:
+Disable Memory globally in `.termlings/workspace.json`:
 
 ```json
 {

@@ -32,6 +32,7 @@ Current core app keys:
 - `browser`
 - `skills`
 - `brand`
+- `design`
 - `social`
 - `ads`
 - `memory`

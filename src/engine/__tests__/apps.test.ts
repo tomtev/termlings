@@ -77,6 +77,7 @@ describe("workspace app resolution", () => {
     expect(findCommandOwnerApp("conversation")).toBe("messaging")
     expect(findCommandOwnerApp("request")).toBe("requests")
     expect(findCommandOwnerApp("calendar")).toBe("calendar")
+    expect(findCommandOwnerApp("design")).toBe("design")
     expect(findCommandOwnerApp("social")).toBe("social")
     expect(findCommandOwnerApp("ads")).toBe("ads")
     expect(findCommandOwnerApp("memory")).toBe("memory")
