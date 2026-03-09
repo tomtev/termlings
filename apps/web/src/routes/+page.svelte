@@ -22,7 +22,7 @@
   import { SITE_DESCRIPTION, SITE_NAME, SITE_OG_IMAGE_URL, SITE_ORIGIN } from '$lib/site';
 
   let { data } = $props();
-  let selectedInstallMethod = $state('npx-docker');
+  let selectedInstallMethod = $state('npx');
 
   const team = [
     { slug: 'human-default', title: 'Founder', name: 'You', jobTitle: 'Founder / Operator', motion: 'talking', runtime: 'Human', runtimeKey: 'human' },
@@ -182,19 +182,19 @@ role: Build and ship product features with rigor.
 
   const installMethods = $derived([
     {
-      id: 'npx-docker',
-      label: 'docker',
-      badge: '[recommended]',
-      command: 'npx termlings@latest --spawn --docker',
-      hint: 'Recommended local mode. Docker-isolated Claude/Codex workers.',
-      detail:
-        'Keeps the operator shell on your host while spawned agents run inside Docker with a separate runtime home. Safer than host-native spawn; the strongest setup is a full Docker workspace or remote machine.'
-    },
-    {
       id: 'npx',
       label: 'npx',
       command: 'npx termlings@latest --spawn',
       hint: 'Fastest host-native start. Requires Bun.'
+    },
+    {
+      id: 'npx-docker',
+      label: 'docker',
+      badge: '[SAFEER]',
+      command: 'npx termlings@latest --spawn --docker',
+      hint: 'Recommended local mode. Docker-isolated Claude/Codex workers.',
+      detail:
+        'Keeps the operator shell on your host while spawned agents run inside Docker with a separate runtime home. Safer than host-native spawn; the strongest setup is a full Docker workspace or remote machine.'
     },
     {
       id: 'bun',
