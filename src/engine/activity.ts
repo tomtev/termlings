@@ -110,6 +110,40 @@ export function appendAppActivity(entry: AppActivityEntry, root = process.cwd())
   return normalized
 }
 
+export function appendCurrentAgentThreadActivity(
+  entry: Omit<AppActivityEntry, "ts" | "actorSessionId" | "actorName" | "actorSlug" | "actorDna" | "threadId"> & {
+    ts?: number
+    threadId?: string
+  },
+  root = process.cwd(),
+): AppActivityEntry | null {
+  const actorSessionId = String(process.env.TERMLINGS_SESSION_ID || "").trim()
+  const actorName = String(process.env.TERMLINGS_AGENT_NAME || "").trim()
+  const actorSlug = String(process.env.TERMLINGS_AGENT_SLUG || "").trim()
+  const actorDna = String(process.env.TERMLINGS_AGENT_DNA || "").trim()
+  const threadId = String(entry.threadId || "").trim() || resolveAgentActivityThreadId({
+    agentSlug: actorSlug || undefined,
+    agentDna: actorDna || undefined,
+  })
+
+  if (!threadId || (!actorSessionId && !actorSlug && !actorDna && !actorName)) {
+    return null
+  }
+
+  return appendAppActivity(
+    {
+      ...entry,
+      ts: typeof entry.ts === "number" && Number.isFinite(entry.ts) ? entry.ts : Date.now(),
+      actorSessionId: actorSessionId || undefined,
+      actorName: actorName || undefined,
+      actorSlug: actorSlug || undefined,
+      actorDna: actorDna || undefined,
+      threadId,
+    },
+    root,
+  )
+}
+
 export function readRecentAppActivityEntries(limit: number, root = process.cwd()): AppActivityEntry[] {
   if (limit <= 0) return []
   const path = activityPath(root)

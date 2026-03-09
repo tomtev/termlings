@@ -20,7 +20,7 @@ const IMAGE_CONTRACT: AppApiContract = {
       stdinJson: {
         prompt: "pixel-art startup dashboard hero",
         provider: "google",
-        model: "gemini-3.1-flash-image-preview",
+        model: "nano-banana-2",
         image: "./input.png",
         out: "./hero.png",
       },

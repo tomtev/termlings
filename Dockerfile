@@ -34,10 +34,6 @@ RUN curl -fsSL https://bun.sh/install | env BUN_INSTALL=/opt/bun bash \
 
 WORKDIR /opt/termlings
 COPY --chown=termlings:termlings package.json bun.lock /opt/termlings/
-COPY --chown=termlings:termlings bin /opt/termlings/bin
-COPY --chown=termlings:termlings src /opt/termlings/src
-COPY --chown=termlings:termlings templates /opt/termlings/templates
-COPY --chown=termlings:termlings scripts /opt/termlings/scripts
 RUN chown -R termlings:termlings /opt/termlings
 
 USER termlings
@@ -47,6 +43,10 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 RUN bun install --frozen-lockfile
 
 USER root
+COPY --chown=termlings:termlings bin /opt/termlings/bin
+COPY --chown=termlings:termlings src /opt/termlings/src
+COPY --chown=termlings:termlings templates /opt/termlings/templates
+COPY --chown=termlings:termlings scripts /opt/termlings/scripts
 RUN printf '%s\n' '#!/bin/sh' 'exec bun /opt/termlings/bin/termlings.js "$@"' > /usr/local/bin/termlings \
   && chmod +x /usr/local/bin/termlings
 RUN chmod +x /opt/termlings/scripts/docker-entrypoint.sh /opt/termlings/scripts/docker-shell

@@ -154,6 +154,13 @@ describe("JSON-first app CLI", () => {
     expect(existsSync(join(root, payload.path))).toBe(true)
   })
 
+  it("prints the image schema with nano banana 2 as the default model example", () => {
+    const schema = runCli(root, ["image", "schema", "generate"])
+    expect(schema.status).toBe(0)
+    expect(schema.stdout).toContain("\"action\": \"generate\"")
+    expect(schema.stdout).toContain("\"model\": \"nano-banana-2\"")
+  })
+
   it("renders a design that imports a completed media image job", () => {
     const mediaDir = join(root, ".termlings", "store", "media")
     mkdirSync(join(mediaDir, "jobs"), { recursive: true })

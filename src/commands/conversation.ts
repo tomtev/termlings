@@ -3,6 +3,7 @@
  */
 
 import { discoverLocalAgents } from "../agents/discover.js";
+import { appendCurrentAgentThreadActivity } from "../engine/activity.js";
 import {
   getChannelMessages,
   readWorkspaceMessages,
@@ -14,7 +15,7 @@ type ConversationScope =
   | { kind: "recent" }
   | { kind: "channel"; channel: string }
   | { kind: "human"; humanId: string }
-  | { kind: "agent"; slug?: string; dna?: string; rawTarget: string }
+  | { kind: "agent"; slug?: string; dna?: string; name?: string; rawTarget: string }
   | { kind: "session"; sessionId: string };
 
 const CONVERSATION_SCHEMA: CommandSchemaContract = {
@@ -89,6 +90,9 @@ function resolveAgentScope(rawTarget: string): ConversationScope {
     kind: "agent",
     slug: resolved?.name ?? (byDna ? undefined : token),
     dna: resolved?.soul?.dna ?? (byDna ? token : undefined),
+    name: typeof resolved?.soul?.name === "string" && resolved.soul.name.trim().length > 0
+      ? resolved.soul.name.trim()
+      : undefined,
     rawTarget,
   };
 }
@@ -182,6 +186,21 @@ function scopeLabel(scope: ConversationScope): string {
   }
 }
 
+function scopeActivityTargetLabel(scope: ConversationScope): string {
+  switch (scope.kind) {
+    case "recent":
+      return "conversation history";
+    case "channel":
+      return `#${scope.channel}`;
+    case "human":
+      return "Owner";
+    case "agent":
+      return scope.name || scope.slug || scope.rawTarget;
+    case "session":
+      return scope.sessionId;
+  }
+}
+
 export async function handleConversation(
   flags: Set<string>,
   positional: string[],
@@ -250,6 +269,16 @@ EXAMPLES:
   const scope = resolveScope(targetArg);
   const root = process.cwd();
   const jsonMode = flags.has("json");
+
+  appendCurrentAgentThreadActivity({
+    app: "messaging",
+    kind: "conversation-read",
+    text: scope.kind === "recent"
+      ? "checked earlier conversation history."
+      : `checked earlier conversation with ${scopeActivityTargetLabel(scope)}.`,
+    level: "summary",
+    surface: "thread",
+  }, root);
 
   const sourceMessages =
     scope.kind === "channel"

@@ -1,4 +1,5 @@
 import { basename } from "path";
+import { appendCurrentAgentThreadActivity } from "../engine/activity.js";
 import { maybeHandleCommandSchema, type CommandSchemaContract } from "./command-schema.js";
 
 const BRIEF_SCHEMA: CommandSchemaContract = {
@@ -94,6 +95,14 @@ INCLUDES:
 `);
     return;
   }
+
+  appendCurrentAgentThreadActivity({
+    app: "brief",
+    kind: "read",
+    text: "read brief for workspace context.",
+    level: "summary",
+    surface: "thread",
+  });
 
   const now = Date.now();
   const cwd = process.cwd();

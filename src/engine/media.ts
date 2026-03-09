@@ -161,7 +161,7 @@ function resolveMediaProvider(input: string | undefined): MediaProvider {
 }
 
 function defaultImageModel(): string {
-  return "gemini-3.1-flash-image-preview"
+  return "nano-banana-2"
 }
 
 function defaultVideoModel(): string {

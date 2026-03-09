@@ -147,6 +147,7 @@ describe("media app", () => {
     }, root, fetchImpl)
 
     expect(imageJob.status).toBe("completed")
+    expect(imageJob.model).toBe("nano-banana-2")
     expect(imageJob.output?.mimeType).toBe("image/png")
     expect(existsSync(join(root, "hero.png"))).toBe(true)
 

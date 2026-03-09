@@ -463,6 +463,23 @@ function targetExtraArgs(runtimeName: string, baseArgs: string[], respawn: boole
   return [...baseArgs, "resume", "--last"]
 }
 
+async function appendSystemWorkspaceMessage(
+  root: string,
+  fromName: string,
+  text: string,
+): Promise<void> {
+  const { appendWorkspaceMessage } = await import("../workspace/state.js")
+  appendWorkspaceMessage(
+    {
+      kind: "system",
+      from: "system",
+      fromName,
+      text,
+    },
+    root,
+  )
+}
+
 export async function ensureDockerWorkspaceBrowser(
   options: { quiet?: boolean } = {},
 ): Promise<{ ok: boolean; status?: "started" | "restarted" | "reused"; port?: number; error?: string }> {
@@ -508,9 +525,23 @@ async function spawnAgentProcesses(
   const failed: Array<{ slug: string; route: string; error: string }> = []
 
   if (docker) {
-    ensureDockerSpawnImage(Boolean(process.env.TERMLINGS_DOCKER_REBUILD === "1"))
-    ensureDockerRuntimeHome(root)
-    await ensureDockerWorkspaceBrowser({ quiet })
+    try {
+      if (quiet) {
+        await appendSystemWorkspaceMessage(root, "Docker", "Preparing Docker runtime image...")
+      }
+      ensureDockerSpawnImage(Boolean(process.env.TERMLINGS_DOCKER_REBUILD === "1"))
+      if (quiet) {
+        await appendSystemWorkspaceMessage(root, "Docker", "Docker runtime image ready.")
+      }
+      ensureDockerRuntimeHome(root)
+      await ensureDockerWorkspaceBrowser({ quiet })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (quiet) {
+        await appendSystemWorkspaceMessage(root, "Docker", `Docker startup failed: ${message}`)
+      }
+      throw error
+    }
   }
 
   for (const target of targets) {
