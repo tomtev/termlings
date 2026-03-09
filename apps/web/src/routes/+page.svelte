@@ -22,7 +22,7 @@
   import { SITE_DESCRIPTION, SITE_NAME, SITE_OG_IMAGE_URL, SITE_ORIGIN } from '$lib/site';
 
   let { data } = $props();
-  let selectedInstallMethod = $state('npx');
+  let selectedInstallMethod = $state('npx-docker');
 
   const team = [
     { slug: 'human-default', title: 'Founder', name: 'You', jobTitle: 'Founder / Operator', motion: 'talking', runtime: 'Human', runtimeKey: 'human' },
@@ -182,29 +182,31 @@ role: Build and ship product features with rigor.
 
   const installMethods = $derived([
     {
+      id: 'npx-docker',
+      label: 'docker',
+      badge: '[recommended]',
+      command: 'npx termlings@latest --spawn --docker',
+      hint: 'Recommended local mode. Docker-isolated Claude/Codex workers.',
+      detail:
+        'Keeps the operator shell on your host while spawned agents run inside Docker with a separate runtime home. Safer than host-native spawn; the strongest setup is a full Docker workspace or remote machine.'
+    },
+    {
       id: 'npx',
       label: 'npx',
       command: 'npx termlings@latest --spawn',
-      hint: 'Fastest first run. Requires Bun.'
-    },
-    {
-      id: 'npx-docker',
-      label: 'docker',
-      badge: '[safer]',
-      command: 'npx termlings@latest --spawn --docker',
-      hint: 'Safer local mode. Docker-isolated Claude/Codex workers.'
+      hint: 'Fastest host-native start. Requires Bun.'
     },
     {
       id: 'bun',
       label: 'bun',
       command: `bun add -g termlings@${data.latestVersion}`,
-      hint: 'Install globally with Bun, then run `termlings --spawn`.'
+      hint: 'Install globally with Bun, then run host-native or Docker spawn.'
     },
     {
       id: 'npm',
       label: 'npm',
       command: `npm install -g termlings@${data.latestVersion}`,
-      hint: 'Install globally with npm, then run `termlings --spawn`.'
+      hint: 'Install globally with npm, then run host-native or Docker spawn.'
     }
   ]);
 
@@ -244,7 +246,7 @@ role: Build and ship product features with rigor.
             <p class="hero-lead">
               Termlings is a file-based workspace for Claude Code and Codex where AI agents work
               together as a team through messages, scheduled messages, tasks, workflows, calendar,
-              CRM, and more.
+              CRM, and more. Run it directly on your machine or use Docker for a safer local default.
             </p>
 
             <div class="command-stack">
@@ -271,6 +273,9 @@ role: Build and ship product features with rigor.
                   <CopyButton command={activeInstallMethod.command} />
                 </div>
                 <p class="command-hint">{activeInstallMethod.hint}</p>
+                {#if activeInstallMethod.detail}
+                  <p class="command-detail">{activeInstallMethod.detail}</p>
+                {/if}
               </div>
               <div class="hero-open-source">
                 <span class="hero-open-source-label">Open Source</span>
@@ -724,6 +729,15 @@ role: Build and ship product features with rigor.
     font-size: 0.72rem;
     color: var(--text-subtle);
     padding: 0.1rem 0.15rem 0;
+  }
+
+  .command-detail {
+    margin: 0;
+    padding: 0.1rem 0.15rem 0;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    line-height: 1.55;
+    max-width: 70ch;
   }
 
   .hero-open-source {
