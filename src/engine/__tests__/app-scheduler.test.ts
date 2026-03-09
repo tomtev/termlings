@@ -94,7 +94,7 @@ describe("scheduled app jobs", () => {
       recurrence: "once",
       time: "08:00",
       timezone: "UTC",
-      date: "2026-03-09",
+      date: "2027-01-01",
       createdBy: "human:default",
     }, root)
 
